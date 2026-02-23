@@ -104,10 +104,8 @@ export class WorldScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       // ── Right-click: issue a gather command ──────────────────────────
       if (p.rightButtonDown()) {
-        const wx = cam.scrollX + p.x / cam.zoom;
-        const wy = cam.scrollY + p.y / cam.zoom;
-        const tx = Phaser.Math.Clamp(Math.floor(wx / TILE_SIZE), 0, GRID_SIZE - 1);
-        const ty = Phaser.Math.Clamp(Math.floor(wy / TILE_SIZE), 0, GRID_SIZE - 1);
+        const tx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE), 0, GRID_SIZE - 1);
+        const ty = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE), 0, GRID_SIZE - 1);
 
         if (isWalkable(this.grid, tx, ty)) {
           this.commandTile = { x: tx, y: ty };
@@ -137,10 +135,8 @@ export class WorldScene extends Phaser.Scene {
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (didDrag || p.rightButtonReleased()) return;
       // Left tap: select dwarf at tile
-      const wx = cam.scrollX + p.x / cam.zoom;
-      const wy = cam.scrollY + p.y / cam.zoom;
-      const tx = Math.floor(wx / TILE_SIZE);
-      const ty = Math.floor(wy / TILE_SIZE);
+      const tx = Math.floor(p.worldX / TILE_SIZE);
+      const ty = Math.floor(p.worldY / TILE_SIZE);
       const hit = this.dwarves.find(d => d.alive && d.x === tx && d.y === ty);
       this.selectedDwarfId = hit?.id ?? null;
     });
