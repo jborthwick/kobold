@@ -34,6 +34,15 @@ export interface Dwarf {
   morale: number;      // 0–100
   alive: boolean;
   task: string;
+  commandTarget: { x: number; y: number } | null;  // player-issued move order
+}
+
+export interface LogEntry {
+  tick: number;
+  dwarfId: string;
+  dwarfName: string;
+  message: string;
+  level: 'info' | 'warn' | 'error';
 }
 
 export interface GameState {
