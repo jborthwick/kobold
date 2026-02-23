@@ -1,4 +1,5 @@
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
+// Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, darkenColor } from '../../simulation/world';
 import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
@@ -22,6 +23,7 @@ export class WorldScene extends Phaser.Scene {
   private agentGfx!: Phaser.GameObjects.Graphics;
   private selectedDwarfId: string | null = null;
   private terrainDirty = true;
+  private lastTickTime = 0;
 
   constructor() {
     super({ key: 'WorldScene' });
@@ -36,17 +38,10 @@ export class WorldScene extends Phaser.Scene {
 
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
-    this.cameras.main.centerOn(worldPx / 2, worldPx / 2);
-    this.cameras.main.setZoom(2); // start zoomed in a bit
+    this.cameras.main.setZoom(2);
+    this.cameras.main.centerOn(200, 200); // NW food zone where dwarves start
 
     this.setupInput();
-
-    this.time.addEvent({
-      delay: TICK_RATE_MS,
-      callback: this.gameTick,
-      callbackScope: this,
-      loop: true,
-    });
   }
 
   private setupInput() {
@@ -155,7 +150,11 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  update() {
+  update(time: number) {
+    if (time - this.lastTickTime >= TICK_RATE_MS) {
+      this.lastTickTime = time;
+      this.gameTick();
+    }
     if (this.terrainDirty) this.drawTerrain();
     this.drawAgents();
   }

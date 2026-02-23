@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { WorldScene } from './scenes/WorldScene';
 
 export function PhaserGame() {

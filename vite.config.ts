@@ -10,8 +10,5 @@ export default defineConfig({
   build: {
     target: 'esnext',
   },
-  optimizeDeps: {
-    exclude: ['phaser'],
-  },
-  assetsInclude: ['**/*.tmx', '**/*.tsx'],
+  assetsInclude: ['**/*.tmx'],
 })
