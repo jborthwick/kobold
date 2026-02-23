@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Phaser from 'phaser';
+import { BootScene } from './scenes/BootScene';
 import { WorldScene } from './scenes/WorldScene';
 
 export function PhaserGame() {
@@ -13,7 +14,7 @@ export function PhaserGame() {
       type:            Phaser.AUTO,
       parent:          containerRef.current,
       backgroundColor: '#1a1a2e',
-      scene:           [WorldScene],
+      scene:           [BootScene, WorldScene],
       scale: {
         mode:       Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,

@@ -1,29 +1,42 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
-import { generateWorld, growback, darkenColor } from '../../simulation/world';
+import { generateWorld, growback } from '../../simulation/world';
 import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type Tile, type Dwarf, type GameState } from '../../shared/types';
 
-const TILE_COLORS: Record<TileType, number> = {
-  [TileType.Grass]:    0x5a8a3a,
-  [TileType.Stone]:    0x888888,
-  [TileType.Water]:    0x2255bb,
-  [TileType.Forest]:   0x2d6a2d,
-  [TileType.Farmland]: 0xc8a832,
-  [TileType.Ore]:      0x7733aa,
+// colored_packed.png: 49 columns × 22 rows, 16×16, no spacing.
+// Frame index = row * 49 + col  (0-based)
+const TILE_FRAMES: Record<TileType, number> = {
+  [TileType.Forest]:   0,    // row 0, col 0  – green tree ✓
+  [TileType.Grass]:    9,    // row 0, col 9  – subtle ground dot
+  [TileType.Water]:    204,  // row 4, col 8  – blue water ✓
+  [TileType.Stone]:    98,   // row 2, col 0  – dark stone
+  [TileType.Farmland]: 147,  // row 3, col 2  – grid/soil pattern
+  [TileType.Ore]:      16,   // row 0, col 16 – mineral icon
 };
+
+// Armored humanoid character sprite (row 0, cols 26-43 are character sprites)
+const DWARF_FRAME = 26;
 
 export class WorldScene extends Phaser.Scene {
   private grid: Tile[][] = [];
   private dwarves: Dwarf[] = [];
   private tick = 0;
-  private terrainGfx!: Phaser.GameObjects.Graphics;
-  private agentGfx!: Phaser.GameObjects.Graphics;
   private selectedDwarfId: string | null = null;
   private terrainDirty = true;
   private lastTickTime = 0;
+
+  // Tilemap for terrain
+  private map!: Phaser.Tilemaps.Tilemap;
+  private terrainLayer!: Phaser.Tilemaps.TilemapLayer;
+
+  // Selection ring graphic
+  private selectionGfx!: Phaser.GameObjects.Graphics;
+
+  // One sprite per living dwarf
+  private dwarfSprites = new Map<string, Phaser.GameObjects.Sprite>();
 
   constructor() {
     super({ key: 'WorldScene' });
@@ -33,8 +46,18 @@ export class WorldScene extends Phaser.Scene {
     this.grid   = generateWorld();
     this.dwarves = spawnDwarves(this.grid);
 
-    this.terrainGfx = this.add.graphics();
-    this.agentGfx   = this.add.graphics();
+    // ── Tilemap for terrain ────────────────────────────────────────────────
+    this.map = this.make.tilemap({
+      tileWidth:  TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      width:      GRID_SIZE,
+      height:     GRID_SIZE,
+    });
+    const tileset = this.map.addTilesetImage('kenney1bit', 'tiles', TILE_SIZE, TILE_SIZE, 0, 0)!;
+    this.terrainLayer = this.map.createBlankLayer('terrain', tileset)!;
+
+    // ── Selection ring (drawn on top of everything) ────────────────────────
+    this.selectionGfx = this.add.graphics();
 
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
@@ -104,49 +127,63 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawTerrain() {
-    this.terrainGfx.clear();
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile  = this.grid[y][x];
-        let   color = TILE_COLORS[tile.type];
+        const frame = TILE_FRAMES[tile.type];
+        const t     = this.terrainLayer.putTileAt(frame, x, y)!;
 
-        // Dim food tiles as they're depleted
+        // Dim food tiles as they deplete (tint is a multiplicative RGB mask)
         if (tile.maxFood > 0) {
-          const ratio = tile.foodValue / tile.maxFood;
-          color = darkenColor(color, (1 - ratio) * 0.5);
+          const ratio      = tile.foodValue / tile.maxFood;
+          const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
+          t.tint = (brightness << 16) | (brightness << 8) | brightness;
+        } else {
+          t.tint = 0xffffff;
         }
-
-        this.terrainGfx.fillStyle(color);
-        this.terrainGfx.fillRect(
-          x * TILE_SIZE, y * TILE_SIZE,
-          TILE_SIZE - 1, TILE_SIZE - 1,
-        );
       }
     }
     this.terrainDirty = false;
   }
 
   private drawAgents() {
-    this.agentGfx.clear();
+    this.selectionGfx.clear();
+
+    // Remove sprites for dwarves that have died
+    for (const [id, spr] of this.dwarfSprites) {
+      const d = this.dwarves.find(dw => dw.id === id);
+      if (!d || !d.alive) {
+        spr.destroy();
+        this.dwarfSprites.delete(id);
+      }
+    }
+
     for (const d of this.dwarves) {
       if (!d.alive) continue;
 
       const px = d.x * TILE_SIZE + TILE_SIZE / 2;
       const py = d.y * TILE_SIZE + TILE_SIZE / 2;
-      const r  = TILE_SIZE / 2 - 1;
 
-      if (d.id === this.selectedDwarfId) {
-        this.agentGfx.lineStyle(2, 0xffff00, 1);
-        this.agentGfx.strokeCircle(px, py, r + 3);
+      // Get or create sprite
+      let spr = this.dwarfSprites.get(d.id);
+      if (!spr) {
+        spr = this.add.sprite(px, py, 'tiles', DWARF_FRAME);
+        this.dwarfSprites.set(d.id, spr);
+      } else {
+        spr.setPosition(px, py);
       }
 
-      // Colour shifts from green → red as hunger rises
-      const hr  = d.hunger / 100;
-      const col = (Math.floor(60 + hr * 195) << 16)
-                | (Math.floor(200 - hr * 150) << 8)
-                | 60;
-      this.agentGfx.fillStyle(col);
-      this.agentGfx.fillCircle(px, py, r);
+      // Colour shifts green → red as hunger rises
+      const hr = d.hunger / 100;
+      const r  = Math.floor(60 + hr * 195);
+      const g  = Math.floor(200 - hr * 150);
+      spr.setTint((r << 16) | (g << 8) | 60);
+
+      // Yellow selection ring
+      if (d.id === this.selectedDwarfId) {
+        this.selectionGfx.lineStyle(2, 0xffff00, 1);
+        this.selectionGfx.strokeCircle(px, py, TILE_SIZE / 2 + 3);
+      }
     }
   }
 
