@@ -235,13 +235,13 @@ Respond ONLY as JSON:
 ### Phase 0 — Project scaffold (day 1)
 The goal is a running shell with all major systems wired together before any game logic is written.
 
-- [ ] Init project: `npm create vite@latest -- --template react-ts`
-- [ ] Install deps: `phaser`, `rot-js`, `koota`, `comlink`, `mitt`, `hono`
-- [ ] Set up Vite config for Web Worker support and Phaser's `import.meta.url` asset loading
-- [ ] Mount Phaser inside a React component using the official Phaser + React template pattern
-- [ ] Set up Comlink bridge: main thread ↔ simulation Web Worker with typed RPC
-- [ ] Set up Cloudflare Worker with Hono, `wrangler.toml`, local dev via `wrangler dev`
-- [ ] Verify end-to-end: React renders, Phaser canvas shows, Worker receives a ping, CF Worker responds to a test request
+- [x] Init project: `npm create vite@latest -- --template react-ts`
+- [x] Install deps: `phaser`, `mitt` (rot-js, koota, comlink, hono deferred to when needed)
+- [x] Set up Vite config for Phaser asset loading (`assetsInclude`, `Scale.RESIZE`)
+- [x] Mount Phaser inside a React component using the official Phaser + React template pattern
+- [ ] Set up Comlink bridge: main thread ↔ simulation Web Worker with typed RPC *(deferred — simulation runs on main thread for now)*
+- [ ] Set up Cloudflare Worker with Hono, `wrangler.toml`, local dev via `wrangler dev` *(Phase 2)*
+- [x] Verify end-to-end: React renders, Phaser canvas shows, no console errors
 
 **Done when:** Browser shows a Phaser canvas inside a React app with no console errors. Worker ping succeeds.
 
@@ -251,32 +251,34 @@ The goal is a running shell with all major systems wired together before any gam
 Goal: a playable colony sim with deterministic dwarves. Must feel alive before adding intelligence.
 
 **Days 2–3: World rendering**
-- [ ] Import Kenney Roguelike/RPG Pack into `/public/assets/kenney-roguelike/`
-- [ ] Create a 64×64 tilemap in Tiled with terrain types: grass, stone, water, forest, farmland, ore deposit
-- [ ] Place two resource peaks: food-rich zone (NW quadrant) and material-rich zone (SE quadrant), separated by a river/mountain
-- [ ] Load and render the Tiled map in `WorldScene.ts`
-- [ ] Add camera with drag/pan and pinch-zoom (mobile-friendly)
-- [ ] Implement resource overlay toggle: show food density / material density as colored overlay
+- [x] Import Kenney 1-bit tileset (`colored_packed.png`, 49×22, 16px) into `/public/assets/`
+- [~] ~~Create a 64×64 tilemap in Tiled~~ → replaced with procedural `generateWorld()` (noise-based forest/grass/water/stone/farmland/ore)
+- [~] ~~Two resource peaks separated by river/mountain~~ → procedural world has food-bearing forest tiles; proper dual-peak layout deferred
+- [x] Load and render the tilemap in `WorldScene.ts` using `Phaser.Tilemaps.TilemapLayer` with per-tile tinting for food density
+- [x] Camera with WASD pan + scroll-wheel zoom (zoom range 0.4–6×). Mobile pinch-zoom not yet done.
+- [ ] Resource overlay toggle (food density / material density as colored overlay)
 
 **Days 4–5: ECS and agents**
-- [ ] Define all Koota traits: `Position`, `Health`, `Hunger`, `Vision`, `Inventory`, `Morale`, `Personality`, `Memory`, `CurrentTask`, `CrisisState`
-- [ ] `AgentFactory.ts`: spawn 5 dwarves with randomized Sugarscape attributes (vision 2–5, metabolism 1–3, starting food 8–15)
-- [ ] Render dwarf sprites on the tilemap synced to Worker ECS state snapshots via Comlink
-- [ ] Implement `HungerSystem.ts`: deduct metabolism from food inventory each tick. Death at 0.
-- [ ] Implement `MovementSystem.ts`: agents pathfind toward their `CurrentTask.targetTile` using rot.js A*
-- [ ] Implement `HarvestSystem.ts`: when on a resource tile, harvest amount based on tile richness. Reduce tile value.
+- [~] ~~Koota ECS traits~~ → using plain TypeScript interfaces in `shared/types.ts` (`Dwarf`, `Tile`, `GameState`). Koota deferred.
+- [x] Spawn 5 dwarves with randomized Sugarscape attributes (vision 2–5, metabolism 1–3, starting food 8–15) in `spawnDwarves()`
+- [x] Render dwarf sprites on tilemap; color-shifted green→red by hunger level; sprite map keyed by `dwarf.id`
+- [~] ~~Comlink state snapshots~~ → `GameState` emitted on `mitt` bus each tick to React HUD
+- [x] `HungerSystem`: `dwarf.hunger += metabolism` each tick; starvation damage at 100; death at health ≤ 0
+- [~] ~~rot.js A\* pathfinding~~ → greedy `stepToward()` (direct-direction candidates only). **Gets stuck on obstacles — A\* upgrade is next.**
+- [x] `HarvestSystem`: harvest up to 3 food/tick from tile underfoot; reduce `tile.foodValue`
 
 **Days 6–7: Behavior and UI**
-- [ ] `BehaviorTree.ts`: implement deterministic fallback behaviors in priority order:
-  1. If health < 20%: flee from nearest threat
-  2. If hunger > 80%: forage for food (Sugarscape movement rule)
-  3. If food tile underfoot: harvest
-  4. If player-assigned task exists: pathfind to it
-  5. Else: wander toward richest visible tile
-- [ ] Resource growback: each tick, depleted tiles regenerate at rate α. Tune α so scarcity is real but not instant death.
-- [ ] React HUD overlay: food stockpile bar, material stockpile bar, population count, current tick
-- [ ] Click/tap a dwarf to open `DwarfPanel.tsx`: shows name, stats, current task, personality traits
-- [ ] Player can tap a tile and issue a "mine here" / "farm here" command to selected dwarf
+- [x] `BehaviorTree` in `tickAgent()` — 6-priority cascade:
+  1. ~~health < 20% flee~~ *(not yet)*
+  2. ✅ hunger > 50% + inventory food → eat
+  3. ✅ food tile underfoot → harvest
+  4. ✅ `commandTarget` set → step toward it
+  5. ✅ forage toward richest visible food tile (Sugarscape scan)
+  6. ✅ wander randomly
+- [x] Resource growback: `growback()` regenerates depleted food tiles each tick toward `maxFood`
+- [x] React HUD overlay: dwarves alive/total, total food, total materials, current tick
+- [ ] `DwarfPanel.tsx`: click dwarf → detail panel showing name, health, hunger, morale, current task, traits
+- [x] Player right-click issues gather command to selected dwarf (or all); yellow flag marker + cyan command ring; `EventLog` shows "ordered to (x,y)" and "arrived" messages
 
 **Phase 1 done when:** 5 dwarves autonomously forage, migrate toward resources, compete for tiles, and die of starvation when food runs out. No LLM needed. This should feel like a working game.
 
