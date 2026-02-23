@@ -1,3 +1,4 @@
+import * as ROT from 'rot-js';
 import { type Dwarf, type Tile } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES } from '../shared/constants';
 import { isWalkable } from './world';
@@ -55,21 +56,32 @@ function bestVisibleFoodTile(
   return best;
 }
 
-function stepToward(
+/**
+ * Returns the next tile to step onto when moving from `from` toward `to`,
+ * using rot.js A* for obstacle-aware pathfinding.
+ * Falls back to staying in place if the destination is unreachable.
+ */
+function pathNextStep(
   from: { x: number; y: number },
   to:   { x: number; y: number },
   grid: Tile[][],
 ): { x: number; y: number } {
-  const dx = Math.sign(to.x - from.x);
-  const dy = Math.sign(to.y - from.y);
+  if (from.x === to.x && from.y === to.y) return from;
 
-  const candidates = [
-    dx !== 0 ? { x: from.x + dx, y: from.y }                   : null,
-    dy !== 0 ? { x: from.x,       y: from.y + dy }              : null,
-    dx !== 0 && dy !== 0 ? { x: from.x + dx, y: from.y + dy }  : null,
-  ].filter((p): p is { x: number; y: number } => p !== null && isWalkable(grid, p.x, p.y));
+  const path: { x: number; y: number }[] = [];
 
-  return candidates[0] ?? from;
+  const astar = new ROT.Path.AStar(
+    to.x, to.y,
+    // Goal tile is always considered passable — commands only target walkable
+    // tiles, and forage targets (food tiles) are also walkable.
+    (x, y) => (x === to.x && y === to.y) || isWalkable(grid, x, y),
+    { topology: 4 },
+  );
+
+  astar.compute(from.x, from.y, (x, y) => path.push({ x, y }));
+
+  // path[0] = from, path[1] = first step. Stay put if unreachable.
+  return path[1] ?? from;
 }
 
 // ── Behavior Tree ──────────────────────────────────────────────────────────
@@ -135,7 +147,7 @@ export function tickAgent(
       dwarf.commandTarget = null;
       dwarf.task          = 'arrived';
     } else {
-      const next = stepToward({ x: dwarf.x, y: dwarf.y }, dwarf.commandTarget, grid);
+      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.commandTarget, grid);
       dwarf.x    = next.x;
       dwarf.y    = next.y;
       dwarf.task = `→ (${tx},${ty})`;
@@ -146,7 +158,7 @@ export function tickAgent(
   // ── 5. Forage toward richest visible food ──────────────────────────────
   const target = bestVisibleFoodTile(dwarf, grid);
   if (target) {
-    const next = stepToward({ x: dwarf.x, y: dwarf.y }, target, grid);
+    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, target, grid);
     dwarf.x    = next.x;
     dwarf.y    = next.y;
     dwarf.task = `foraging → (${target.x},${target.y})`;

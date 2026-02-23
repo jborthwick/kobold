@@ -264,7 +264,7 @@ Goal: a playable colony sim with deterministic dwarves. Must feel alive before a
 - [x] Render dwarf sprites on tilemap; color-shifted green→red by hunger level; sprite map keyed by `dwarf.id`
 - [~] ~~Comlink state snapshots~~ → `GameState` emitted on `mitt` bus each tick to React HUD
 - [x] `HungerSystem`: `dwarf.hunger += metabolism` each tick; starvation damage at 100; death at health ≤ 0
-- [~] ~~rot.js A\* pathfinding~~ → greedy `stepToward()` (direct-direction candidates only). **Gets stuck on obstacles — A\* upgrade is next.**
+- [x] rot.js A\* pathfinding via `ROT.Path.AStar` in `pathNextStep()` — replaces greedy `stepToward()`; dwarves now route around the river and obstacles for both commands and foraging
 - [x] `HarvestSystem`: harvest up to 3 food/tick from tile underfoot; reduce `tile.foodValue`
 
 **Days 6–7: Behavior and UI**
@@ -277,7 +277,7 @@ Goal: a playable colony sim with deterministic dwarves. Must feel alive before a
   6. ✅ wander randomly
 - [x] Resource growback: `growback()` regenerates depleted food tiles each tick toward `maxFood`
 - [x] React HUD overlay: dwarves alive/total, total food, total materials, current tick
-- [ ] `DwarfPanel.tsx`: click dwarf → detail panel showing name, health, hunger, morale, current task, traits
+- [x] `DwarfPanel` (inline in `HUD.tsx`): click dwarf → detail panel showing name, health/hunger/morale bars, food inventory, vision, metabolism, current task
 - [x] Player right-click issues gather command to selected dwarf (or all); yellow flag marker + cyan command ring; `EventLog` shows "ordered to (x,y)" and "arrived" messages
 
 **Phase 1 done when:** 5 dwarves autonomously forage, migrate toward resources, compete for tiles, and die of starvation when food runs out. No LLM needed. This should feel like a working game.
