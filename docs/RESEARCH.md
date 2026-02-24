@@ -11,17 +11,18 @@
 
 | Decision | Choice | Status |
 |---|---|---|
-| Game engine | Phaser 3.88+ | ✅ Locked |
-| Roguelike algorithms | rot.js 2.x | ✅ Locked |
-| ECS | Koota (pmndrs) | ✅ Locked |
-| UI overlay | React 19 | ✅ Locked |
-| Worker RPC | Comlink | ✅ Locked |
-| Backend | Cloudflare Workers + Hono | ✅ Locked |
-| LLM | Claude 3.5 Haiku | ✅ Locked |
-| Art assets | Kenney 1-Bit Pack — colored variant (16×16, CC0) — `public/assets/kenney-1-bit/` | ✅ Locked |
-| Map editor | Tiled Map Editor | ✅ Locked |
-| Agent architecture | Sugarscape body + simplified PIANO mind | ✅ Locked |
-| LLM call pattern | Async crisis triggers only, never per-tick | ✅ Locked |
+| Game engine | Phaser 3.90+ | ✅ Live |
+| Roguelike algorithms | rot.js 2.x | ✅ Live |
+| UI overlay | React 19 | ✅ Live |
+| LLM | claude-haiku-4-5 | ✅ Live |
+| Art assets | Kenney 1-bit Pack — `colored_packed.png` (16×16, CC0) | ✅ Live |
+| Agent architecture | Sugarscape body + simplified PIANO mind | ✅ Live |
+| LLM call pattern | Async crisis triggers only, never per-tick | ✅ Live |
+| ECS | Koota (pmndrs) | ⏸ Deferred — plain TS interfaces used instead |
+| Worker RPC | Comlink | ⏸ Deferred — simulation runs on main thread |
+| Backend | Cloudflare Workers + Hono | ⏸ Deferred — Vite dev proxy used in dev |
+| Map editor | Tiled Map Editor | ✗ Replaced — procedural gen + in-game T-key tile picker |
+| Grid plugin | RexRainbow Board | ✗ Not needed — rot.js A* is sufficient |
 | Custom tileset | Replace Kenney art with custom art in Phase 3 | 🔄 Phase 3 |
 | Multiplayer | Not in scope yet | ⏸ Deferred |
 
@@ -128,43 +129,31 @@ public/assets/kenney-1-bit/
 
 ### Which tilesheet to use
 
-**Use `Tilesheet/colored.png`** — colored with 1px spacing between tiles. Matches the tilesheet spec below. The `_packed` variants have no spacing and require different frame math. The `tileset_colored.tsx` in `Tilemap/` is the matching Tiled tileset definition — use this when building maps in Tiled.
+**Use `Tilesheet/colored_packed.png`** — colored with NO spacing between tiles (packed). This is what the codebase actually loads. The non-packed `colored.png` has 1px spacing and requires different frame math.
 
-The `.tmx` sample maps in `Tilemap/` are Tiled reference files — useful for seeing how Kenney intended tiles to be arranged, but not loaded directly by Phaser.
-
-### Tilesheet specification (for `colored.png`)
+### Tilesheet specification (for `colored_packed.png`)
 
 ```
 Tile size:                16px × 16px
-Space between tiles:       1px × 1px
+Space between tiles:       0px (packed — no spacing)
 Total tiles (horizontal): 49
 Total tiles (vertical):   22
 Total tiles:              1,078
-```
-
-When calculating frame positions in Phaser (e.g. for `createFromCache` or manual UV math):
-
-```typescript
-const TILE_SIZE = 16;
-const TILE_SPACING = 1;
-const TILES_PER_ROW = 49;
-
-const frameX = tileIndex % TILES_PER_ROW;
-const frameY = Math.floor(tileIndex / TILES_PER_ROW);
-const pixelX = frameX * (TILE_SIZE + TILE_SPACING);
-const pixelY = frameY * (TILE_SIZE + TILE_SPACING);
+Frame index:              row * 49 + col  (0-based)
 ```
 
 ### Loading in Phaser
 
 ```typescript
 // In BootScene.ts preload():
-this.load.spritesheet('tiles', 'assets/kenney-1-bit/Tilesheet/colored.png', {
+this.load.spritesheet('tiles', 'assets/kenney-1-bit/Tilesheet/colored_packed.png', {
   frameWidth: 16,
   frameHeight: 16,
-  spacing: 1,
+  // no margin or spacing — packed sheet
 });
 ```
+
+Use `python3 scripts/inspect-tiles.py --frame N` to inspect tiles by frame index.
 
 **Phase 3 note:** The colored 1-bit style works well as a permanent aesthetic — many successful colony sims use it. Phase 3 "custom art" likely means additional color tinting for game states (red tint for danger, blue for cold, etc.) and UI polish rather than a full tileset replacement.
 
@@ -190,13 +179,13 @@ From Project Sid (Altera.AI, arXiv:2411.00114) — designed for 10–1,000+ agen
 Run sequentially per agent per decision cycle (~5–10 second intervals):
 
 ```
-1. PERCEIVE    → gather visible tiles, nearby agents, threats, resource levels
-2. RETRIEVE    → pull working memory + last 5 short-term events + long-term summary
-3. FILTER      → compress into ~400 tokens (the CC bottleneck)
-4. DECIDE (CC) → single LLM call → {action, reasoning, emotional_state, expectedOutcome}
-5. EXECUTE     → map decision to game actions
-6. VERIFY      → did outcome match expectedOutcome? (Action Awareness)
-7. UPDATE      → write result to memory, update relationship scores
+1. PERCEIVE    → gather visible tiles, nearby agents, threats, resource levels   ✅ done
+2. RETRIEVE    → pull working memory + last 5 short-term events + long-term summary  ❌ stateless
+3. FILTER      → compress into ~400 tokens (the CC bottleneck)                   ✅ done
+4. DECIDE (CC) → single LLM call → {action, reasoning, emotional_state, expectedOutcome}  ✅ done
+5. EXECUTE     → map decision to game actions                                    ❌ action field drives task label only
+6. VERIFY      → did outcome match expectedOutcome? (Action Awareness)           ✅ done (40-tick snapshot check)
+7. UPDATE      → write result to memory, update relationship scores              ✅ partial (last-5 memory; no relationships)
 ```
 
 Less frequently (every N cycles): compress short-term into long-term, generate new goals, update mood.
@@ -409,9 +398,9 @@ From Project Sid HN discussion: *"Each 'agent' is essentially a SQL view that ma
 | Backend | CF Workers + Hono | Edge deployment = <5ms latency. $0 at hobby scale (100k req/day free). Hono is 12kB, runs natively in CF Workers. Vercel Edge Functions has cold start issues. |
 | KV store | Cloudflare KV | Co-located with CF Worker. Used for rate limiting and usage tracking. No separate database needed at this scale. |
 
-### Why three loops instead of one
+### Why single-thread for now (Web Worker deferred)
 
-Simulation at 10 ticks/second + pathfinding for 10 agents on a 64×64 grid creates CPU spikes that drop frames on mobile if run on the main thread alongside Phaser. Web Worker separates concerns: main thread renders at 60fps guaranteed; Worker simulates and can spike freely. Comlink state snapshots carry state between them efficiently.
+Simulation runs on the main thread alongside Phaser. At 5 dwarves on a 64×64 grid the CPU load is low enough that this causes no frame drops. The Web Worker + Comlink architecture remains the right call for Phase 3 (10+ agents, mobile targets) but would add complexity before the simulation logic is stable. Deferred — see Quick Reference above.
 
 ---
 
@@ -448,7 +437,7 @@ Simulation at 10 ticks/second + pathfinding for 10 agents on a 64×64 grid creat
 - Red Blob Games colony sim: https://www.redblobgames.com/x/2327-roguelike-dev/
 
 ### Libraries and tools
-- Phaser 3 docs: https://newdocs.phaser.io/docs/3.88.0
+- Phaser 3 docs: https://newdocs.phaser.io/docs/3.90.0
 - Phaser + React template: https://github.com/phaserjs/template-react-ts
 - rot.js manual: https://ondras.github.io/rot.js/manual/
 - RexRainbow Board plugin: https://rexrainbow.github.io/phaser3-rex-notes/docs/site/board/
