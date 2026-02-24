@@ -27,17 +27,20 @@ export function EventLog() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>EVENT LOG</div>
-      {entries.length === 0
-        ? <div style={styles.empty}>Waiting for events…</div>
-        : entries.map((e, i) => (
-            <div key={i} style={{ ...styles.entry, color: levelColor(e.level) }}>
-              <span style={styles.tick}>[{e.tick}]</span>
-              <span style={styles.name}>{e.dwarfName}</span>
-              {e.message}
-            </div>
-          ))
-      }
-      <div ref={bottomRef} />
+      {/* Separate scrollable area so the header stays pinned */}
+      <div style={styles.scrollArea}>
+        {entries.length === 0
+          ? <div style={styles.empty}>Waiting for events…</div>
+          : entries.map((e, i) => (
+              <div key={i} style={{ ...styles.entry, color: levelColor(e.level) }}>
+                <span style={styles.tick}>[{e.tick}]</span>
+                <span style={styles.name}>{e.dwarfName}</span>
+                {e.message}
+              </div>
+            ))
+        }
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
@@ -50,26 +53,20 @@ function levelColor(level: LogEntry['level']): string {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position:       'absolute',
-    bottom:         16,
-    right:          12,
-    width:          280,
-    maxHeight:      200,
-    overflowY:      'auto',
-    background:     'rgba(0,0,0,0.70)',
-    borderRadius:   8,
-    padding:        '6px 10px',
-    fontFamily:     'monospace',
-    fontSize:       11,
-    color:          '#aaa',
-    userSelect:     'none',
-    pointerEvents:  'none',
-    display:        'flex',
-    flexDirection:  'column',
-    gap:            2,
-    scrollbarWidth: 'thin',
-    scrollbarColor: '#444 transparent',
-  } as React.CSSProperties,
+    position:      'absolute',
+    bottom:        16,
+    right:         12,
+    width:         280,
+    background:    'rgba(0,0,0,0.70)',
+    borderRadius:  8,
+    padding:       '6px 10px',
+    fontFamily:    'monospace',
+    fontSize:      11,
+    color:         '#aaa',
+    userSelect:    'none',
+    // pointer events ON so the user can scroll with mouse/trackpad
+    pointerEvents: 'auto',
+  },
   header: {
     fontSize:      9,
     color:         '#555',
@@ -78,6 +75,15 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom:  '1px solid #222',
     paddingBottom: 3,
   },
+  scrollArea: {
+    maxHeight:      180,
+    overflowY:      'auto',
+    display:        'flex',
+    flexDirection:  'column',
+    gap:            2,
+    scrollbarWidth: 'thin',
+    scrollbarColor: '#444 transparent',
+  } as React.CSSProperties,
   empty: {
     color:     '#444',
     fontStyle: 'italic',
@@ -88,6 +94,7 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace:   'nowrap',
     overflow:     'hidden',
     textOverflow: 'ellipsis',
+    flexShrink:   0,
   },
   tick: {
     color:       '#555',
