@@ -4,7 +4,7 @@ import { generateWorld, growback, isWalkable } from '../../simulation/world';
 import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type Tile, type Dwarf, type GameState } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } from '../../shared/types';
 
 // colored_packed.png: 49 columns × 22 rows, 16×16, no spacing.
 // Frame index = row * 49 + col  (0-based)
@@ -39,6 +39,8 @@ export class WorldScene extends Phaser.Scene {
   // Graphics layers
   private selectionGfx!: Phaser.GameObjects.Graphics;
   private flagGfx!: Phaser.GameObjects.Graphics;
+  private overlayGfx!: Phaser.GameObjects.Graphics;
+  private overlayMode: OverlayMode = 'off';
 
   // One sprite per living dwarf
   private dwarfSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -70,6 +72,7 @@ export class WorldScene extends Phaser.Scene {
     this.terrainLayer = this.map.createBlankLayer('terrain', tileset)!;
 
     // ── Graphics layers ─────────────────────────────────────────────────
+    this.overlayGfx   = this.add.graphics();
     this.flagGfx      = this.add.graphics();
     this.selectionGfx = this.add.graphics();
 
@@ -89,6 +92,16 @@ export class WorldScene extends Phaser.Scene {
 
     // Suppress browser right-click context menu over the canvas
     this.input.mouse?.disableContextMenu();
+
+    // ── O key: cycle resource overlay ───────────────────────────────────
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.O)
+      .on('down', () => {
+        const modes: OverlayMode[] = ['off', 'food', 'material'];
+        const next = modes[(modes.indexOf(this.overlayMode) + 1) % modes.length];
+        this.overlayMode = next;
+        this.drawOverlay();
+      });
 
     this.setupInput();
   }
@@ -222,6 +235,7 @@ export class WorldScene extends Phaser.Scene {
       totalFood:       alive.reduce((s, d) => s + d.inventory.food, 0),
       totalMaterials:  alive.reduce((s, d) => s + d.inventory.materials, 0),
       selectedDwarfId: this.selectedDwarfId,
+      overlayMode:     this.overlayMode,
     };
     bus.emit('gameState', state);
   }
@@ -246,6 +260,33 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.terrainDirty = false;
+  }
+
+  /** Colored semi-transparent overlay showing food or material density. */
+  private drawOverlay() {
+    this.overlayGfx.clear();
+    if (this.overlayMode === 'off') return;
+
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        const tile = this.grid[y][x];
+        let alpha = 0;
+        let color = 0;
+
+        if (this.overlayMode === 'food' && tile.maxFood > 0) {
+          alpha = (tile.foodValue / tile.maxFood) * 0.65;
+          color = 0x00dd44; // green
+        } else if (this.overlayMode === 'material' && tile.maxMaterial > 0) {
+          alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+          color = 0xff8800; // amber
+        }
+
+        if (alpha > 0.02) {
+          this.overlayGfx.fillStyle(color, alpha);
+          this.overlayGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
   }
 
   private drawAgents() {
@@ -312,7 +353,10 @@ export class WorldScene extends Phaser.Scene {
       this.gameTick();
     }
 
-    if (this.terrainDirty) this.drawTerrain();
+    if (this.terrainDirty) {
+      this.drawTerrain();
+      this.drawOverlay(); // refresh density whenever food values change
+    }
     this.drawAgents();
   }
 }

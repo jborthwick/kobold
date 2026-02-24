@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf } from '../shared/types';
+import type { GameState, Dwarf, OverlayMode } from '../shared/types';
 
 export function HUD() {
   const [state, setState] = useState<GameState | null>(null);
@@ -24,6 +24,7 @@ export function HUD() {
         <Stat label="food"    value={state.totalFood.toFixed(1)} />
         <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
         <Stat label="tick"    value={String(state.tick)} />
+        <OverlayIndicator mode={state.overlayMode} />
       </div>
 
       {selected && <DwarfPanel dwarf={selected} />}
@@ -36,6 +37,27 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div style={styles.stat}>
       <span style={styles.statLabel}>{label}</span>
       <span style={styles.statValue}>{value}</span>
+    </div>
+  );
+}
+
+const OVERLAY_LABEL: Record<OverlayMode, string> = {
+  off:      '[O] overlay',
+  food:     '[O] food ▓',
+  material: '[O] stone ▓',
+};
+const OVERLAY_COLOR: Record<OverlayMode, string> = {
+  off:      '#555',
+  food:     '#00dd44',
+  material: '#ff8800',
+};
+
+function OverlayIndicator({ mode }: { mode: OverlayMode }) {
+  return (
+    <div style={{ ...styles.stat, justifyContent: 'center' }}>
+      <span style={{ ...styles.statLabel, color: OVERLAY_COLOR[mode], fontSize: 10 }}>
+        {OVERLAY_LABEL[mode]}
+      </span>
     </div>
   );
 }

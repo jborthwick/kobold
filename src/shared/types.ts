@@ -45,10 +45,13 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error';
 }
 
+export type OverlayMode = 'off' | 'food' | 'material';
+
 export interface GameState {
   tick: number;
   dwarves: Dwarf[];
   totalFood: number;
   totalMaterials: number;
   selectedDwarfId: string | null;
+  overlayMode: OverlayMode;
 }
