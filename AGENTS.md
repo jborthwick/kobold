@@ -15,7 +15,7 @@ library comparisons, and agent architecture research.
 |---|---|---|---|
 | Language | TypeScript 5.x | ✅ live | End-to-end type safety |
 | Bundler | Vite 7.x | ✅ live | Native TS, HMR, proxy plugin for LLM |
-| Game engine | Phaser 3.88+ | ✅ live | TilemapLayer terrain + sprite dwarves |
+| Game engine | Phaser 3.90+ | ✅ live | TilemapLayer terrain + sprite dwarves |
 | Roguelike algorithms | rot.js 2.x | ✅ live | A* pathfinding in `pathNextStep()` |
 | UI overlay | React 19 | ✅ live | HUD, DwarfPanel, EventLog, TilePicker |
 | Event bus | mitt (200 bytes) | ✅ live | Typed events for Phaser ↔ React |
@@ -189,14 +189,16 @@ Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/dw
 ## World design
 
 - **Grid:** 64×64 tiles, 16×16 px (Kenney 1-bit `colored_packed.png`)
-- **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore
+- **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom
 - **Layout (enforced in `generateWorld()`):**
   - NW quadrant (x<28, y<30): dense Forest food peak (8–12 food/tile)
   - SE quadrant (x>36, y>36): Ore/Stone material peak (8–12 material/tile)
   - River barrier at y=30–32 with two walkable crossing gaps
   - Farmland strip at y=41–42, x<15 (fallback food patch)
-  - Spawn zone x=20–28, y=33–37 (cleared, walkable)
-- **Growback:** food tiles regenerate toward `maxFood` at `growbackRate`/tick
+  - Grass meadow belt (Pass 2.5): ~30% of Dirt in y=33–57, x=10–54 → light food (2–4)
+  - 7 Mushroom clusters (Pass 3.5): 2-tile radius patches in south-central zone, food 4–7
+  - Spawn zone x=20–28, y=33–37 (cleared, walkable — overwrites meadow/mushroom)
+- **Growback rates:** Forest 0.3/tick · Grass meadow 0.15/tick · Mushroom 0.5/tick (fastest)
 - **World events** (every 300–600 ticks, layout-agnostic grid scan):
   - Blight: halves maxFood/foodValue in a 6-tile radius
   - Bounty: boosts food ×1.5 (cap 20) in a 5-tile radius
@@ -211,12 +213,13 @@ Managed by `src/game/tileConfig.ts` (editable via in-game T-key tile picker):
 ```typescript
 TILE_CONFIG = {
   Dirt:     [0, 1, 2],              // noise-selected variation
-  Grass:    [6, 7, 8],
+  Grass:    [5, 6, 7],
   Forest:   [49,50,51,52,53,54,101,102],
   Water:    [253],
   Stone:    [103],
   Farmland: [310],
   Ore:      [522],
+  Mushroom: [554],
 }
 SPRITE_CONFIG = { dwarf: 318 }
 ```
@@ -281,7 +284,8 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 - LLM crisis detection fully working (model, proxy, JSON parsing)
 
 ### Iteration 4 ✅ — Camera, LLM execution, short-term memory
-- WASD + drag pan, scroll-wheel zoom (0.4–6×)
+- WASD + drag pan, scroll-wheel zoom (0.5–5×, dynamic min = map-fill; cursor-anchored)
+- WASD speed divided by `cam.zoom` for consistent apparent pan speed
 - LLM `action` field drives `dwarf.task` display
 - LLM `intent` field overrides behavior tree for 50 ticks
 - Short-term memory (last 5 decisions) injected into LLM prompts
