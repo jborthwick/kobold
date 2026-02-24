@@ -25,8 +25,8 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       x, y,
       health:        100,
       maxHealth:     100,
-      hunger:        rand(10, 40),
-      metabolism:    rand(1, 3),
+      hunger:        rand(10, 30),
+      metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,  // 0.15–0.35/tick (~3–6 min to starve)
       vision:        rand(2, 5),
       inventory:     { food: rand(8, 15), materials: 0 },  // enough to survive travel to forest
       morale:        70 + rand(0, 20),
@@ -127,8 +127,8 @@ export function tickAgent(
 
   // ── 1. Starvation ─────────────────────────────────────────────────────
   if (dwarf.hunger >= 100 && dwarf.inventory.food === 0) {
-    dwarf.health -= 10;
-    dwarf.morale  = Math.max(0, dwarf.morale - 5);
+    dwarf.health -= 2;
+    dwarf.morale  = Math.max(0, dwarf.morale - 2);
     dwarf.task    = 'starving!';
     onLog?.(`is starving! (health ${dwarf.health})`, 'warn');
     if (dwarf.health <= 0) {
