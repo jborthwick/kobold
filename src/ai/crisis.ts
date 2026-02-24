@@ -15,11 +15,13 @@ import type { CrisisSituation, LLMDecision } from './types';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
-const HUNGER_CRISIS_THRESHOLD = 65;   // % hunger — fires even with some food in hand
-const MORALE_CRISIS_THRESHOLD = 40;   // morale ≤ this (morale decays in tickAgent)
-const CONTEST_RADIUS          = 2;    // tiles — contest triggers when rival is this close
-const COOLDOWN_TICKS          = 50;   // ~5 s at 10 ticks/s — min gap between calls
-const MODEL                   = 'claude-3-5-haiku-20241022';
+const HUNGER_CRISIS_THRESHOLD   = 65;  // % hunger — fires when eating is due (eating now at > 70)
+const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tickAgent)
+const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
+const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
+const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
+const COOLDOWN_TICKS            = 50;  // ~7 s at ~7 ticks/s — min gap between calls
+const MODEL                     = 'claude-3-5-haiku-20241022';
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
@@ -33,6 +35,17 @@ export function detectCrisis(
   const alive      = dwarves.filter(d => d.alive);
   const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
   const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
+
+  // Low supplies — fires when inventory nearly empty AND hunger is rising.
+  // This catches the realistic crisis *before* starvation, while there's
+  // still time to act (go harvest, steal from rival, etc.).
+  if (dwarf.inventory.food <= LOW_SUPPLIES_FOOD && dwarf.hunger >= LOW_SUPPLIES_HUNGER) {
+    return {
+      type:        'low_supplies',
+      description: `You are running out of food (only ${dwarf.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${dwarf.hunger.toFixed(0)}/100).`,
+      colonyContext: ctx,
+    };
+  }
 
   // Hunger crisis — fires when hungry, regardless of whether they still have some food
   if (dwarf.hunger >= HUNGER_CRISIS_THRESHOLD) {

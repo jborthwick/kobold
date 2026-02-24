@@ -129,7 +129,9 @@ export function tickAgent(
   }
 
   // ── 2. Eat from inventory ──────────────────────────────────────────────
-  if (dwarf.hunger > 50 && dwarf.inventory.food > 0) {
+  // Threshold at 70 (not 50) so hunger regularly crosses the 65 crisis
+  // threshold first — giving the LLM a chance to react before they eat.
+  if (dwarf.hunger > 70 && dwarf.inventory.food > 0) {
     const bite        = Math.min(dwarf.inventory.food, 3);
     dwarf.inventory.food -= bite;
     dwarf.hunger      = Math.max(0, dwarf.hunger - bite * 20);

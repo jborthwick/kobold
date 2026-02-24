@@ -6,7 +6,7 @@ export interface LLMDecision {
 }
 
 export interface CrisisSituation {
-  type:          'hunger' | 'morale' | 'resource_contest';
+  type:          'hunger' | 'morale' | 'resource_contest' | 'low_supplies';
   description:   string;
   colonyContext: string;
 }
