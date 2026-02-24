@@ -275,8 +275,24 @@ export class WorldScene extends Phaser.Scene {
         const frame = TILE_FRAMES[tile.type];
         const t     = this.terrainLayer.putTileAt(frame, x, y)!;
 
-        // Dim food tiles as they deplete (tint is a multiplicative RGB mask)
-        if (tile.maxFood > 0) {
+        // Tint tiles to show type + depletion state (multiplicative RGB mask).
+        // Each tile type gets its own hue so forest ≠ stone even when depleted.
+        if (tile.type === TileType.Forest && tile.maxFood > 0) {
+          // Forest: bright lime (full) → dark olive (depleted) — always clearly green
+          const ratio = tile.foodValue / tile.maxFood;
+          const r = Math.floor((0.20 + ratio * 0.20) * 255);  // 51–102
+          const g = Math.floor((0.55 + ratio * 0.45) * 255);  // 140–255
+          const b = 0x22;
+          t.tint = (r << 16) | (g << 8) | b;
+        } else if (tile.type === TileType.Farmland && tile.maxFood > 0) {
+          // Farmland: yellow-green (full) → olive-yellow (depleted)
+          const ratio = tile.foodValue / tile.maxFood;
+          const r = Math.floor((0.55 + ratio * 0.45) * 255);  // 140–255
+          const g = Math.floor((0.65 + ratio * 0.35) * 255);  // 166–255
+          const b = 0x10;
+          t.tint = (r << 16) | (g << 8) | b;
+        } else if (tile.maxFood > 0) {
+          // Other food tiles: gray brightness fallback
           const ratio      = tile.foodValue / tile.maxFood;
           const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
           t.tint = (brightness << 16) | (brightness << 8) | brightness;

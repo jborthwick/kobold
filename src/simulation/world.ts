@@ -64,10 +64,10 @@ function makeGrass(): Tile {
 // Six ordered passes on top of a noise base:
 //   1. Fill everything with sparse grass
 //   2. Carve horizontal river at y=30–32 (two walkable crossing gaps)
-//   3. Force NW forest peak: x<28, y<28 — 60% of tiles → dense forest (8–12 food)
+//   3. Force NW forest peak: x<28, y<30 — 60% of tiles → dense forest (8–12 food)
 //   4. Force SE ore peak:    x>36, y>36 — 65% of tiles → ore/stone (8–12 material)
-//   5. Farmland strip at y=38–42 (left half) — fast-regrowth fallback food (3–4)
-//   6. Clear spawn zone (18–30, 26–38) → grass — dwarves must actively search for food
+//   5. Farmland strip at y=41–42, x<15 — small fallback patch (2–3 food)
+//   6. Clear spawn zone (18–30, 33–38) → grass — only the spawn rows, preserves y=28–29 forest
 
 export function generateWorld(): Tile[][] {
   const grid: Tile[][] = [];
@@ -96,9 +96,11 @@ export function generateWorld(): Tile[][] {
   }
 
   // ── Pass 3: NW forest peak ───────────────────────────────────────────────────
-  // 60% of tiles in (x<28, y<28) become dense forest (food 8–12).
+  // 60% of tiles in (x<28, y<30) become dense forest (food 8–12).
+  // Extending to y<30 brings forest right to the south bank of the river so
+  // dwarves with vision≥4 can see food from spawn y=33–37 after crossing.
   // 40% remain sparse grass — natural gaps and clearings.
-  for (let y = 0; y < 28; y++) {
+  for (let y = 0; y < 30; y++) {
     for (let x = 0; x < 28; x++) {
       const n = tileNoise(x, y);
       if (n < 0.60) {
@@ -168,9 +170,10 @@ export function generateWorld(): Tile[][] {
   }
 
   // ── Pass 6: Clear spawn zone ─────────────────────────────────────────────────
-  // Run LAST so forest/ore tiles in this rectangle get cleared.
-  // Dwarves spawn here with only grass (foodValue=1) — must actively search.
-  for (let y = 26; y <= 38; y++) {
+  // Run LAST so any forest tiles in the spawn rectangle get cleared.
+  // Only clear y=33–38 (the actual spawn rows) — y=28–29 forest rows are kept
+  // so they remain visible from spawn and pull dwarves toward the river crossing.
+  for (let y = 33; y <= 38; y++) {
     for (let x = 18; x <= 30; x++) {
       if (grid[y][x].type === TileType.Water) continue; // preserve river
       grid[y][x] = makeGrass();
