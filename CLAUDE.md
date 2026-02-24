@@ -8,6 +8,32 @@ A browser-based colony survival game inspired by Dwarf Fortress. Small colony of
 See `docs/RESEARCH.md` for detailed rationale behind stack decisions,
 library comparisons, and agent architecture research.
 
+---
+
+## Commands
+
+```bash
+npm run dev          # dev server + LLM proxy at http://localhost:5173
+npm run build        # tsc -b && vite build
+npx tsc --noEmit     # type-check only (preferred before commits)
+npm run lint         # eslint
+python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame index
+```
+
+**Required:** `ANTHROPIC_API_KEY=sk-...` in `.env.local` (gitignored) — LLM proxy won't work without it.
+LLM is off by default in-game (🤖 toggle). HMR works for most changes; full reload needed for `crisis.ts` singleton.
+
+## Phaser 3 camera gotcha
+
+`cam.scrollX` is **not** the world position at the left edge — the camera uses a viewport-centred transform.
+Zoom-to-cursor correct formula:
+```typescript
+const f = 1 / oldZoom - 1 / newZoom;
+cam.scrollX += (ptr.x - cam.x - cam.width / 2) * f;
+cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
+```
+
+---
 
 ## Stack decisions
 
@@ -342,7 +368,7 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 
 ## Reference links
 
-- Phaser 3 docs: https://newdocs.phaser.io/docs/3.88.0
+- Phaser 3 docs: https://newdocs.phaser.io/docs/3.90.0
 - rot.js docs: https://ondras.github.io/rot.js/manual/
 - Project Sid (PIANO architecture): https://arxiv.org/abs/2411.00114
 - Sugarscape paper: https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html
