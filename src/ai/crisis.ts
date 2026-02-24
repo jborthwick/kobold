@@ -15,8 +15,9 @@ import type { CrisisSituation, LLMDecision } from './types';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
-const HUNGER_CRISIS_THRESHOLD = 80;   // % hunger, with no food in hand
-const MORALE_CRISIS_THRESHOLD = 25;   // morale ≤ this
+const HUNGER_CRISIS_THRESHOLD = 65;   // % hunger — fires even with some food in hand
+const MORALE_CRISIS_THRESHOLD = 40;   // morale ≤ this (morale decays in tickAgent)
+const CONTEST_RADIUS          = 2;    // tiles — contest triggers when rival is this close
 const COOLDOWN_TICKS          = 50;   // ~5 s at 10 ticks/s — min gap between calls
 const MODEL                   = 'claude-3-5-haiku-20241022';
 
@@ -33,30 +34,35 @@ export function detectCrisis(
   const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
   const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
 
-  // Starving with nothing to eat
-  if (dwarf.hunger >= HUNGER_CRISIS_THRESHOLD && dwarf.inventory.food === 0) {
+  // Hunger crisis — fires when hungry, regardless of whether they still have some food
+  if (dwarf.hunger >= HUNGER_CRISIS_THRESHOLD) {
     return {
       type:        'hunger',
-      description: `You are starving (hunger ${dwarf.hunger.toFixed(0)}/100) and carry no food.`,
+      description: `You are very hungry (hunger ${dwarf.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${dwarf.inventory.food.toFixed(0)} units).`,
       colonyContext: ctx,
     };
   }
 
-  // Morale breaking point
+  // Morale breaking point (morale decays in tickAgent when hungry)
   if (dwarf.morale <= MORALE_CRISIS_THRESHOLD) {
     return {
       type:        'morale',
-      description: `Your morale has collapsed to ${dwarf.morale.toFixed(0)}/100. You are barely holding on.`,
+      description: `Your morale has fallen to ${dwarf.morale.toFixed(0)}/100. You are struggling to keep going.`,
       colonyContext: ctx,
     };
   }
 
-  // Resource contest — another living dwarf on the same tile
-  const rival = alive.find(d => d.id !== dwarf.id && d.x === dwarf.x && d.y === dwarf.y);
+  // Resource contest — rival within CONTEST_RADIUS tiles targeting the same area
+  const rival = alive.find(d =>
+    d.id !== dwarf.id &&
+    Math.abs(d.x - dwarf.x) <= CONTEST_RADIUS &&
+    Math.abs(d.y - dwarf.y) <= CONTEST_RADIUS &&
+    d.inventory.food < 3,   // only contest if rival is also food-hungry
+  );
   if (rival) {
     return {
       type:        'resource_contest',
-      description: `${rival.name} is on the same tile competing for the same resources.`,
+      description: `${rival.name} is nearby (${Math.abs(rival.x - dwarf.x) + Math.abs(rival.y - dwarf.y)} tiles away) competing for the same scarce food.`,
       colonyContext: `You carry ${dwarf.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
     };
   }

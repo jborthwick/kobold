@@ -106,6 +106,13 @@ export function tickAgent(
   // Hunger grows every tick
   dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism);
 
+  // Morale decays slowly when hungry, recovers when well-fed
+  if (dwarf.hunger > 60) {
+    dwarf.morale = Math.max(0,   dwarf.morale - 0.4);
+  } else if (dwarf.hunger < 30) {
+    dwarf.morale = Math.min(100, dwarf.morale + 0.2);
+  }
+
   // ── 1. Starvation ─────────────────────────────────────────────────────
   if (dwarf.hunger >= 100 && dwarf.inventory.food === 0) {
     dwarf.health -= 10;
