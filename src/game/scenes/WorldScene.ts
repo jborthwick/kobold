@@ -4,7 +4,7 @@ import { generateWorld, growback, isWalkable } from '../../simulation/world';
 import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState, type TileInfo } from '../../shared/types';
 import { llmSystem } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -185,6 +185,20 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      // Tile hover — emit info for the tooltip regardless of drag state
+      const hx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE), 0, GRID_SIZE - 1);
+      const hy = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE), 0, GRID_SIZE - 1);
+      const ht = this.grid[hy]?.[hx];
+      if (ht) {
+        const info: TileInfo = {
+          x: hx, y: hy,
+          type: ht.type,
+          foodValue: ht.foodValue, maxFood: ht.maxFood,
+          materialValue: ht.materialValue, maxMaterial: ht.maxMaterial,
+        };
+        bus.emit('tileHover', info);
+      }
+
       if (!p.isDown || p.rightButtonDown()) return;
       const dx = (dragStartX - p.x) / cam.zoom;
       const dy = (dragStartY - p.y) / cam.zoom;

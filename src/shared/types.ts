@@ -69,6 +69,16 @@ export interface LogEntry {
 
 export type OverlayMode = 'off' | 'food' | 'material';
 
+export interface TileInfo {
+  x: number;
+  y: number;
+  type: TileType;
+  foodValue: number;
+  maxFood: number;
+  materialValue: number;
+  maxMaterial: number;
+}
+
 export interface GameState {
   tick: number;
   dwarves: Dwarf[];
