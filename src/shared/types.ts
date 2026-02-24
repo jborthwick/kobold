@@ -35,6 +35,7 @@ export interface Dwarf {
   alive: boolean;
   task: string;
   commandTarget: { x: number; y: number } | null;  // player-issued move order
+  llmReasoning: string | null;  // last LLM decision shown in DwarfPanel
 }
 
 export interface LogEntry {

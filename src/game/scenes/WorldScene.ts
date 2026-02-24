@@ -5,6 +5,7 @@ import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } from '../../shared/types';
+import { llmSystem } from '../../ai/crisis';
 
 // colored_packed.png: 49 columns × 22 rows, 16×16, no spacing.
 // Frame index = row * 49 + col  (0-based)
@@ -214,6 +215,20 @@ export class WorldScene extends Phaser.Scene {
           level,
         });
       });
+
+      // Fire async LLM crisis check — never blocks the game loop
+      llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick,
+        (dwarf, decision, situation) => {
+          dwarf.llmReasoning = decision.reasoning;
+          bus.emit('logEntry', {
+            tick:      this.tick,
+            dwarfId:   dwarf.id,
+            dwarfName: dwarf.name,
+            message:   `[${situation.type}] "${decision.reasoning}" → ${decision.action}`,
+            level:     'warn',
+          });
+        },
+      );
     }
 
     growback(this.grid);

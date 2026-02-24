@@ -1,0 +1,170 @@
+/**
+ * LLM crisis detection and decision system.
+ *
+ * Pattern from RESEARCH.md §7 — "AI Commander":
+ *  - detectCrisis()       rule-based trigger check (runs every tick, cheap)
+ *  - LLMDecisionSystem    singleton class; manages in-flight requests and
+ *                         per-agent cooldowns; never blocks the game loop
+ *
+ * Proxy route: /api/llm-proxy → Vite dev server → api.anthropic.com/v1/messages
+ * In production this will be a Cloudflare Worker at the same path.
+ */
+
+import type { Dwarf, Tile } from '../shared/types';
+import type { CrisisSituation, LLMDecision } from './types';
+
+// ── Thresholds ────────────────────────────────────────────────────────────────
+
+const HUNGER_CRISIS_THRESHOLD = 80;   // % hunger, with no food in hand
+const MORALE_CRISIS_THRESHOLD = 25;   // morale ≤ this
+const COOLDOWN_TICKS          = 50;   // ~5 s at 10 ticks/s — min gap between calls
+const MODEL                   = 'claude-3-5-haiku-20241022';
+
+// ── Crisis detection (deterministic, runs every tick) ─────────────────────────
+
+export function detectCrisis(
+  dwarf:   Dwarf,
+  dwarves: Dwarf[],
+  _grid:   Tile[][],
+): CrisisSituation | null {
+  if (!dwarf.alive) return null;
+
+  const alive      = dwarves.filter(d => d.alive);
+  const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
+  const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
+
+  // Starving with nothing to eat
+  if (dwarf.hunger >= HUNGER_CRISIS_THRESHOLD && dwarf.inventory.food === 0) {
+    return {
+      type:        'hunger',
+      description: `You are starving (hunger ${dwarf.hunger.toFixed(0)}/100) and carry no food.`,
+      colonyContext: ctx,
+    };
+  }
+
+  // Morale breaking point
+  if (dwarf.morale <= MORALE_CRISIS_THRESHOLD) {
+    return {
+      type:        'morale',
+      description: `Your morale has collapsed to ${dwarf.morale.toFixed(0)}/100. You are barely holding on.`,
+      colonyContext: ctx,
+    };
+  }
+
+  // Resource contest — another living dwarf on the same tile
+  const rival = alive.find(d => d.id !== dwarf.id && d.x === dwarf.x && d.y === dwarf.y);
+  if (rival) {
+    return {
+      type:        'resource_contest',
+      description: `${rival.name} is on the same tile competing for the same resources.`,
+      colonyContext: `You carry ${dwarf.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
+    };
+  }
+
+  return null;
+}
+
+// ── Prompt builder ────────────────────────────────────────────────────────────
+
+function buildPrompt(dwarf: Dwarf, situation: CrisisSituation): string {
+  return `You are ${dwarf.name}, a dwarf in a colony.
+Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
+Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
+
+CRISIS: ${situation.description}
+Colony context: ${situation.colonyContext}
+
+Respond ONLY as valid JSON (no markdown, no extra text):
+{
+  "action": "one short sentence — what you will do next",
+  "reasoning": "internal monologue, 1-2 sentences",
+  "emotional_state": "3-5 words describing how you feel",
+  "expectedOutcome": "one short sentence — what you expect to happen"
+}`;
+}
+
+// ── LLM Decision System ───────────────────────────────────────────────────────
+
+type DecisionCallback = (
+  dwarf:     Dwarf,
+  decision:  LLMDecision,
+  situation: CrisisSituation,
+) => void;
+
+export class LLMDecisionSystem {
+  // One Promise per agent — prevents duplicate in-flight calls
+  private pendingRequests = new Map<string, Promise<LLMDecision | null>>();
+  // Per-agent cooldown: don't fire again until this tick
+  private cooldownUntil   = new Map<string, number>();
+
+  /**
+   * Check for a crisis, fire an async LLM call if one is found and the agent
+   * isn't on cooldown.  Never awaited — the game loop must not block.
+   */
+  requestDecision(
+    dwarf:      Dwarf,
+    dwarves:    Dwarf[],
+    grid:       Tile[][],
+    currentTick: number,
+    onDecision: DecisionCallback,
+  ): void {
+    if (!dwarf.alive)                                          return;
+    if (this.pendingRequests.has(dwarf.id))                    return;
+    if ((this.cooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
+
+    const situation = detectCrisis(dwarf, dwarves, grid);
+    if (!situation) return;
+
+    const promise = this.callLLM(dwarf, situation);
+    this.pendingRequests.set(dwarf.id, promise);
+
+    // Detached — resolves on its own; game loop continues
+    promise.then(decision => {
+      this.pendingRequests.delete(dwarf.id);
+      this.cooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS);
+      if (decision) onDecision(dwarf, decision, situation);
+    });
+  }
+
+  private async callLLM(
+    dwarf:     Dwarf,
+    situation: CrisisSituation,
+  ): Promise<LLMDecision | null> {
+    try {
+      const res = await fetch('/api/llm-proxy', {
+        method:  'POST',
+        headers: { 'content-type': 'application/json' },
+        signal:  AbortSignal.timeout(5_000),
+        body: JSON.stringify({
+          model:      MODEL,
+          max_tokens: 256,
+          messages: [{ role: 'user', content: buildPrompt(dwarf, situation) }],
+        }),
+      });
+
+      if (!res.ok) {
+        console.warn(`[LLM] HTTP ${res.status} for ${dwarf.name}`);
+        return null;
+      }
+
+      const data     = await res.json() as { content?: { text?: string }[] };
+      const raw      = data?.content?.[0]?.text ?? '';
+      const decision = JSON.parse(raw) as LLMDecision;
+
+      if (!decision?.action || !decision?.reasoning) return null;
+      // Provide defaults for optional fields
+      decision.emotional_state ??= 'uncertain';
+      decision.expectedOutcome  ??= 'unknown outcome';
+      return decision;
+    } catch (err) {
+      const name = (err as Error).name;
+      if (name !== 'AbortError' && name !== 'TimeoutError') {
+        console.warn('[LLM] call failed:', err);
+      }
+      return null;
+    }
+  }
+}
+
+// Singleton — shared across the WorldScene
+export const llmSystem = new LLMDecisionSystem();

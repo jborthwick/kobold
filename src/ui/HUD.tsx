@@ -73,6 +73,9 @@ function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
       <div style={styles.panelRow}>vision: {dwarf.vision}</div>
       <div style={styles.panelRow}>metabolism: {dwarf.metabolism}/tick</div>
       <div style={styles.task}>{dwarf.task}</div>
+      {dwarf.llmReasoning && (
+        <div style={styles.llmReasoning}>💭 "{dwarf.llmReasoning}"</div>
+      )}
     </div>
   );
 }
@@ -166,5 +169,15 @@ const styles: Record<string, React.CSSProperties> = {
     height:       '100%',
     borderRadius: 4,
     transition:   'width 0.15s ease',
+  },
+  llmReasoning: {
+    marginTop:  8,
+    padding:    '5px 7px',
+    background: 'rgba(255,200,0,0.08)',
+    borderLeft: '2px solid #f0c040',
+    color:      '#f0c040',
+    fontStyle:  'italic',
+    fontSize:   10,
+    lineHeight: 1.4,
   },
 };

@@ -4,6 +4,11 @@ A browser-based, mobile-friendly colony survival game inspired by Dwarf Fortress
 
 ---
 
+## Further reading
+See `docs/RESEARCH.md` for detailed rationale behind stack decisions, 
+library comparisons, and agent architecture research.
+
+
 ## Stack decisions (locked in)
 
 | Layer | Choice | Notes |

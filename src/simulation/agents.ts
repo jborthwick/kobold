@@ -30,6 +30,7 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       alive:         true,
       task:          'idle',
       commandTarget: null,
+      llmReasoning:  null,
     });
   }
   return dwarves;
