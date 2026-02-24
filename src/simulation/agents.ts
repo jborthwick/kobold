@@ -1,5 +1,5 @@
 import * as ROT from 'rot-js';
-import { type Dwarf, type Tile } from '../shared/types';
+import { type Dwarf, type Tile, type DwarfRole } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
@@ -7,17 +7,25 @@ function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// Role assignment order and vision ranges
+const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'forager', 'miner'];
+const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number }> = {
+  forager: { visionMin: 4, visionMax: 6 },
+  miner:   { visionMin: 2, visionMax: 4 },
+  scout:   { visionMin: 5, visionMax: 8 },
+};
+
 export function spawnDwarves(grid: Tile[][]): Dwarf[] {
   const dwarves: Dwarf[] = [];
   for (let i = 0; i < INITIAL_DWARVES; i++) {
     let x: number, y: number;
-    // Spawn in center-left zone (20–28, 33–37) — cleared of food, south of river.
-    // Dwarves must cross at x=19–21 or x=43–45 to reach NW forest.
-    // All tiles here are walkable grass (no water), so isWalkable never retries.
     do {
       x = rand(20, 28);
       y = rand(33, 37);
     } while (!isWalkable(grid, x, y));
+
+    const role  = ROLE_ORDER[i % ROLE_ORDER.length];
+    const stats = ROLE_STATS[role];
 
     dwarves.push({
       id:            `dwarf-${i}`,
@@ -27,11 +35,12 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       maxHealth:     100,
       hunger:        rand(10, 30),
       metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,  // 0.15–0.35/tick (~3–6 min to starve)
-      vision:        rand(2, 5),
-      inventory:     { food: rand(8, 15), materials: 0 },  // enough to survive travel to forest
+      vision:        rand(stats.visionMin, stats.visionMax),
+      inventory:     { food: rand(8, 15), materials: 0 },
       morale:        70 + rand(0, 20),
       alive:         true,
       task:          'idle',
+      role,
       commandTarget: null,
       llmReasoning:    null,
       llmIntent:       null,
@@ -59,6 +68,27 @@ function bestFoodTile(
       const ny = dwarf.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       const v = grid[ny][nx].foodValue;
+      if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
+    }
+  }
+  return best;
+}
+
+/** Scan a square of `radius` tiles around the dwarf for the richest material tile (miners). */
+function bestMaterialTile(
+  dwarf:  Dwarf,
+  grid:   Tile[][],
+  radius: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestValue = 0.5;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = dwarf.x + dx;
+      const ny = dwarf.y + dy;
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      const v = grid[ny][nx].materialValue;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
   }
@@ -179,6 +209,29 @@ export function tickAgent(
     }
   }
 
+  // ── 2.7. Food sharing ─────────────────────────────────────────────────
+  // Well-fed dwarves share 3 food with the hungriest starving neighbor.
+  // Donor keeps ≥ 5 food after sharing (8 − 3 = 5).
+  if (dwarves && dwarf.inventory.food >= 8) {
+    const SHARE_RADIUS = 2;
+    const needy = dwarves
+      .filter(d =>
+        d.alive && d.id !== dwarf.id &&
+        Math.abs(d.x - dwarf.x) <= SHARE_RADIUS &&
+        Math.abs(d.y - dwarf.y) <= SHARE_RADIUS &&
+        d.hunger > 60 && d.inventory.food < 3,
+      )
+      .sort((a, b) => b.hunger - a.hunger)[0] ?? null;
+    if (needy) {
+      const gift = 3;
+      dwarf.inventory.food -= gift;
+      needy.inventory.food  = Math.min(MAX_INVENTORY_FOOD, needy.inventory.food + gift);
+      dwarf.task = `sharing food → ${needy.name}`;
+      onLog?.(`shared ${gift} food with ${needy.name} (hunger ${needy.hunger.toFixed(0)})`, 'info');
+      return;
+    }
+  }
+
   // ── 3. Follow player command ───────────────────────────────────────────
   // Player commands take priority over autonomous harvesting so right-click
   // actually moves the dwarf without interruption.
@@ -211,9 +264,24 @@ export function tickAgent(
       dwarf.y    = next.y;
     }
     const here = grid[dwarf.y][dwarf.x];
+
+    // Contest yield — if a hungrier dwarf is on the same tile, let them harvest first
+    if (dwarves) {
+      const rival = dwarves.find(d =>
+        d.alive && d.id !== dwarf.id &&
+        d.x === dwarf.x && d.y === dwarf.y &&
+        d.hunger > dwarf.hunger,
+      );
+      if (rival) {
+        dwarf.task = `yielding to ${rival.name}`;
+        return;
+      }
+    }
+
     const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
     if (here.foodValue > 0 && headroom > 0) {
-      const amount          = Math.min(here.foodValue, 3, headroom);
+      const harvestRate     = dwarf.role === 'forager' ? 4 : 3;  // foragers harvest 1 extra/tile
+      const amount          = Math.min(here.foodValue, harvestRate, headroom);
       here.foodValue        = Math.max(0, here.foodValue - amount);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
@@ -225,6 +293,30 @@ export function tickAgent(
       dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
     }
     return;
+  }
+
+  // ── 4.5. Miners target ore/material tiles when no food found ──────────
+  if (dwarf.role === 'miner') {
+    const oreTarget = bestMaterialTile(dwarf, grid, dwarf.vision);
+    if (oreTarget) {
+      if (dwarf.x !== oreTarget.x || dwarf.y !== oreTarget.y) {
+        const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, oreTarget, grid);
+        dwarf.x    = next.x;
+        dwarf.y    = next.y;
+      }
+      const here = grid[dwarf.y][dwarf.x];
+      if (here.materialValue > 0) {
+        const mined        = Math.min(here.materialValue, 2);
+        here.materialValue = Math.max(0, here.materialValue - mined);
+        dwarf.inventory.materials = Math.min(
+          dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
+        );
+        dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
+      } else {
+        dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
+      }
+      return;
+    }
   }
 
   // ── 5. Wander / Avoid ─────────────────────────────────────────────────

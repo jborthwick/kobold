@@ -10,7 +10,7 @@
  * In production this will be a Cloudflare Worker at the same path.
  */
 
-import type { Dwarf, Tile } from '../shared/types';
+import type { Dwarf, Tile, LLMIntent } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -66,10 +66,12 @@ export function detectCrisis(
   }
 
   // Resource contest — rival within CONTEST_RADIUS tiles targeting the same area
+  // Scouts have wider situational awareness
+  const contestRadius = dwarf.role === 'scout' ? 4 : CONTEST_RADIUS;
   const rival = alive.find(d =>
     d.id !== dwarf.id &&
-    Math.abs(d.x - dwarf.x) <= CONTEST_RADIUS &&
-    Math.abs(d.y - dwarf.y) <= CONTEST_RADIUS &&
+    Math.abs(d.x - dwarf.x) <= contestRadius &&
+    Math.abs(d.y - dwarf.y) <= contestRadius &&
     d.inventory.food < 3,   // only contest if rival is also food-hungry
   );
   if (rival) {
@@ -80,19 +82,46 @@ export function detectCrisis(
     };
   }
 
+  // Resource sharing — fires when well-fed AND a nearby dwarf is struggling
+  const SHARE_RADIUS = 2;
+  if (dwarf.inventory.food >= 8) {
+    const needyNeighbor = alive.find(d =>
+      d.id !== dwarf.id &&
+      Math.abs(d.x - dwarf.x) <= SHARE_RADIUS &&
+      Math.abs(d.y - dwarf.y) <= SHARE_RADIUS &&
+      d.hunger > 60 && d.inventory.food < 3,
+    );
+    if (needyNeighbor) {
+      return {
+        type:        'resource_sharing',
+        description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food). You are well-supplied with ${dwarf.inventory.food.toFixed(0)} units.`,
+        colonyContext: ctx,
+      };
+    }
+  }
+
   return null;
 }
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
+function roleLabel(dwarf: Dwarf): string {
+  if (dwarf.role === 'forager') return 'Forager — you specialize in harvesting food efficiently.';
+  if (dwarf.role === 'miner')   return 'Miner — you prioritize mining ore and stone over foraging.';
+  return 'Scout — you have wide vision and detect threats early.';
+}
+
 function buildPrompt(dwarf: Dwarf, situation: CrisisSituation): string {
-  // PIANO step 2 — inject short-term memory if present
+  // PIANO step 2 — inject short-term memory if present (with VERIFY outcomes)
   const memBlock = dwarf.memory.length > 0
-    ? `\nRECENT DECISIONS:\n${dwarf.memory.map(m =>
-        `  [tick ${m.tick}] ${m.crisis}: "${m.action}"`).join('\n')}`
+    ? `\nRECENT DECISIONS:\n${dwarf.memory.map(m => {
+        const out = m.outcome ? ` → OUTCOME: ${m.outcome}` : '';
+        return `  [tick ${m.tick}] ${m.crisis}: "${m.action}"${out}`;
+      }).join('\n')}`
     : '';
 
-  return `You are ${dwarf.name}, a dwarf in a colony.
+  return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
+Role affects your priorities and decisions.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
 Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
 
@@ -118,6 +147,15 @@ type DecisionCallback = (
   situation: CrisisSituation,
 ) => void;
 
+interface VerifySnapshot {
+  dwarfId:          string;
+  verifyAtTick:     number;        // currentTick + 40
+  intent:           LLMIntent;
+  hungerAtDecision: number;
+  foodAtDecision:   number;
+  memoryEntryIndex: number;        // index into dwarf.memory to backfill
+}
+
 export class LLMDecisionSystem {
   /** Set to false to suppress all LLM calls (e.g. dev toggle). */
   public enabled = false;
@@ -126,6 +164,8 @@ export class LLMDecisionSystem {
   private pendingRequests = new Map<string, Promise<LLMDecision | null>>();
   // Per-agent cooldown: don't fire again until this tick
   private cooldownUntil   = new Map<string, number>();
+  // PIANO step 6 — pending outcome verifications
+  private pendingVerifications = new Map<string, VerifySnapshot>();
 
   /**
    * Check for a crisis, fire an async LLM call if one is found and the agent
@@ -153,8 +193,59 @@ export class LLMDecisionSystem {
     promise.then(decision => {
       this.pendingRequests.delete(dwarf.id);
       this.cooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS);
-      if (decision) onDecision(dwarf, decision, situation);
+      if (decision) {
+        onDecision(dwarf, decision, situation);
+        // PIANO step 6 — schedule outcome verification after 40 ticks
+        if (decision.intent && decision.intent !== 'none') {
+          this.pendingVerifications.set(dwarf.id, {
+            dwarfId:          dwarf.id,
+            verifyAtTick:     currentTick + 40,
+            intent:           decision.intent,
+            hungerAtDecision: dwarf.hunger,
+            foodAtDecision:   dwarf.inventory.food,
+            memoryEntryIndex: dwarf.memory.length - 1,
+          });
+        }
+      }
     });
+  }
+
+  /**
+   * Called once per game tick from WorldScene. Checks pending verifications,
+   * backfills outcomes into memory, and returns surprise messages for the log.
+   */
+  public checkVerifications(dwarves: Dwarf[], currentTick: number): string[] {
+    const surprises: string[] = [];
+    for (const [id, snap] of this.pendingVerifications) {
+      if (currentTick < snap.verifyAtTick) continue;
+      this.pendingVerifications.delete(id);
+      const dwarf = dwarves.find(d => d.id === id && d.alive);
+      if (!dwarf) continue;
+      const result = this.evaluateOutcome(dwarf, snap);
+      if (result) {
+        const entry = dwarf.memory[snap.memoryEntryIndex];
+        if (entry) entry.outcome = result;
+        surprises.push(`${dwarf.name}: ${result}`);
+      }
+    }
+    return surprises;
+  }
+
+  private evaluateOutcome(dwarf: Dwarf, snap: VerifySnapshot): string | null {
+    const hungerDelta = dwarf.hunger - snap.hungerAtDecision;
+    const foodDelta   = dwarf.inventory.food - snap.foodAtDecision;
+    switch (snap.intent) {
+      case 'eat':    return hungerDelta >= 0
+        ? `eating failed — hunger rose ${hungerDelta.toFixed(0)}`
+        : null;
+      case 'forage': return foodDelta <= 0
+        ? `foraging failed — no food collected`
+        : null;
+      case 'rest':   return dwarf.hunger > 80
+        ? `resting while starving (hunger ${dwarf.hunger.toFixed(0)})`
+        : null;
+      default:       return null;
+    }
   }
 
   private async callLLM(

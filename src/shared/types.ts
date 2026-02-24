@@ -27,10 +27,14 @@ export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
 
 // PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
 export interface MemoryEntry {
-  tick:   number;
-  crisis: string;  // CrisisSituation.type
-  action: string;  // decision.action text
+  tick:     number;
+  crisis:   string;   // CrisisSituation.type
+  action:   string;   // decision.action text
+  outcome?: string;   // backfilled by VERIFY step (~40 ticks later)
 }
+
+// Agent role — assigned at spawn, permanent
+export type DwarfRole = 'forager' | 'miner' | 'scout';
 
 export interface Dwarf {
   id: string;
@@ -51,6 +55,7 @@ export interface Dwarf {
   llmIntent:       LLMIntent | null; // active override intent (expires at llmIntentExpiry)
   llmIntentExpiry: number;           // tick after which intent is discarded
   memory:          MemoryEntry[];    // last 5 decisions, oldest-first
+  role:            DwarfRole;
 }
 
 export interface LogEntry {

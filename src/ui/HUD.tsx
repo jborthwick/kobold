@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf, OverlayMode } from '../shared/types';
+import type { GameState, Dwarf, OverlayMode, DwarfRole } from '../shared/types';
 
 export function HUD() {
   const [state,      setState]      = useState<GameState | null>(null);
@@ -75,10 +75,15 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
   );
 }
 
+function roleColor(role: DwarfRole): string {
+  return role === 'forager' ? '#56d973' : role === 'miner' ? '#ff8800' : '#7ec8e3';
+}
+
 function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
   return (
     <div style={styles.panel}>
       <div style={styles.panelName}>{dwarf.name}</div>
+      <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 6 }}>[{dwarf.role.toUpperCase()}]</div>
       <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />

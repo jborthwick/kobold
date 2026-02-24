@@ -6,6 +6,7 @@ import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } from '../../shared/types';
 import { llmSystem } from '../../ai/crisis';
+import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
@@ -201,6 +202,18 @@ export class WorldScene extends Phaser.Scene {
   private gameTick() {
     this.tick++;
 
+    // PIANO step 6 — check pending outcome verifications, log surprises
+    const surprises = llmSystem.checkVerifications(this.dwarves, this.tick);
+    for (const msg of surprises) {
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   'system',
+        dwarfName: 'VERIFY',
+        message:   msg,
+        level:     'warn',
+      });
+    }
+
     for (const d of this.dwarves) {
       tickAgent(d, this.grid, this.tick, this.dwarves, (message, level) => {
         bus.emit('logEntry', {
@@ -216,11 +229,12 @@ export class WorldScene extends Phaser.Scene {
       llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick,
         (dwarf, decision, situation) => {
           dwarf.llmReasoning = decision.reasoning;
+          dwarf.task         = decision.action;  // show LLM action string as task label
 
-          // Store structured intent with expiry (~1.5 s at 7 ticks/s)
+          // Store structured intent with expiry (~7.5 s at 7 ticks/s)
           if (decision.intent && decision.intent !== 'none') {
             dwarf.llmIntent       = decision.intent;
-            dwarf.llmIntentExpiry = this.tick + 10;
+            dwarf.llmIntentExpiry = this.tick + 50;
           }
 
           // Push to rolling short-term memory (cap at 5 entries)
@@ -239,6 +253,19 @@ export class WorldScene extends Phaser.Scene {
     }
 
     growback(this.grid);
+
+    // World events — blight / bounty / ore discovery
+    const ev = tickWorldEvents(this.grid, this.tick);
+    if (ev.fired) {
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   'world',
+        dwarfName: 'WORLD',
+        message:   ev.message,
+        level:     'warn',
+      });
+    }
+
     this.terrainDirty = true;
 
     // Clear flag once all commanded dwarves have arrived
