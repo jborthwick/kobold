@@ -21,7 +21,7 @@ const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival 
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
 const COOLDOWN_TICKS            = 50;  // ~7 s at ~7 ticks/s — min gap between calls
-const MODEL                     = 'claude-3-5-haiku-20241022';
+const MODEL                     = 'claude-haiku-4-5';
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
@@ -166,9 +166,11 @@ export class LLMDecisionSystem {
         return null;
       }
 
-      const data     = await res.json() as { content?: { text?: string }[] };
-      const raw      = data?.content?.[0]?.text ?? '';
-      const decision = JSON.parse(raw) as LLMDecision;
+      const data    = await res.json() as { content?: { text?: string }[] };
+      const raw     = data?.content?.[0]?.text ?? '';
+      // Some models wrap JSON in markdown fences — strip them before parsing
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const decision = JSON.parse(cleaned) as LLMDecision;
 
       if (!decision?.action || !decision?.reasoning) return null;
       // Provide defaults for optional fields

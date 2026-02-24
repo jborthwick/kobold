@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
           headers: {
             'x-api-key':         env.ANTHROPIC_API_KEY ?? '',
             'anthropic-version': '2023-06-01',
+            // Vite forwards the browser Origin header; Anthropic requires this
+            // flag when it detects a cross-origin / browser-initiated request.
+            'anthropic-dangerous-direct-browser-access': 'true',
           },
         },
       },
