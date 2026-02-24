@@ -89,9 +89,9 @@ function pathNextStep(
 //   1. Starvation damage / death
 //   2. Eat from inventory
 //   3. Follow player commandTarget  ← player commands override harvesting
-//   4. Harvest tile underfoot
-//   5. Forage toward richest visible food
-//   6. Wander
+//   4. Forage + harvest (Sugarscape rule): move toward richest visible food,
+//      then harvest wherever you land
+//   5. Wander
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -147,27 +147,30 @@ export function tickAgent(
     return;
   }
 
-  // ── 4. Harvest tile underfoot ──────────────────────────────────────────
-  const here = grid[dwarf.y][dwarf.x];
-  if (here.foodValue > 0) {
-    const amount          = Math.min(here.foodValue, 3);
-    here.foodValue        = Math.max(0, here.foodValue - amount);
-    dwarf.inventory.food += amount;
-    dwarf.task            = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
+  // ── 4. Forage + harvest (Sugarscape rule) ─────────────────────────────
+  // Each tick: move toward the richest visible tile, then harvest wherever
+  // you land.  bestVisibleFoodTile scans dx=0,dy=0 too, so if the current
+  // tile is already the richest the dwarf stays put and harvests in place.
+  const foodTarget = bestVisibleFoodTile(dwarf, grid);
+  if (foodTarget) {
+    if (dwarf.x !== foodTarget.x || dwarf.y !== foodTarget.y) {
+      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, foodTarget, grid);
+      dwarf.x    = next.x;
+      dwarf.y    = next.y;
+    }
+    const here = grid[dwarf.y][dwarf.x];
+    if (here.foodValue > 0) {
+      const amount          = Math.min(here.foodValue, 3);
+      here.foodValue        = Math.max(0, here.foodValue - amount);
+      dwarf.inventory.food += amount;
+      dwarf.task            = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
+    } else {
+      dwarf.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
+    }
     return;
   }
 
-  // ── 5. Forage toward richest visible food ──────────────────────────────
-  const target = bestVisibleFoodTile(dwarf, grid);
-  if (target) {
-    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, target, grid);
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
-    dwarf.task = `foraging → (${target.x},${target.y})`;
-    return;
-  }
-
-  // ── 6. Wander ──────────────────────────────────────────────────────────
+  // ── 5. Wander ──────────────────────────────────────────────────────────
   const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
   const open = dirs
     .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
