@@ -76,7 +76,7 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: 3,
   },
   scrollArea: {
-    maxHeight:      180,
+    maxHeight:      320,
     overflowY:      'auto',
     display:        'flex',
     flexDirection:  'column',
