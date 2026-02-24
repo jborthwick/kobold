@@ -8,14 +8,17 @@ import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } fro
 import { llmSystem } from '../../ai/crisis';
 
 // colored_packed.png: 49 columns × 22 rows, 16×16, no spacing.
-// Frame index = row * 49 + col  (0-based)
+// Frame index = row * 49 + col  (0-based).
+// Frames verified by pixel analysis (4-bit indexed PNG, 8-color palette):
+//   BG  = (71,45,60)  GREEN = (56,217,115)  GRAY  = (207,198,184)
+//   TAN = (191,121,88) BROWNDARK = (122,68,74) BLUE = (60,172,215)
 const TILE_FRAMES: Record<TileType, number> = {
-  [TileType.Forest]:   0,    // row 0, col 0  – green tree ✓
-  [TileType.Grass]:    9,    // row 0, col 9  – subtle ground dot
-  [TileType.Water]:    204,  // row 4, col 8  – blue water ✓
-  [TileType.Stone]:    98,   // row 2, col 0  – dark stone
-  [TileType.Farmland]: 147,  // row 3, col 2  – grid/soil pattern
-  [TileType.Ore]:      16,   // row 0, col 16 – mineral icon
+  [TileType.Forest]:   54,   // row 1, col 5  – 110 green pixels (pine tree) ✓
+  [TileType.Grass]:     9,   // row 0, col 9  – 164 browndark (ground path) ✓
+  [TileType.Water]:   204,   // row 4, col 8  – 166 blue ✓
+  [TileType.Stone]:    72,   // row 1, col 23 – 186 gray (stone tile) ✓
+  [TileType.Farmland]:150,   // row 3, col 3  – 150 tan (soil tile) ✓
+  [TileType.Ore]:      16,   // row 0, col 16 – mineral icon (verify visually)
 };
 
 // Armored humanoid character sprite (row 0, cols 26-43 are character sprites)
@@ -275,24 +278,9 @@ export class WorldScene extends Phaser.Scene {
         const frame = TILE_FRAMES[tile.type];
         const t     = this.terrainLayer.putTileAt(frame, x, y)!;
 
-        // Tint tiles to show type + depletion state (multiplicative RGB mask).
-        // Each tile type gets its own hue so forest ≠ stone even when depleted.
-        if (tile.type === TileType.Forest && tile.maxFood > 0) {
-          // Forest: bright lime (full) → dark olive (depleted) — always clearly green
-          const ratio = tile.foodValue / tile.maxFood;
-          const r = Math.floor((0.20 + ratio * 0.20) * 255);  // 51–102
-          const g = Math.floor((0.55 + ratio * 0.45) * 255);  // 140–255
-          const b = 0x22;
-          t.tint = (r << 16) | (g << 8) | b;
-        } else if (tile.type === TileType.Farmland && tile.maxFood > 0) {
-          // Farmland: yellow-green (full) → olive-yellow (depleted)
-          const ratio = tile.foodValue / tile.maxFood;
-          const r = Math.floor((0.55 + ratio * 0.45) * 255);  // 140–255
-          const g = Math.floor((0.65 + ratio * 0.35) * 255);  // 166–255
-          const b = 0x10;
-          t.tint = (r << 16) | (g << 8) | b;
-        } else if (tile.maxFood > 0) {
-          // Other food tiles: gray brightness fallback
+        // Dim food tiles as they deplete (multiplicative brightness mask).
+        // No per-type hue needed — correct frame colors handle visual identity.
+        if (tile.maxFood > 0) {
           const ratio      = tile.foodValue / tile.maxFood;
           const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
           t.tint = (brightness << 16) | (brightness << 8) | brightness;
