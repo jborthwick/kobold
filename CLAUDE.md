@@ -216,15 +216,24 @@ Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/dw
 
 - **Grid:** 64×64 tiles, 16×16 px (Kenney 1-bit `colored_packed.png`)
 - **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom
-- **Layout (enforced in `generateWorld()`):**
-  - NW quadrant (x<28, y<30): dense Forest food peak (8–12 food/tile)
-  - SE quadrant (x>36, y>36): Ore/Stone material peak (8–12 material/tile)
-  - River barrier at y=30–32 with two walkable crossing gaps
-  - Farmland strip at y=41–42, x<15 (fallback food patch)
-  - Grass meadow belt (Pass 2.5): ~30% of Dirt in y=33–57, x=10–54 → light food (2–4)
-  - 7 Mushroom clusters (Pass 3.5): 2-tile radius patches in south-central zone, food 4–7
-  - Spawn zone x=20–28, y=33–37 (cleared, walkable — overwrites meadow/mushroom)
-- **Growback rates:** Forest 0.3/tick · Grass meadow 0.15/tick · Mushroom 0.5/tick (fastest)
+- **Layout:** Fully procedural every game — nothing is hardcoded. `generateWorld()`
+  returns `{ grid, spawnZone }`:
+  - **River:** base Y chosen randomly at 35–55% of map height; sinusoidal wiggle applied
+    via two overlapping sine waves (`Math.sin(x * 0.07 …) + Math.sin(x * 0.18 …)`).
+    `riverBandMin / riverBandMax` are the conservative extremes used to keep features clear.
+    Two column-range gaps left as crossings.
+  - **Forest clusters:** 2–3 large blobs on far side of river, 1 small blob near spawn.
+    Each placed with `placeForestCluster(cx, cy, r, foodMin, foodMax)`.
+  - **Ore clusters:** 1–2 clusters on far side (opposite forest-heavy side).
+  - **Mushroom clusters:** 5–8 patches (radius 2–4) scattered across the map.
+  - **Farmland:** 1–2 strips (~4×3 tiles) on the spawn side as fallback food.
+  - **Spawn zone:** 12×6 rectangle, centred horizontally, placed on a random side of the
+    river. Cleared last (overwrites all terrain to walkable Dirt).
+- **`FORAGEABLE_TILES`** (`src/simulation/agents.ts`): `Set<TileType>` listing harvestable
+  tile types. Currently `{ Mushroom }`. Add one line to unlock a new food source.
+- **Harvest split:** tile loses `depletionRate` (5–6) per visit but dwarf only gains
+  `harvestYield` (1–2) — tiles exhaust fast, forcing dwarves to explore.
+- **Growback rates:** Forest 0.04/tick · Farmland 0.02/tick · Mushroom 0.08/tick (slowest to refill)
 - **World events** (every 300–600 ticks, layout-agnostic grid scan):
   - Blight: halves maxFood/foodValue in a 6-tile radius
   - Bounty: boosts food ×1.5 (cap 20) in a 5-tile radius
@@ -325,6 +334,19 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 - Food sharing (BT step 2.7): well-fed dwarves gift food to nearby starving neighbors
 - Contest yield: hungrier dwarf harvests first on contested tile
 - `resource_sharing` crisis type
+
+### Iteration 6 ✅ — Procedural world, scarcity, UI polish
+- **Fully procedural world generation:** river, forests, ore, mushrooms, farmland, and
+  spawn zone are all randomly placed each game — no hardcoded layout
+- **Sinusoidal river:** two overlapping sine waves produce an organic river shape
+- **Mushroom-only foraging via `FORAGEABLE_TILES` Set:** data-driven, one-line extensible
+- **Split depletion/yield:** tiles exhaust 5–6× faster than dwarves receive food → forces
+  exploration and scarcity-driven crisis behaviour
+- **Growback rates slashed** (×5–7 slower) to sustain scarcity pressure
+- **Full-height EventLog** (360px right sidebar, top-to-bottom) with word-wrap
+- **Memory panel in DwarfPanel:** last 5 LLM decisions shown in HUD (red ✗ for bad outcomes)
+- **Dead-dwarf ghost sprites:** deceased dwarves persist as red, Y-flipped sprites
+- **`[` / `]` hotkeys:** cycle selected dwarf through all alive dwarves
 
 ---
 
