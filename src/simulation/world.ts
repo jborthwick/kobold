@@ -42,12 +42,14 @@ export function generateWorld(): Tile[][] {
       }
 
       if (sum < RIVER_MIN) {
-        // NW food zone
+        // NW food zone — tight falloff (×0.6) keeps food within ~16 tiles of
+        // the peak so most of the zone is barren dirt, forcing real scarcity.
         const d = dist(x, y, FOOD_PEAK.x, FOOD_PEAK.y);
-        const foodMax = Math.max(0, MAX_FOOD_VALUE - d * 0.25);
+        const foodMax = Math.max(0, MAX_FOOD_VALUE - d * 0.6);
         const type = foodMax > 5 ? TileType.Farmland
                    : foodMax > 2 ? TileType.Grass
-                   : TileType.Forest;
+                   : foodMax > 0 ? TileType.Forest   // sparse scrubland, tiny food
+                   : TileType.Grass;                 // barren dirt — no food
         grid[y][x] = {
           type,
           foodValue:    foodMax * (0.7 + Math.random() * 0.3),
