@@ -18,7 +18,7 @@ const TILE_FRAMES: Record<TileType, number> = {
   [TileType.Water]:   204,   // row 4, col 8  – 166 blue ✓
   [TileType.Stone]:    72,   // row 1, col 23 – 186 gray (stone tile) ✓
   [TileType.Farmland]:150,   // row 3, col 3  – 150 tan (soil tile) ✓
-  [TileType.Ore]:      16,   // row 0, col 16 – mineral icon (verify visually)
+  [TileType.Ore]:     513,   // row 10, col 23 – 118 yellow pixels (gold/mineral) ✓
 };
 
 // Armored humanoid character sprite (row 0, cols 26-43 are character sprites)
