@@ -1,6 +1,7 @@
 import { PhaserGame } from './game/PhaserGame';
 import { HUD } from './ui/HUD';
 import { EventLog } from './ui/EventLog';
+import { TilePicker } from './ui/TilePicker';
 
 export default function App() {
   return (
@@ -8,6 +9,7 @@ export default function App() {
       <PhaserGame />
       <HUD />
       <EventLog />
+      <TilePicker />
     </div>
   );
 }

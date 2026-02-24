@@ -6,29 +6,11 @@ import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState } from '../../shared/types';
 import { llmSystem } from '../../ai/crisis';
+import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 
-// colored_packed.png: 49 columns × 22 rows, 16×16, no spacing.
-// Frame index = row * 49 + col  (0-based).
-// Frames verified by pixel analysis (4-bit indexed PNG, 8-color palette):
-//   BG  = (71,45,60)  GREEN = (56,217,115)  GRAY  = (207,198,184)
-//   TAN = (191,121,88) BROWNDARK = (122,68,74) BLUE = (60,172,215)
-// Dirt uses three ground-variation frames; noise selects per tile.
-const DIRT_FRAMES  = [0, 1, 2]; // row 0 cols 0-2: plain dark → sparse dots → denser dots
-// Grass uses three green-tuft frames; noise selects per tile.
-const GRASS_FRAMES = [6, 7, 8]; // row 0 cols 6-8: green tufts (38/44 GREEN px) + darker variant
-
-const TILE_FRAMES: Record<TileType, number> = {
-  [TileType.Dirt]:      0,   // placeholder — overridden per-tile by DIRT_FRAMES below
-  [TileType.Grass]:     0,   // placeholder — overridden per-tile by GRASS_FRAMES below
-  [TileType.Forest]:   54,   // row 1, col 5  – 110 green pixels (pine tree) ✓
-  [TileType.Water]:   204,   // row 4, col 8  – 166 blue ✓
-  [TileType.Stone]:    72,   // row 1, col 23 – 186 gray (stone tile) ✓
-  [TileType.Farmland]:150,   // row 3, col 3  – 150 tan (soil tile) ✓
-  [TileType.Ore]:     513,   // row 10, col 23 – 118 yellow pixels (gold/mineral) ✓
-};
-
-// Armored humanoid character sprite (row 0, cols 26-43 are character sprites)
-const DWARF_FRAME    = 26;
+// Frame assignments live in src/game/tileConfig.ts — edit them there
+// or use the in-game tile picker (press T).
+const DWARF_FRAME = SPRITE_CONFIG.dwarf;
 const CAM_PAN_SPEED  = 200; // world pixels per second for WASD pan
 
 export class WorldScene extends Phaser.Scene {
@@ -286,14 +268,13 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile = this.grid[y][x];
-        // Dirt and Grass each get one of three variation frames chosen by position noise.
-        const n     = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-        const noise = n - Math.floor(n);
-        const frame = tile.type === TileType.Dirt
-          ? DIRT_FRAMES[Math.floor(noise * DIRT_FRAMES.length)]
-          : tile.type === TileType.Grass
-            ? GRASS_FRAMES[Math.floor(noise * GRASS_FRAMES.length)]
-            : TILE_FRAMES[tile.type];
+        // Look up frame(s) from tileConfig. Multiple frames = noise-selected variation.
+        const frames = TILE_CONFIG[tile.type] ?? [0];
+        const n      = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        const noise  = n - Math.floor(n);
+        const frame  = frames.length === 1
+          ? frames[0]
+          : frames[Math.floor(noise * frames.length)];
         const t = this.terrainLayer.putTileAt(frame, x, y)!;
 
         // Dim food tiles as they deplete (multiplicative brightness mask).
