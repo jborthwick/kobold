@@ -1,9 +1,9 @@
 # Kobold — Research & Architecture Reference
 
-> **Agent usage:** This document explains *why* decisions in `AGENTS.md` were made.
+> **Agent usage:** This document explains *why* decisions in `CLAUDE.md` were made.
 > Read it selectively — jump to the relevant section when you need rationale,
 > not as a document to load in full every session.
-> All implementation instructions live in `AGENTS.md`.
+> All implementation instructions live in `CLAUDE.md`.
 
 ---
 
