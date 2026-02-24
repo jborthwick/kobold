@@ -120,7 +120,7 @@ type DecisionCallback = (
 
 export class LLMDecisionSystem {
   /** Set to false to suppress all LLM calls (e.g. dev toggle). */
-  public enabled = true;
+  public enabled = false;
 
   // One Promise per agent — prevents duplicate in-flight calls
   private pendingRequests = new Map<string, Promise<LLMDecision | null>>();

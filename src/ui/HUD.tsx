@@ -4,7 +4,7 @@ import type { GameState, Dwarf, OverlayMode } from '../shared/types';
 
 export function HUD() {
   const [state,      setState]      = useState<GameState | null>(null);
-  const [llmEnabled, setLlmEnabled] = useState(true);
+  const [llmEnabled, setLlmEnabled] = useState(false);
 
   useEffect(() => {
     bus.on('gameState', setState);
