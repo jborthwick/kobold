@@ -42,6 +42,8 @@ export class WorldScene extends Phaser.Scene {
   private dwarfSprites = new Map<string, Phaser.GameObjects.Sprite>();
   // Persistent grave sprites for dead dwarves (red, flipped upside-down)
   private dwarfGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  // Off-screen arrow indicator for selected dwarf
+  private offScreenGfx!: Phaser.GameObjects.Graphics;
 
   // WASD keys
   private wasd!: {
@@ -74,6 +76,8 @@ export class WorldScene extends Phaser.Scene {
     this.overlayGfx   = this.add.graphics();
     this.flagGfx      = this.add.graphics();
     this.selectionGfx = this.add.graphics();
+    // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
+    this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
 
     // ── Camera ──────────────────────────────────────────────────────────
     const worldPx = GRID_SIZE * TILE_SIZE;
@@ -451,6 +455,60 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** Arrow at viewport edge pointing toward the selected dwarf when off-screen. */
+  private drawOffScreenIndicator() {
+    this.offScreenGfx.clear();
+    if (!this.selectedDwarfId) return;
+
+    const d = this.dwarves.find(dw => dw.id === this.selectedDwarfId && dw.alive);
+    if (!d) return;
+
+    const cam  = this.cameras.main;
+    const view = cam.worldView;
+
+    // Screen position of dwarf (world → screen)
+    const sx = (d.x * TILE_SIZE + TILE_SIZE / 2 - view.x) * cam.zoom;
+    const sy = (d.y * TILE_SIZE + TILE_SIZE / 2 - view.y) * cam.zoom;
+
+    const margin = 24;
+    const sw = cam.width;
+    const sh = cam.height;
+
+    if (sx >= margin && sx <= sw - margin && sy >= margin && sy <= sh - margin) return;
+
+    // Clamp arrow tip to viewport edge with margin
+    const cx  = sw / 2;
+    const cy  = sh / 2;
+    const dx  = sx - cx;
+    const dy  = sy - cy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const nx  = dx / len;
+    const ny  = dy / len;
+
+    // Clamp along the direction until we hit an edge
+    const scaleX = Math.abs(nx) > 0.001 ? (nx > 0 ? (sw - margin - cx) : (cx - margin)) / Math.abs(dx) : Infinity;
+    const scaleY = Math.abs(ny) > 0.001 ? (ny > 0 ? (sh - margin - cy) : (cy - margin)) / Math.abs(dy) : Infinity;
+    const t = Math.min(scaleX, scaleY);
+    const ax = cx + dx * t;
+    const ay = cy + dy * t;
+
+    // Draw filled triangle arrow pointing toward dwarf
+    const angle   = Math.atan2(ny, nx);
+    const tipSize = 10;
+    const baseHalf = 6;
+    const tx0 = ax + Math.cos(angle) * tipSize;
+    const ty0 = ay + Math.sin(angle) * tipSize;
+    const tx1 = ax + Math.cos(angle + Math.PI * 0.7) * baseHalf;
+    const ty1 = ay + Math.sin(angle + Math.PI * 0.7) * baseHalf;
+    const tx2 = ax + Math.cos(angle - Math.PI * 0.7) * baseHalf;
+    const ty2 = ay + Math.sin(angle - Math.PI * 0.7) * baseHalf;
+
+    this.offScreenGfx.fillStyle(0xffff00, 0.85);
+    this.offScreenGfx.fillTriangle(tx0, ty0, tx1, ty1, tx2, ty2);
+    this.offScreenGfx.lineStyle(1, 0x888800, 0.5);
+    this.offScreenGfx.strokeTriangle(tx0, ty0, tx1, ty1, tx2, ty2);
+  }
+
   private drawAgents() {
     this.selectionGfx.clear();
 
@@ -527,5 +585,6 @@ export class WorldScene extends Phaser.Scene {
       this.drawOverlay(); // refresh density whenever food values change
     }
     this.drawAgents();
+    this.drawOffScreenIndicator();
   }
 }
