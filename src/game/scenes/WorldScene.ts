@@ -12,9 +12,12 @@ import { llmSystem } from '../../ai/crisis';
 // Frames verified by pixel analysis (4-bit indexed PNG, 8-color palette):
 //   BG  = (71,45,60)  GREEN = (56,217,115)  GRAY  = (207,198,184)
 //   TAN = (191,121,88) BROWNDARK = (122,68,74) BLUE = (60,172,215)
+// Grass uses three ground-variation frames; noise selects per tile.
+const GRASS_FRAMES = [0, 1, 2]; // row 0 cols 0-2: plain dark → sparse dots → denser dots
+
 const TILE_FRAMES: Record<TileType, number> = {
   [TileType.Forest]:   54,   // row 1, col 5  – 110 green pixels (pine tree) ✓
-  [TileType.Grass]:     9,   // row 0, col 9  – 164 browndark (ground path) ✓
+  [TileType.Grass]:     0,   // placeholder — overridden per-tile by grassFrame() below
   [TileType.Water]:   204,   // row 4, col 8  – 166 blue ✓
   [TileType.Stone]:    72,   // row 1, col 23 – 186 gray (stone tile) ✓
   [TileType.Farmland]:150,   // row 3, col 3  – 150 tan (soil tile) ✓
@@ -274,9 +277,14 @@ export class WorldScene extends Phaser.Scene {
   private drawTerrain() {
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
-        const tile  = this.grid[y][x];
-        const frame = TILE_FRAMES[tile.type];
-        const t     = this.terrainLayer.putTileAt(frame, x, y)!;
+        const tile = this.grid[y][x];
+        // Grass gets one of three ground-variation frames chosen by position noise.
+        const n     = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        const noise = n - Math.floor(n);
+        const frame = tile.type === TileType.Grass
+          ? GRASS_FRAMES[Math.floor(noise * GRASS_FRAMES.length)]
+          : TILE_FRAMES[tile.type];
+        const t = this.terrainLayer.putTileAt(frame, x, y)!;
 
         // Dim food tiles as they deplete (multiplicative brightness mask).
         // No per-type hue needed — correct frame colors handle visual identity.
