@@ -9,15 +9,26 @@ export enum TileType {
 
 export interface Tile {
   type: TileType;
-  foodValue: number;      // 0–10
-  materialValue: number;  // 0–10
-  maxFood: number;        // growback cap
+  foodValue: number;      // current food on tile
+  materialValue: number;  // current material on tile
+  maxFood: number;        // growback ceiling
   maxMaterial: number;
+  growbackRate: number;   // food units restored per tick (0 = doesn't regrow)
 }
 
 export interface Inventory {
   food: number;
   materials: number;
+}
+
+// PIANO step 5 — structured intent the LLM can set to override the BT
+export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
+
+// PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
+export interface MemoryEntry {
+  tick:   number;
+  crisis: string;  // CrisisSituation.type
+  action: string;  // decision.action text
 }
 
 export interface Dwarf {
@@ -35,7 +46,10 @@ export interface Dwarf {
   alive: boolean;
   task: string;
   commandTarget: { x: number; y: number } | null;  // player-issued move order
-  llmReasoning: string | null;  // last LLM decision shown in DwarfPanel
+  llmReasoning:    string | null;    // last LLM decision shown in DwarfPanel
+  llmIntent:       LLMIntent | null; // active override intent (expires at llmIntentExpiry)
+  llmIntentExpiry: number;           // tick after which intent is discarded
+  memory:          MemoryEntry[];    // last 5 decisions, oldest-first
 }
 
 export interface LogEntry {

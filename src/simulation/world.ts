@@ -1,107 +1,194 @@
 import { TileType, type Tile } from '../shared/types';
-import { GRID_SIZE, MAX_FOOD_VALUE, MAX_MATERIAL_VALUE, GROWBACK_RATE } from '../shared/constants';
+import { GRID_SIZE } from '../shared/constants';
 
-// Sugarscape layout — diagonal river splits the map:
-//   NW zone (x+y < 58):  food — one tight peak near spawn, plus scattered forage
-//   SE zone (x+y > 65):  material-rich stone/ore
-const FOOD_PEAK = { x: 12, y: 12 };
-const MAT_PEAK  = { x: 52, y: 52 };
-const RIVER_MIN = 58;
-const RIVER_MAX = 65;
+// ── World Config ───────────────────────────────────────────────────────────────
+// Tune these values to adjust scarcity pressure.
+// Total NW forest food should support ~5 dwarves for ~20 minutes before
+// requiring active management — if they never starve, lower forestGrowback.
+const WORLD_CONFIG = {
+  // NW forest peak (primary food — rich tiles, slow but meaningful regrowth)
+  forestFoodMin:  8,
+  forestFoodMax:  12,
+  forestGrowback: 0.3,   // units/tick — slow enough to deplete under pressure
 
-/**
- * Deterministic per-tile pseudo-noise in [0, 1].
- * No dependencies — output is stable across reloads for the same (x, y).
- */
+  // Farmland strip at y=38–42 (fallback food — fast regrowth, low ceiling)
+  farmFoodMin:    3,
+  farmFoodMax:    4,
+  farmGrowback:   0.5,
+
+  // Sparse grass everywhere else (filler — barely worth eating)
+  grassFood:      1,
+  grassGrowback:  0.1,
+
+  // SE ore peak (material — finite, doesn't regrow)
+  oreMatMin:      8,
+  oreMatMax:      12,
+  oreGrowback:    0,
+} as const;
+
+// Horizontal river at y=30–32.  Two narrow crossing gaps let dwarves pass.
+const RIVER_Y_MIN = 30;
+const RIVER_Y_MAX = 32;
+const CROSSINGS   = [
+  { x: 19, w: 3 },   // west crossing  — x=19, 20, 21
+  { x: 43, w: 3 },   // east crossing  — x=43, 44, 45
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Deterministic per-tile pseudo-noise in [0, 1].  Same (x,y) → same value. */
 function tileNoise(x: number, y: number): number {
   const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return n - Math.floor(n);
 }
 
-function dist(x: number, y: number, px: number, py: number) {
-  return Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+/** Linear interpolate between a and b by t∈[0,1]. */
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
-function darkenColor(color: number, factor: number): number {
-  const r = Math.floor(((color >> 16) & 0xff) * (1 - factor));
-  const g = Math.floor(((color >> 8) & 0xff) * (1 - factor));
-  const b = Math.floor((color & 0xff) * (1 - factor));
-  return (r << 16) | (g << 8) | b;
+/** Return a bare grass tile with the minimum food value. */
+function makeGrass(): Tile {
+  return {
+    type:          TileType.Grass,
+    foodValue:     WORLD_CONFIG.grassFood,
+    materialValue: 0,
+    maxFood:       WORLD_CONFIG.grassFood,
+    maxMaterial:   0,
+    growbackRate:  WORLD_CONFIG.grassGrowback,
+  };
 }
 
-// Exported so WorldScene can use it without importing Phaser
-export { darkenColor };
+// ── World generation ───────────────────────────────────────────────────────────
+//
+// Six ordered passes on top of a noise base:
+//   1. Fill everything with sparse grass
+//   2. Carve horizontal river at y=30–32 (two walkable crossing gaps)
+//   3. Force NW forest peak: x<28, y<28 — 60% of tiles → dense forest (8–12 food)
+//   4. Force SE ore peak:    x>36, y>36 — 65% of tiles → ore/stone (8–12 material)
+//   5. Farmland strip at y=38–42 (left half) — fast-regrowth fallback food (3–4)
+//   6. Clear spawn zone (18–30, 26–38) → grass — dwarves must actively search for food
 
 export function generateWorld(): Tile[][] {
   const grid: Tile[][] = [];
 
+  // ── Pass 1: Sparse grass everywhere ─────────────────────────────────────────
   for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
     for (let x = 0; x < GRID_SIZE; x++) {
-      const sum = x + y;
+      grid[y][x] = makeGrass();
+    }
+  }
 
-      if (sum >= RIVER_MIN && sum <= RIVER_MAX) {
+  // ── Pass 2: Horizontal river ─────────────────────────────────────────────────
+  for (let y = RIVER_Y_MIN; y <= RIVER_Y_MAX; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const isCrossing = CROSSINGS.some(c => x >= c.x && x < c.x + c.w);
+      if (!isCrossing) {
         grid[y][x] = {
-          type: TileType.Water,
-          foodValue: 0, materialValue: 0,
-          maxFood: 0,   maxMaterial: 0,
+          type:          TileType.Water,
+          foodValue:     0, materialValue: 0,
+          maxFood:       0, maxMaterial:   0,
+          growbackRate:  0,
         };
-        continue;
       }
+    }
+  }
 
-      if (sum < RIVER_MIN) {
-        // NW food zone:
-        //   • One tight main peak (~12-tile radius) — depletes fast under 5 dwarves
-        //   • Scattered forage patches (~12% of tiles, 1–3 food each) keep
-        //     lone foragers alive but can't sustain the whole colony
-        const d = dist(x, y, FOOD_PEAK.x, FOOD_PEAK.y);
-        const peak    = Math.max(0, MAX_FOOD_VALUE - d * 1.1);    // ~9-tile radius
-        const noise1  = tileNoise(x, y);
-        const noise2  = tileNoise(x + 7, y + 13);                 // second sample for value
-        const scatter = noise1 > 0.88 ? 1 + noise2 * 2 : 0;      // ~12% of tiles, 1–3 food
-        const foodMax = Math.max(peak, scatter);
-
-        const type = foodMax > 5 ? TileType.Farmland
-                   : foodMax > 2 ? TileType.Grass
-                   : foodMax > 0 ? TileType.Forest   // sparse scrubland / scatter tile
-                   : TileType.Grass;                 // barren dirt — no food
+  // ── Pass 3: NW forest peak ───────────────────────────────────────────────────
+  // 60% of tiles in (x<28, y<28) become dense forest (food 8–12).
+  // 40% remain sparse grass — natural gaps and clearings.
+  for (let y = 0; y < 28; y++) {
+    for (let x = 0; x < 28; x++) {
+      const n = tileNoise(x, y);
+      if (n < 0.60) {
+        const foodMax = lerp(
+          WORLD_CONFIG.forestFoodMin,
+          WORLD_CONFIG.forestFoodMax,
+          tileNoise(x + 5, y + 11),   // second sample for value variation
+        );
         grid[y][x] = {
-          type,
+          type:          TileType.Forest,
           foodValue:     foodMax * (0.7 + Math.random() * 0.3),
           materialValue: 0,
           maxFood:       foodMax,
           maxMaterial:   0,
-        };
-      } else {
-        // SE material zone
-        const d = dist(x, y, MAT_PEAK.x, MAT_PEAK.y);
-        const matMax = Math.max(0, MAX_MATERIAL_VALUE - d * 0.25);
-        const type = matMax > 5 ? TileType.Ore
-                   : matMax > 2 ? TileType.Stone
-                   : TileType.Grass;
-        grid[y][x] = {
-          type,
-          foodValue:    0,
-          materialValue: matMax * (0.7 + Math.random() * 0.3),
-          maxFood:      0,
-          maxMaterial:  matMax,
+          growbackRate:  WORLD_CONFIG.forestGrowback,
         };
       }
+      // Remaining 40% keep the grass tile from pass 1
+    }
+  }
+
+  // ── Pass 4: SE ore peak ──────────────────────────────────────────────────────
+  // 65% of tiles in (x>36, y>36): Ore (richer) or Stone (moderate).
+  for (let y = 37; y < GRID_SIZE; y++) {
+    for (let x = 37; x < GRID_SIZE; x++) {
+      if (grid[y][x].type === TileType.Water) continue;
+      const n = tileNoise(x, y);
+      if (n < 0.65) {
+        const matMax = lerp(
+          WORLD_CONFIG.oreMatMin,
+          WORLD_CONFIG.oreMatMax,
+          tileNoise(x + 3, y + 7),
+        );
+        grid[y][x] = {
+          type:          n < 0.35 ? TileType.Ore : TileType.Stone,
+          foodValue:     0,
+          materialValue: matMax * (0.7 + Math.random() * 0.3),
+          maxFood:       0,
+          maxMaterial:   matMax,
+          growbackRate:  WORLD_CONFIG.oreGrowback,
+        };
+      }
+    }
+  }
+
+  // ── Pass 5: Farmland strip ───────────────────────────────────────────────────
+  // Narrow band at y=38–42, left half only (x<36).
+  // Dwarves can survive here but food is low — not worth staying long-term.
+  for (let y = 38; y <= 42; y++) {
+    for (let x = 0; x < 36; x++) {
+      if (grid[y][x].type === TileType.Water) continue;
+      const foodMax = lerp(
+        WORLD_CONFIG.farmFoodMin,
+        WORLD_CONFIG.farmFoodMax,
+        tileNoise(x, y + 20),
+      );
+      grid[y][x] = {
+        type:          TileType.Farmland,
+        foodValue:     foodMax * (0.7 + Math.random() * 0.3),
+        materialValue: 0,
+        maxFood:       foodMax,
+        maxMaterial:   0,
+        growbackRate:  WORLD_CONFIG.farmGrowback,
+      };
+    }
+  }
+
+  // ── Pass 6: Clear spawn zone ─────────────────────────────────────────────────
+  // Run LAST so forest/ore tiles in this rectangle get cleared.
+  // Dwarves spawn here with only grass (foodValue=1) — must actively search.
+  for (let y = 26; y <= 38; y++) {
+    for (let x = 18; x <= 30; x++) {
+      if (grid[y][x].type === TileType.Water) continue; // preserve river
+      grid[y][x] = makeGrass();
     }
   }
 
   return grid;
 }
 
+// ── Growback ───────────────────────────────────────────────────────────────────
+// Each tile grows back by its own growbackRate per tick.
+// Materials (ore) don't regrow — oreGrowback is 0.
+
 export function growback(grid: Tile[][]): void {
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
-      if (t.maxFood > 0 && t.foodValue < t.maxFood) {
-        t.foodValue = Math.min(t.maxFood, t.foodValue + GROWBACK_RATE * t.maxFood);
-      }
-      if (t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
-        t.materialValue = Math.min(t.maxMaterial, t.materialValue + GROWBACK_RATE * t.maxMaterial);
+      if (t.growbackRate > 0 && t.maxFood > 0 && t.foodValue < t.maxFood) {
+        t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate);
       }
     }
   }

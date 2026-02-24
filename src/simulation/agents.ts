@@ -11,9 +11,12 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
   const dwarves: Dwarf[] = [];
   for (let i = 0; i < INITIAL_DWARVES; i++) {
     let x: number, y: number;
+    // Spawn in center-left zone (20–28, 28–36) — cleared of food, between
+    // the river and farmland strip.  isWalkable() rejects river tiles (y=30–32)
+    // automatically, so the do-while retries until a walkable tile is found.
     do {
-      x = rand(2, 25);
-      y = rand(2, 25);
+      x = rand(20, 28);
+      y = rand(28, 36);
     } while (!isWalkable(grid, x, y));
 
     dwarves.push({
@@ -25,7 +28,7 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       hunger:        rand(10, 40),
       metabolism:    rand(1, 3),
       vision:        rand(2, 5),
-      inventory:     { food: rand(3, 8), materials: 0 },
+      inventory:     { food: rand(8, 15), materials: 0 },  // enough to survive travel to forest
       morale:        70 + rand(0, 20),
       alive:         true,
       task:          'idle',
