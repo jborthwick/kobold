@@ -37,6 +37,8 @@ export class WorldScene extends Phaser.Scene {
 
   // One sprite per living dwarf
   private dwarfSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  // Persistent grave sprites for dead dwarves (red, flipped upside-down)
+  private dwarfGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
 
   // WASD keys
   private wasd!: {
@@ -51,8 +53,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    this.grid    = generateWorld();
-    this.dwarves = spawnDwarves(this.grid);
+    const { grid, spawnZone } = generateWorld();
+    this.grid    = grid;
+    this.dwarves = spawnDwarves(this.grid, spawnZone);
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -73,7 +76,11 @@ export class WorldScene extends Phaser.Scene {
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
     this.cameras.main.setZoom(2);
-    this.cameras.main.centerOn(24 * TILE_SIZE, 35 * TILE_SIZE); // spawn zone center
+    // Centre camera on the dynamically-placed spawn zone
+    this.cameras.main.centerOn(
+      (spawnZone.x + spawnZone.w / 2) * TILE_SIZE,
+      (spawnZone.y + spawnZone.h / 2) * TILE_SIZE,
+    );
 
     // ── Keyboard ────────────────────────────────────────────────────────
     this.wasd = {
@@ -95,6 +102,21 @@ export class WorldScene extends Phaser.Scene {
         this.overlayMode = next;
         this.drawOverlay();
       });
+
+    // ── [ / ] keys: cycle selected dwarf ────────────────────────────────
+    const cycleSelected = (direction: 1 | -1) => {
+      const alive = this.dwarves.filter(d => d.alive);
+      if (alive.length === 0) return;
+      const currentIdx = alive.findIndex(d => d.id === this.selectedDwarfId);
+      const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
+      this.selectedDwarfId = alive[nextIdx].id;
+    };
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
+      .on('down', () => cycleSelected(-1));
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET)
+      .on('down', () => cycleSelected(1));
 
     // ── Settings bus ────────────────────────────────────────────────────
     bus.on('settingsChange', ({ llmEnabled }) => {
@@ -360,10 +382,17 @@ export class WorldScene extends Phaser.Scene {
   private drawAgents() {
     this.selectionGfx.clear();
 
-    // Remove sprites for dwarves that have died
+    // Convert newly-dead dwarves to ghost sprites (red + upside-down) and
+    // remove their live sprite. Ghost sprites are created once and stay.
     for (const [id, spr] of this.dwarfSprites) {
       const d = this.dwarves.find(dw => dw.id === id);
       if (!d || !d.alive) {
+        if (!this.dwarfGhostSprites.has(id)) {
+          const ghost = this.add.sprite(spr.x, spr.y, 'tiles', DWARF_FRAME);
+          ghost.setTint(0xff2222);
+          ghost.setFlipY(true);
+          this.dwarfGhostSprites.set(id, ghost);
+        }
         spr.destroy();
         this.dwarfSprites.delete(id);
       }

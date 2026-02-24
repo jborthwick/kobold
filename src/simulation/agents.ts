@@ -1,11 +1,17 @@
 import * as ROT from 'rot-js';
-import { type Dwarf, type Tile, type DwarfRole } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
 function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+// Tile types dwarves can harvest food from.
+// Add entries here to unlock new food sources — no logic changes needed.
+const FORAGEABLE_TILES = new Set<TileType>([
+  TileType.Mushroom,
+]);
 
 // Role assignment order and vision ranges
 const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'forager', 'miner'];
@@ -15,13 +21,16 @@ const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number }> = 
   scout:   { visionMin: 5, visionMax: 8 },
 };
 
-export function spawnDwarves(grid: Tile[][]): Dwarf[] {
+export function spawnDwarves(
+  grid:      Tile[][],
+  spawnZone: { x: number; y: number; w: number; h: number },
+): Dwarf[] {
   const dwarves: Dwarf[] = [];
   for (let i = 0; i < INITIAL_DWARVES; i++) {
     let x: number, y: number;
     do {
-      x = rand(20, 28);
-      y = rand(33, 37);
+      x = spawnZone.x + rand(0, spawnZone.w - 1);
+      y = spawnZone.y + rand(0, spawnZone.h - 1);
     } while (!isWalkable(grid, x, y));
 
     const role  = ROLE_ORDER[i % ROLE_ORDER.length];
@@ -53,7 +62,7 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Scan a square of `radius` tiles around the dwarf for the richest food tile. */
+/** Scan a square of `radius` tiles around the dwarf for the richest forageable tile. */
 function bestFoodTile(
   dwarf:  Dwarf,
   grid:   Tile[][],
@@ -67,6 +76,7 @@ function bestFoodTile(
       const nx = dwarf.x + dx;
       const ny = dwarf.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      if (!FORAGEABLE_TILES.has(grid[ny][nx].type)) continue;
       const v = grid[ny][nx].foodValue;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
@@ -279,10 +289,13 @@ export function tickAgent(
     }
 
     const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
-    if (here.foodValue > 0 && headroom > 0) {
-      const harvestRate     = dwarf.role === 'forager' ? 4 : 3;  // foragers harvest 1 extra/tile
-      const amount          = Math.min(here.foodValue, harvestRate, headroom);
-      here.foodValue        = Math.max(0, here.foodValue - amount);
+    if (FORAGEABLE_TILES.has(here.type) && here.foodValue > 0 && headroom > 0) {
+      // Deplete tile aggressively, but yield less to inventory — encourages exploration
+      const depletionRate   = dwarf.role === 'forager' ? 6 : 5;
+      const harvestYield    = dwarf.role === 'forager' ? 2 : 1;
+      const depleted        = Math.min(here.foodValue, depletionRate);
+      here.foodValue        = Math.max(0, here.foodValue - depleted);
+      const amount          = Math.min(harvestYield, depleted, headroom);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
       dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;

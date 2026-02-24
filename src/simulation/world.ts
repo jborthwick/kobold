@@ -2,87 +2,255 @@ import { TileType, type Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 
 // ── World Config ───────────────────────────────────────────────────────────────
-// Tune these values to adjust scarcity pressure.
-// Total NW forest food should support ~5 dwarves for ~20 minutes before
-// requiring active management — if they never starve, lower forestGrowback.
 const WORLD_CONFIG = {
-  // NW forest peak (primary food — rich tiles, slow but meaningful regrowth)
+  // Forest (primary food — rich tiles, very slow regrowth)
   forestFoodMin:  8,
   forestFoodMax:  12,
-  forestGrowback: 0.3,   // units/tick — slow enough to deplete under pressure
+  forestGrowback: 0.04,
 
-  // Farmland strip (fallback food — small patch, slow regrowth, low ceiling)
+  // Farmland (fallback food — small patches, very slow regrowth)
   farmFoodMin:    2,
   farmFoodMax:    3,
-  farmGrowback:   0.15,
+  farmGrowback:   0.02,
 
-  // Sparse grass everywhere else (filler — barely worth eating)
+  // Bare dirt (no food)
   grassFood:      0,
-  grassGrowback:  0.1,   // inert — growback() checks maxFood > 0, which is 0 for grass
+  grassGrowback:  0,
 
-  // SE ore peak (material — finite, doesn't regrow)
+  // Ore deposits (material — no regrowth)
   oreMatMin:      8,
   oreMatMax:      12,
   oreGrowback:    0,
 
-  // Grass meadow belt (light food — transition zone south of river)
+  // Grass meadow (light scattered food)
   grassMeadowFoodMin:  2,
   grassMeadowFoodMax:  4,
-  grassMeadowGrowback: 0.15,
+  grassMeadowGrowback: 0.02,
 
-  // Mushroom hotspots (medium food, fast growback — secondary contested nodes)
+  // Mushroom hotspots (medium food, slow growback)
   mushroomFoodMin:  4,
   mushroomFoodMax:  7,
-  mushroomGrowback: 0.5,   // 1.67× faster than forest's 0.3
+  mushroomGrowback: 0.08,
 } as const;
 
-// Horizontal river at y=30–32.  Two narrow crossing gaps let dwarves pass.
-const RIVER_Y_MIN = 30;
-const RIVER_Y_MAX = 32;
-const CROSSINGS   = [
-  { x: 19, w: 3 },   // west crossing  — x=19, 20, 21
-  { x: 43, w: 3 },   // east crossing  — x=43, 44, 45
-];
+// ── Result type ────────────────────────────────────────────────────────────────
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+export interface WorldGenResult {
+  grid:      Tile[][];
+  /** Cleared walkable rectangle where dwarves spawn. */
+  spawnZone: { x: number; y: number; w: number; h: number };
+}
 
-/** Deterministic per-tile pseudo-noise in [0, 1].  Same (x,y) → same value. */
+// ── Seeded noise ───────────────────────────────────────────────────────────────
+
+let _worldSeed = 0;
+
 function tileNoise(x: number, y: number): number {
-  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  const n = Math.sin(x * 127.1 + y * 311.7 + _worldSeed) * 43758.5453;
   return n - Math.floor(n);
 }
 
-/** Linear interpolate between a and b by t∈[0,1]. */
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-/** Return a bare dirt tile (barren ground, no food). */
+// ── Tile constructors ──────────────────────────────────────────────────────────
+
 function makeDirt(): Tile {
-  return {
-    type:          TileType.Dirt,
-    foodValue:     WORLD_CONFIG.grassFood,
-    materialValue: 0,
-    maxFood:       WORLD_CONFIG.grassFood,
-    maxMaterial:   0,
-    growbackRate:  WORLD_CONFIG.grassGrowback,
-  };
+  return { type: TileType.Dirt, foodValue: 0, materialValue: 0, maxFood: 0, maxMaterial: 0, growbackRate: 0 };
 }
 
-// ── World generation ───────────────────────────────────────────────────────────
+function makeWater(): Tile {
+  return { type: TileType.Water, foodValue: 0, materialValue: 0, maxFood: 0, maxMaterial: 0, growbackRate: 0 };
+}
+
+// ── Cluster helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Stamp a forest food blob around (cx, cy).
+ * Density falls off from centre so blobs look organic, not square.
+ * Skip Water and Ore/Stone tiles.
+ */
+function placeForestCluster(
+  grid:        Tile[][],
+  cx:          number,
+  cy:          number,
+  radius:      number,
+  foodMin:     number,
+  foodMax:     number,
+  growback:    number,
+) {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+      const t = grid[y][x];
+      if (t.type === TileType.Water || t.type === TileType.Ore || t.type === TileType.Stone) continue;
+
+      const dist    = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+      const falloff = 1 - dist / radius;
+      // Threshold: near centre ~0.85 chance, at edge ~0.35 chance
+      if (tileNoise(x + 5, y + 7) > 0.35 + falloff * 0.50) continue;
+
+      const fMax = lerp(foodMin, foodMax, falloff * (0.6 + tileNoise(x + 3, y + 11) * 0.4));
+      grid[y][x] = {
+        type:          TileType.Forest,
+        foodValue:     fMax * (0.7 + Math.random() * 0.3),
+        materialValue: 0,
+        maxFood:       fMax,
+        maxMaterial:   0,
+        growbackRate:  growback,
+      };
+    }
+  }
+}
+
+/**
+ * Stamp an ore/stone blob around (cx, cy).
+ * Skip Water and Forest tiles — ore deposits sit among dirt/grass.
+ */
+function placeOreCluster(grid: Tile[][], cx: number, cy: number, radius: number) {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+      const t = grid[y][x];
+      if (t.type === TileType.Water || t.type === TileType.Forest) continue;
+
+      const dist    = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+      const falloff = 1 - dist / radius;
+      if (tileNoise(x + 2, y + 17) > 0.30 + falloff * 0.55) continue;
+
+      const matMax = lerp(WORLD_CONFIG.oreMatMin, WORLD_CONFIG.oreMatMax, falloff * (0.5 + tileNoise(x, y + 5) * 0.5));
+      grid[y][x] = {
+        type:          tileNoise(x + 1, y + 1) < 0.45 ? TileType.Ore : TileType.Stone,
+        foodValue:     0,
+        materialValue: matMax * (0.7 + Math.random() * 0.3),
+        maxFood:       0,
+        maxMaterial:   matMax,
+        growbackRate:  WORLD_CONFIG.oreGrowback,
+      };
+    }
+  }
+}
+
+/**
+ * Stamp a mushroom cluster (radius 2, ~75% fill).
+ * Skip Water, Forest, Ore, Stone.
+ */
+function placeMushroomCluster(grid: Tile[][], cx: number, cy: number) {
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+      const t = grid[y][x];
+      if (t.type === TileType.Water  || t.type === TileType.Forest ||
+          t.type === TileType.Ore    || t.type === TileType.Stone)  continue;
+      if (tileNoise(x + 23, y + 41) > 0.75) continue;
+
+      const fMax = lerp(WORLD_CONFIG.mushroomFoodMin, WORLD_CONFIG.mushroomFoodMax, tileNoise(x + 3, y + 13));
+      grid[y][x] = {
+        type:          TileType.Mushroom,
+        foodValue:     fMax * (0.7 + Math.random() * 0.3),
+        materialValue: 0,
+        maxFood:       fMax,
+        maxMaterial:   0,
+        growbackRate:  WORLD_CONFIG.mushroomGrowback,
+      };
+    }
+  }
+}
+
+/**
+ * Stamp a small farmland rectangle. Skip Water tiles.
+ */
+function placeFarmland(grid: Tile[][], x0: number, y0: number, w: number, h: number) {
+  for (let dy = 0; dy < h; dy++) {
+    for (let dx = 0; dx < w; dx++) {
+      const x = x0 + dx;
+      const y = y0 + dy;
+      if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+      if (grid[y][x].type === TileType.Water) continue;
+      const fMax = lerp(WORLD_CONFIG.farmFoodMin, WORLD_CONFIG.farmFoodMax, tileNoise(x, y + 20));
+      grid[y][x] = {
+        type:          TileType.Farmland,
+        foodValue:     fMax * (0.7 + Math.random() * 0.3),
+        materialValue: 0,
+        maxFood:       fMax,
+        maxMaterial:   0,
+        growbackRate:  WORLD_CONFIG.farmGrowback,
+      };
+    }
+  }
+}
+
+// ── Main generator ─────────────────────────────────────────────────────────────
 //
-// Six ordered passes on top of a noise base:
-//   1. Fill everything with sparse grass
-//   2. Carve horizontal river at y=30–32 (two walkable crossing gaps)
-//   3. Force NW forest peak: x<28, y<30 — 60% of tiles → dense forest (8–12 food)
-//   4. Force SE ore peak:    x>36, y>36 — 65% of tiles → ore/stone (8–12 material)
-//   5. Farmland strip at y=41–42, x<15 — small fallback patch (2–3 food)
-//   6. Clear spawn zone (18–30, 33–38) → grass — only the spawn rows, preserves y=28–29 forest
+// Ordered passes — later passes can overwrite earlier ones; spawn clear always last.
+//   1. Fill everything with bare dirt
+//   2. Carve river (random y, 2 tiles wide, 2 guaranteed crossings)
+//   3. Forest clusters  — 2–3 large blobs on the far side, 1 small on spawn side
+//   4. Ore clusters     — 1–2 blobs anywhere not in river/forest
+//   5. Grass meadow     — ~25% of remaining bare dirt across the whole map
+//   6. Mushroom clusters— 5–8 random positions anywhere (skips forest/ore/water)
+//   7. Farmland patches — 1–2 small rectangles near spawn
+//   8. Clear spawn zone — always LAST to guarantee walkable start area
 
-export function generateWorld(): Tile[][] {
+export function generateWorld(): WorldGenResult {
+  _worldSeed = Math.random() * 10000;
+
+  // ── Geometry decisions ───────────────────────────────────────────────────────
+
+  // River: organic horizontal band with sinusoidal wiggle.
+  // Base centre sits in the middle 35–55% of the map; two overlapping sine waves
+  // shift the centre ±wiggleAmp tiles as x increases, giving an S-curve feel.
+  const riverBaseY  = Math.floor(GRID_SIZE * (0.35 + Math.random() * 0.20)); // 22–35
+  const riverW      = 2;   // width at each column
+  const wiggleAmp   = 4;   // max deviation from base centre, in tiles
+
+  // Per-column centre: two sin waves with different frequencies and phases
+  const riverCenterAt = (x: number): number => {
+    const w1 = Math.sin(x * 0.07  + _worldSeed * 0.31) * wiggleAmp * 0.65;
+    const w2 = Math.sin(x * 0.18  + _worldSeed * 0.77) * wiggleAmp * 0.35;
+    return Math.round(riverBaseY + w1 + w2);
+  };
+
+  // Extreme y-extent of the river across the whole map (for placing features)
+  const riverBandMin = riverBaseY - wiggleAmp - 1;
+  const riverBandMax = riverBaseY + riverW + wiggleAmp + 1;
+
+  // 2 crossings — divide map into left and right halves, one crossing per half
+  const crossings = [
+    { x:  4 + Math.floor(Math.random() * 20), w: 3 },  // left  half: x 4–23
+    { x: 34 + Math.floor(Math.random() * 22), w: 3 },  // right half: x 34–55
+  ];
+
+  // Spawn side: north of river or south, chosen randomly
+  const spawnInNorth = Math.random() < 0.5;
+  const spawnSideMin = spawnInNorth ? 2                    : riverBandMax + 2;
+  const spawnSideMax = spawnInNorth ? riverBandMin - 2     : GRID_SIZE - 3;
+
+  // Spawn zone: 12 × 6, centered horizontally in the map, centered vertically on spawn side
+  const SPAWN_W = 12, SPAWN_H = 6;
+  const spawnX  = Math.floor(GRID_SIZE / 2 - SPAWN_W / 2);
+  const spawnY  = Math.max(
+    spawnSideMin,
+    Math.min(spawnSideMax - SPAWN_H, Math.floor((spawnSideMin + spawnSideMax) / 2 - SPAWN_H / 2)),
+  );
+  const spawnZone = { x: spawnX, y: spawnY, w: SPAWN_W, h: SPAWN_H };
+
+  // Far side (opposite spawn) — main food zone lives here
+  const farSideMin  = spawnInNorth ? riverBandMax + 2  : 2;
+  const farSideMax  = spawnInNorth ? GRID_SIZE - 2      : riverBandMin - 3;
+  const farSideSpan = farSideMax - farSideMin;
+
+  // ── Pass 1: Bare dirt ────────────────────────────────────────────────────────
   const grid: Tile[][] = [];
-
-  // ── Pass 1: Sparse grass everywhere ─────────────────────────────────────────
   for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
     for (let x = 0; x < GRID_SIZE; x++) {
@@ -90,176 +258,93 @@ export function generateWorld(): Tile[][] {
     }
   }
 
-  // ── Pass 2: Horizontal river ─────────────────────────────────────────────────
-  for (let y = RIVER_Y_MIN; y <= RIVER_Y_MAX; y++) {
-    for (let x = 0; x < GRID_SIZE; x++) {
-      const isCrossing = CROSSINGS.some(c => x >= c.x && x < c.x + c.w);
-      if (!isCrossing) {
-        grid[y][x] = {
-          type:          TileType.Water,
-          foodValue:     0, materialValue: 0,
-          maxFood:       0, maxMaterial:   0,
-          growbackRate:  0,
-        };
-      }
+  // ── Pass 2: River ────────────────────────────────────────────────────────────
+  // Carve column by column so each x column uses its own wiggly centre y.
+  // Crossing columns are skipped entirely, creating natural fords.
+  for (let x = 0; x < GRID_SIZE; x++) {
+    if (crossings.some(c => x >= c.x && x < c.x + c.w)) continue;
+    const cy = riverCenterAt(x);
+    for (let y = cy; y < cy + riverW; y++) {
+      if (y >= 0 && y < GRID_SIZE) grid[y][x] = makeWater();
     }
   }
 
-  // ── Pass 2.5: Sparse Grass meadow belt ──────────────────────────────────────
-  // Converts ~30% of bare Dirt in the south-central zone (south of river, between
-  // spawn and farmland) into Grass with light food. Provides scattered pickup food
-  // for dwarves travelling between the crossing and the SW farmland strip.
-  // Pass 6 clears the spawn zone last, so no Grass in the spawn rectangle.
-  for (let y = 33; y < 58; y++) {
-    for (let x = 10; x < 55; x++) {
-      const t = grid[y][x];
-      if (t.type !== TileType.Dirt) continue;           // don't overwrite Water/Forest/Ore
-      if (tileNoise(x + 13, y + 3) >= 0.30) continue;  // 30% of eligible tiles
-      const foodMax = lerp(
-        WORLD_CONFIG.grassMeadowFoodMin,
-        WORLD_CONFIG.grassMeadowFoodMax,
-        tileNoise(x + 7, y + 19),
-      );
+  // ── Pass 3: Forest clusters ──────────────────────────────────────────────────
+  // 2–3 large blobs on the far side of the river (forces crossing to reach food)
+  const numFarForest = 2 + (Math.random() < 0.5 ? 1 : 0);
+  for (let i = 0; i < numFarForest; i++) {
+    const cx = 5 + Math.floor(Math.random() * (GRID_SIZE - 10));
+    const cy = farSideMin + Math.floor(Math.random() * farSideSpan);
+    placeForestCluster(grid, cx, cy, 8 + Math.floor(Math.random() * 7),
+      WORLD_CONFIG.forestFoodMin, WORLD_CONFIG.forestFoodMax, WORLD_CONFIG.forestGrowback);
+  }
+  // 1 smaller blob on the spawn side — just enough to survive without crossing immediately
+  {
+    const cx = 5 + Math.floor(Math.random() * (GRID_SIZE - 10));
+    const cy = spawnSideMin + Math.floor(Math.random() * (spawnSideMax - spawnSideMin));
+    placeForestCluster(grid, cx, cy, 5 + Math.floor(Math.random() * 4),
+      WORLD_CONFIG.forestFoodMin - 2, WORLD_CONFIG.forestFoodMax - 2, WORLD_CONFIG.forestGrowback);
+  }
+
+  // ── Pass 4: Ore clusters ─────────────────────────────────────────────────────
+  // 1–2 blobs placed anywhere, avoiding spawn zone vicinity (keeps ore as a
+  // destination to seek, not a starting gift)
+  const numOre = 1 + (Math.random() < 0.5 ? 1 : 0);
+  for (let i = 0; i < numOre; i++) {
+    const cx = 4 + Math.floor(Math.random() * (GRID_SIZE - 8));
+    const cy = 4 + Math.floor(Math.random() * (GRID_SIZE - 8));
+    placeOreCluster(grid, cx, cy, 6 + Math.floor(Math.random() * 6));
+  }
+
+  // ── Pass 5: Grass meadow scatter ─────────────────────────────────────────────
+  // ~25% of bare dirt tiles get light food — provides thin sustenance while
+  // exploring and gives visual texture to otherwise empty regions.
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (grid[y][x].type !== TileType.Dirt) continue;
+      if (tileNoise(x + 13, y + 3) >= 0.25) continue;
+      const fMax = lerp(WORLD_CONFIG.grassMeadowFoodMin, WORLD_CONFIG.grassMeadowFoodMax, tileNoise(x + 7, y + 19));
       grid[y][x] = {
         type:          TileType.Grass,
-        foodValue:     foodMax * (0.7 + Math.random() * 0.3),
+        foodValue:     fMax * (0.7 + Math.random() * 0.3),
         materialValue: 0,
-        maxFood:       foodMax,
+        maxFood:       fMax,
         maxMaterial:   0,
         growbackRate:  WORLD_CONFIG.grassMeadowGrowback,
       };
     }
   }
 
-  // ── Pass 3: NW forest peak ───────────────────────────────────────────────────
-  // 60% of tiles in (x<28, y<30) become dense forest (food 8–12).
-  // Extending to y<30 brings forest right to the south bank of the river so
-  // dwarves with vision≥4 can see food from spawn y=33–37 after crossing.
-  // 40% remain sparse grass — natural gaps and clearings.
-  for (let y = 0; y < 30; y++) {
-    for (let x = 0; x < 28; x++) {
-      const n = tileNoise(x, y);
-      if (n < 0.60) {
-        const foodMax = lerp(
-          WORLD_CONFIG.forestFoodMin,
-          WORLD_CONFIG.forestFoodMax,
-          tileNoise(x + 5, y + 11),   // second sample for value variation
-        );
-        grid[y][x] = {
-          type:          TileType.Forest,
-          foodValue:     foodMax * (0.7 + Math.random() * 0.3),
-          materialValue: 0,
-          maxFood:       foodMax,
-          maxMaterial:   0,
-          growbackRate:  WORLD_CONFIG.forestGrowback,
-        };
-      }
-      // Remaining 40% keep the grass tile from pass 1
+  // ── Pass 6: Mushroom clusters ────────────────────────────────────────────────
+  const numMushrooms = 5 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < numMushrooms; i++) {
+    placeMushroomCluster(
+      grid,
+      3 + Math.floor(Math.random() * (GRID_SIZE - 6)),
+      3 + Math.floor(Math.random() * (GRID_SIZE - 6)),
+    );
+  }
+
+  // ── Pass 7: Farmland patches ─────────────────────────────────────────────────
+  // 1–2 small farmland rectangles on the spawn side, offset from spawn center
+  const numFarm = 1 + (Math.random() < 0.5 ? 1 : 0);
+  for (let i = 0; i < numFarm; i++) {
+    const fx = Math.max(1, Math.min(GRID_SIZE - 8, spawnX - 12 + Math.floor(Math.random() * 24)));
+    const fy = Math.max(spawnSideMin, Math.min(spawnSideMax - 2, spawnSideMin + Math.floor(Math.random() * (spawnSideMax - spawnSideMin))));
+    placeFarmland(grid, fx, fy, 7, 2);
+  }
+
+  // ── Pass 8: Clear spawn zone (always LAST) ───────────────────────────────────
+  for (let y = spawnY; y < spawnY + SPAWN_H; y++) {
+    for (let x = spawnX; x < spawnX + SPAWN_W; x++) {
+      if (grid[y][x].type !== TileType.Water) grid[y][x] = makeDirt();
     }
   }
 
-  // ── Pass 3.5: Mushroom hotspot clusters ─────────────────────────────────────
-  // 7 deterministic cluster centres in the central/south zone, each filling a
-  // 2-tile radius at 75% density (noise-thinned for natural-looking patches).
-  // Fast growback (0.5/tick) makes these secondary contested food nodes.
-  // Pass 6 clears any mushrooms in the spawn rectangle.
-  const MUSHROOM_CENTRES = [
-    { x: 17, y: 40 }, { x: 33, y: 44 }, { x: 48, y: 39 },
-    { x: 25, y: 51 }, { x: 41, y: 55 }, { x: 12, y: 55 }, { x: 56, y: 47 },
-  ];
-  const MUSHROOM_RADIUS = 2;
-
-  for (const centre of MUSHROOM_CENTRES) {
-    for (let dy = -MUSHROOM_RADIUS; dy <= MUSHROOM_RADIUS; dy++) {
-      for (let dx = -MUSHROOM_RADIUS; dx <= MUSHROOM_RADIUS; dx++) {
-        const x = centre.x + dx;
-        const y = centre.y + dy;
-        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
-        const t = grid[y][x];
-        if (t.type === TileType.Water  || t.type === TileType.Forest ||
-            t.type === TileType.Ore    || t.type === TileType.Stone)  continue;
-        if (tileNoise(x + 23, y + 41) > 0.75) continue;  // 75% fill density
-        const foodMax = lerp(
-          WORLD_CONFIG.mushroomFoodMin,
-          WORLD_CONFIG.mushroomFoodMax,
-          tileNoise(x + 3, y + 13),
-        );
-        grid[y][x] = {
-          type:          TileType.Mushroom,
-          foodValue:     foodMax * (0.7 + Math.random() * 0.3),
-          materialValue: 0,
-          maxFood:       foodMax,
-          maxMaterial:   0,
-          growbackRate:  WORLD_CONFIG.mushroomGrowback,
-        };
-      }
-    }
-  }
-
-  // ── Pass 4: SE ore peak ──────────────────────────────────────────────────────
-  // 65% of tiles in (x>36, y>36): Ore (richer) or Stone (moderate).
-  for (let y = 37; y < GRID_SIZE; y++) {
-    for (let x = 37; x < GRID_SIZE; x++) {
-      if (grid[y][x].type === TileType.Water) continue;
-      const n = tileNoise(x, y);
-      if (n < 0.65) {
-        const matMax = lerp(
-          WORLD_CONFIG.oreMatMin,
-          WORLD_CONFIG.oreMatMax,
-          tileNoise(x + 3, y + 7),
-        );
-        grid[y][x] = {
-          type:          n < 0.35 ? TileType.Ore : TileType.Stone,
-          foodValue:     0,
-          materialValue: matMax * (0.7 + Math.random() * 0.3),
-          maxFood:       0,
-          maxMaterial:   matMax,
-          growbackRate:  WORLD_CONFIG.oreGrowback,
-        };
-      }
-    }
-  }
-
-  // ── Pass 5: Farmland strip ───────────────────────────────────────────────────
-  // Small patch at y=41–42, far left (x<15) — 30 tiles total.
-  // Spawn is at x=20–28, so farmland is 5–28 tiles west; forces travel to reach it.
-  // Food is low, regrowth slow — barely sustainable under 5-dwarf pressure.
-  for (let y = 41; y <= 42; y++) {
-    for (let x = 0; x < 15; x++) {
-      if (grid[y][x].type === TileType.Water) continue;
-      const foodMax = lerp(
-        WORLD_CONFIG.farmFoodMin,
-        WORLD_CONFIG.farmFoodMax,
-        tileNoise(x, y + 20),
-      );
-      grid[y][x] = {
-        type:          TileType.Farmland,
-        foodValue:     foodMax * (0.7 + Math.random() * 0.3),
-        materialValue: 0,
-        maxFood:       foodMax,
-        maxMaterial:   0,
-        growbackRate:  WORLD_CONFIG.farmGrowback,
-      };
-    }
-  }
-
-  // ── Pass 6: Clear spawn zone ─────────────────────────────────────────────────
-  // Run LAST so any forest tiles in the spawn rectangle get cleared.
-  // Only clear y=33–38 (the actual spawn rows) — y=28–29 forest rows are kept
-  // so they remain visible from spawn and pull dwarves toward the river crossing.
-  for (let y = 33; y <= 38; y++) {
-    for (let x = 18; x <= 30; x++) {
-      if (grid[y][x].type === TileType.Water) continue; // preserve river
-      grid[y][x] = makeDirt();
-    }
-  }
-
-  return grid;
+  return { grid, spawnZone };
 }
 
 // ── Growback ───────────────────────────────────────────────────────────────────
-// Each tile grows back by its own growbackRate per tick.
-// Materials (ore) don't regrow — oreGrowback is 0.
 
 export function growback(grid: Tile[][]): void {
   for (let y = 0; y < GRID_SIZE; y++) {
