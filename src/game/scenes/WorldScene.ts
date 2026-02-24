@@ -128,29 +128,23 @@ export class WorldScene extends Phaser.Scene {
     // ── SPACE: pause / unpause ───────────────────────────────────────────
     this.input.keyboard!
       .addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
-      .on('down', () => { this.paused = !this.paused; this.emitGameState(); });
+      .on('down', () => this.togglePause());
 
-    // ── = / − keys: change speed ─────────────────────────────────────────
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.EQUALS)
-      .on('down', () => {
-        const i = this.SPEED_STEPS.indexOf(this.speedMultiplier);
-        if (i < this.SPEED_STEPS.length - 1) {
-          this.speedMultiplier = this.SPEED_STEPS[i + 1];
-          this.emitGameState();
-        }
-      });
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.MINUS)
-      .on('down', () => {
-        const i = this.SPEED_STEPS.indexOf(this.speedMultiplier);
-        if (i > 0) {
-          this.speedMultiplier = this.SPEED_STEPS[i - 1];
-          this.emitGameState();
-        }
-      });
+    // ── Speed keys: = (187) and numpad + (107) for faster; - (189) and numpad - (109) for slower
+    // Use raw keycodes — KeyCodes.EQUALS is unreliable across Phaser builds
+    for (const code of [187, 107]) {
+      this.input.keyboard!.addKey(code).on('down', () => this.adjustSpeed(1));
+    }
+    for (const code of [189, 109]) {
+      this.input.keyboard!.addKey(code).on('down', () => this.adjustSpeed(-1));
+    }
 
-    // ── Settings bus ────────────────────────────────────────────────────
+    // ── Settings / control bus ───────────────────────────────────────────
+    bus.on('controlChange', ({ action }) => {
+      if (action === 'pause')     this.togglePause();
+      if (action === 'speedUp')   this.adjustSpeed(1);
+      if (action === 'speedDown') this.adjustSpeed(-1);
+    });
     bus.on('settingsChange', ({ llmEnabled }) => {
       llmSystem.enabled = llmEnabled;
     });
@@ -360,6 +354,20 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.tick % 5 === 0) this.emitMiniMap();
     this.emitGameState();
+  }
+
+  private togglePause() {
+    this.paused = !this.paused;
+    this.emitGameState();
+  }
+
+  private adjustSpeed(dir: 1 | -1) {
+    const i = this.SPEED_STEPS.indexOf(this.speedMultiplier);
+    const next = i + dir;
+    if (next >= 0 && next < this.SPEED_STEPS.length) {
+      this.speedMultiplier = this.SPEED_STEPS[next];
+      this.emitGameState();
+    }
   }
 
   private emitMiniMap() {

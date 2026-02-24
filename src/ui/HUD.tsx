@@ -83,13 +83,30 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function PauseSpeed({ paused, speed }: { paused: boolean; speed: number }) {
-  const speedLabel = speed === 1 ? '1×' : speed < 1 ? `${speed}×` : `${speed}×`;
+  const emit = (action: 'pause' | 'speedUp' | 'speedDown') =>
+    bus.emit('controlChange', { action });
+
   return (
-    <div style={styles.stat}>
-      <span style={styles.statLabel}>speed</span>
-      <span style={{ ...styles.statValue, color: paused ? '#e74c3c' : '#fff' }}>
-        {paused ? '⏸' : speedLabel}
-      </span>
+    <div style={styles.pauseSpeedGroup}>
+      <button
+        onClick={() => emit('speedDown')}
+        style={{ ...styles.ctrlBtn, ...styles.ctrlBtnNeutral }}
+        title="Slower (−)"
+      >−</button>
+
+      <button
+        onClick={() => emit('pause')}
+        style={{ ...styles.ctrlBtn, ...(paused ? styles.ctrlBtnPaused : styles.ctrlBtnPlay) }}
+        title="Pause / unpause (SPACE)"
+      >{paused ? '⏸' : '▶'}</button>
+
+      <span style={styles.speedLabel}>{speed}×</span>
+
+      <button
+        onClick={() => emit('speedUp')}
+        style={{ ...styles.ctrlBtn, ...styles.ctrlBtnNeutral }}
+        title="Faster (=)"
+      >+</button>
     </div>
   );
 }
@@ -326,5 +343,45 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'none',
     display:    'flex',
     gap:        8,
+  },
+  pauseSpeedGroup: {
+    display:    'flex',
+    alignItems: 'center',
+    gap:        4,
+    pointerEvents: 'auto' as const,
+  },
+  speedLabel: {
+    fontFamily: 'monospace',
+    fontSize:   12,
+    fontWeight: 'bold',
+    color:      '#fff',
+    minWidth:   24,
+    textAlign:  'center' as const,
+  },
+  ctrlBtn: {
+    fontFamily:   'monospace',
+    fontSize:     12,
+    fontWeight:   'bold',
+    border:       'none',
+    borderRadius: 4,
+    width:        22,
+    height:       22,
+    cursor:       'pointer',
+    display:      'flex',
+    alignItems:   'center',
+    justifyContent: 'center',
+    lineHeight:   1,
+  } as React.CSSProperties,
+  ctrlBtnNeutral: {
+    background: 'rgba(120,120,120,0.25)',
+    color:      '#aaa',
+  },
+  ctrlBtnPlay: {
+    background: 'rgba(0,200,80,0.2)',
+    color:      '#4efa8a',
+  },
+  ctrlBtnPaused: {
+    background: 'rgba(220,60,60,0.25)',
+    color:      '#e74c3c',
   },
 };

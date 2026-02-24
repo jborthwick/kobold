@@ -7,6 +7,7 @@ type Events = {
   settingsChange: { llmEnabled: boolean };
   tileHover:      TileInfo | null;
   miniMapUpdate:  MiniMapData;
+  controlChange:  { action: 'pause' | 'speedUp' | 'speedDown' };
 };
 
 export const bus = mitt<Events>();
