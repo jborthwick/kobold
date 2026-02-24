@@ -1,6 +1,6 @@
 import * as ROT from 'rot-js';
 import { type Dwarf, type Tile } from '../shared/types';
-import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES } from '../shared/constants';
+import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
 function rand(min: number, max: number) {
@@ -25,7 +25,7 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       hunger:        rand(10, 40),
       metabolism:    rand(1, 3),
       vision:        rand(2, 5),
-      inventory:     { food: rand(8, 15), materials: 0 },
+      inventory:     { food: rand(3, 8), materials: 0 },
       morale:        70 + rand(0, 20),
       alive:         true,
       task:          'idle',
@@ -208,12 +208,15 @@ export function tickAgent(
       dwarf.y    = next.y;
     }
     const here = grid[dwarf.y][dwarf.x];
-    if (here.foodValue > 0) {
-      const amount          = Math.min(here.foodValue, 3);
+    const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
+    if (here.foodValue > 0 && headroom > 0) {
+      const amount          = Math.min(here.foodValue, 3, headroom);
       here.foodValue        = Math.max(0, here.foodValue - amount);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
       dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
+    } else if (headroom <= 0) {
+      dwarf.task = 'inventory full';
     } else {
       const label = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
       dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;

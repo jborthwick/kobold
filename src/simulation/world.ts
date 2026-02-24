@@ -55,7 +55,7 @@ export function generateWorld(): Tile[][] {
         //   • Scattered forage patches (~12% of tiles, 1–3 food each) keep
         //     lone foragers alive but can't sustain the whole colony
         const d = dist(x, y, FOOD_PEAK.x, FOOD_PEAK.y);
-        const peak    = Math.max(0, MAX_FOOD_VALUE - d * 0.85);   // ~12-tile radius
+        const peak    = Math.max(0, MAX_FOOD_VALUE - d * 1.1);    // ~9-tile radius
         const noise1  = tileNoise(x, y);
         const noise2  = tileNoise(x + 7, y + 13);                 // second sample for value
         const scatter = noise1 > 0.88 ? 1 + noise2 * 2 : 0;      // ~12% of tiles, 1–3 food
