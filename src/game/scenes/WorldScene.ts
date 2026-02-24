@@ -4,7 +4,7 @@ import { generateWorld, growback, isWalkable } from '../../simulation/world';
 import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState, type TileInfo } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState, type TileInfo, type MiniMapData } from '../../shared/types';
 import { llmSystem } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -354,7 +354,31 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
+    if (this.tick % 5 === 0) this.emitMiniMap();
     this.emitGameState();
+  }
+
+  private emitMiniMap() {
+    const cam    = this.cameras.main;
+    const tpx    = TILE_SIZE;
+    const view   = cam.worldView;
+    const data: MiniMapData = {
+      tiles: this.grid.map(row => row.map(t => ({
+        type:      t.type,
+        foodRatio: t.maxFood     > 0 ? t.foodValue     / t.maxFood     : 0,
+        matRatio:  t.maxMaterial > 0 ? t.materialValue / t.maxMaterial : 0,
+      }))),
+      dwarves: this.dwarves
+        .filter(d => d.alive)
+        .map(d => ({ x: d.x, y: d.y, hunger: d.hunger })),
+      viewport: {
+        x: view.x / tpx,
+        y: view.y / tpx,
+        w: view.width  / tpx,
+        h: view.height / tpx,
+      },
+    };
+    bus.emit('miniMapUpdate', data);
   }
 
   private emitGameState() {

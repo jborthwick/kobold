@@ -79,6 +79,15 @@ export interface TileInfo {
   maxMaterial: number;
 }
 
+export interface MiniMapData {
+  /** One cell per tile: type + food fill ratio (0–1). */
+  tiles:    { type: TileType; foodRatio: number; matRatio: number }[][];
+  /** Alive dwarf positions and hunger (0–100). */
+  dwarves:  { x: number; y: number; hunger: number }[];
+  /** Camera viewport in tile-space. */
+  viewport: { x: number; y: number; w: number; h: number };
+}
+
 export interface GameState {
   tick: number;
   dwarves: Dwarf[];
