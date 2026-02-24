@@ -11,10 +11,10 @@ const WORLD_CONFIG = {
   forestFoodMax:  12,
   forestGrowback: 0.3,   // units/tick — slow enough to deplete under pressure
 
-  // Farmland strip at y=38–42 (fallback food — fast regrowth, low ceiling)
-  farmFoodMin:    3,
-  farmFoodMax:    4,
-  farmGrowback:   0.5,
+  // Farmland strip (fallback food — small patch, slow regrowth, low ceiling)
+  farmFoodMin:    2,
+  farmFoodMax:    3,
+  farmGrowback:   0.15,
 
   // Sparse grass everywhere else (filler — barely worth eating)
   grassFood:      0,
@@ -145,10 +145,11 @@ export function generateWorld(): Tile[][] {
   }
 
   // ── Pass 5: Farmland strip ───────────────────────────────────────────────────
-  // Narrow band at y=38–42, left half only (x<36).
-  // Dwarves can survive here but food is low — not worth staying long-term.
-  for (let y = 38; y <= 42; y++) {
-    for (let x = 0; x < 36; x++) {
+  // Small patch at y=41–42, far left (x<15) — 30 tiles total.
+  // Spawn is at x=20–28, so farmland is 5–28 tiles west; forces travel to reach it.
+  // Food is low, regrowth slow — barely sustainable under 5-dwarf pressure.
+  for (let y = 41; y <= 42; y++) {
+    for (let x = 0; x < 15; x++) {
       if (grid[y][x].type === TileType.Water) continue;
       const foodMax = lerp(
         WORLD_CONFIG.farmFoodMin,
