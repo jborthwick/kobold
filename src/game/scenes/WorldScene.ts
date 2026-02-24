@@ -206,7 +206,7 @@ export class WorldScene extends Phaser.Scene {
     this.tick++;
 
     for (const d of this.dwarves) {
-      tickAgent(d, this.grid, (message, level) => {
+      tickAgent(d, this.grid, this.tick, this.dwarves, (message, level) => {
         bus.emit('logEntry', {
           tick:      this.tick,
           dwarfId:   d.id,
@@ -220,11 +220,22 @@ export class WorldScene extends Phaser.Scene {
       llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick,
         (dwarf, decision, situation) => {
           dwarf.llmReasoning = decision.reasoning;
+
+          // Store structured intent with expiry (~1.5 s at 7 ticks/s)
+          if (decision.intent && decision.intent !== 'none') {
+            dwarf.llmIntent       = decision.intent;
+            dwarf.llmIntentExpiry = this.tick + 10;
+          }
+
+          // Push to rolling short-term memory (cap at 5 entries)
+          dwarf.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action });
+          if (dwarf.memory.length > 5) dwarf.memory.shift();
+
           bus.emit('logEntry', {
             tick:      this.tick,
             dwarfId:   dwarf.id,
             dwarfName: dwarf.name,
-            message:   `[${situation.type}] "${decision.reasoning}" → ${decision.action}`,
+            message:   `[${situation.type}] ${decision.intent ?? 'none'} — "${decision.reasoning}"`,
             level:     'warn',
           });
         },

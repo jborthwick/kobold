@@ -30,7 +30,10 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
       alive:         true,
       task:          'idle',
       commandTarget: null,
-      llmReasoning:  null,
+      llmReasoning:    null,
+      llmIntent:       null,
+      llmIntentExpiry: 0,
+      memory:          [],
     });
   }
   return dwarves;
@@ -38,15 +41,17 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function bestVisibleFoodTile(
-  dwarf: Dwarf,
-  grid: Tile[][],
+/** Scan a square of `radius` tiles around the dwarf for the richest food tile. */
+function bestFoodTile(
+  dwarf:  Dwarf,
+  grid:   Tile[][],
+  radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
   let bestValue = 0.5;
 
-  for (let dy = -dwarf.vision; dy <= dwarf.vision; dy++) {
-    for (let dx = -dwarf.vision; dx <= dwarf.vision; dx++) {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
       const nx = dwarf.x + dx;
       const ny = dwarf.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
@@ -87,19 +92,23 @@ function pathNextStep(
 
 // ── Behavior Tree ──────────────────────────────────────────────────────────
 // Priority cascade (highest first):
-//   1. Starvation damage / death
-//   2. Eat from inventory
-//   3. Follow player commandTarget  ← player commands override harvesting
-//   4. Forage + harvest (Sugarscape rule): move toward richest visible food,
-//      then harvest wherever you land
-//   5. Wander
+//   1.  Starvation damage / death
+//   2.  Eat from inventory (hunger > 70)
+//   2.5 Execute LLM intent: eat (force-eat), rest (stay put)
+//       'forage' and 'avoid' are handled in steps 4/5
+//   3.  Follow player commandTarget  ← player commands override harvesting
+//   4.  Forage + harvest (Sugarscape rule): move toward richest food tile;
+//       radius extends to 10 when llmIntent === 'forage'
+//   5.  Wander (or avoid rival when llmIntent === 'avoid')
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
 export function tickAgent(
-  dwarf: Dwarf,
-  grid:  Tile[][],
-  onLog?: LogFn,
+  dwarf:       Dwarf,
+  grid:        Tile[][],
+  currentTick: number,
+  dwarves?:    Dwarf[],
+  onLog?:      LogFn,
 ): void {
   if (!dwarf.alive) return;
 
@@ -139,6 +148,34 @@ export function tickAgent(
     return;
   }
 
+  // ── 2.5. Execute LLM intent (eat / rest) ──────────────────────────────
+  // 'forage' and 'avoid' are handled in steps 4 / 5 via llmIntent check.
+  if (dwarf.llmIntent) {
+    if (currentTick > dwarf.llmIntentExpiry) {
+      dwarf.llmIntent = null;          // intent expired — clear it
+    } else {
+      switch (dwarf.llmIntent) {
+        case 'eat':
+          // Force-eat even below the normal 70-hunger threshold
+          if (dwarf.inventory.food > 0 && dwarf.hunger > 30) {
+            const bite           = Math.min(dwarf.inventory.food, 3);
+            dwarf.inventory.food -= bite;
+            dwarf.hunger         = Math.max(0, dwarf.hunger - bite * 20);
+            dwarf.task           = 'eating (LLM)';
+            return;
+          }
+          break;
+        case 'rest':
+          dwarf.task = 'resting';
+          return;                      // skip movement entirely
+        case 'forage':
+        case 'avoid':
+        case 'none':
+          break;                       // handled in later BT steps
+      }
+    }
+  }
+
   // ── 3. Follow player command ───────────────────────────────────────────
   // Player commands take priority over autonomous harvesting so right-click
   // actually moves the dwarf without interruption.
@@ -158,10 +195,12 @@ export function tickAgent(
   }
 
   // ── 4. Forage + harvest (Sugarscape rule) ─────────────────────────────
-  // Each tick: move toward the richest visible tile, then harvest wherever
-  // you land.  bestVisibleFoodTile scans dx=0,dy=0 too, so if the current
-  // tile is already the richest the dwarf stays put and harvests in place.
-  const foodTarget = bestVisibleFoodTile(dwarf, grid);
+  // Each tick: move toward the richest food tile, then harvest wherever
+  // you land.  When the LLM sets intent 'forage', scan a 10-tile global
+  // radius instead of normal vision so the dwarf seeks the best food
+  // even if it's outside their sight range.
+  const radius     = dwarf.llmIntent === 'forage' ? 10 : dwarf.vision;
+  const foodTarget = bestFoodTile(dwarf, grid, radius);
   if (foodTarget) {
     if (dwarf.x !== foodTarget.x || dwarf.y !== foodTarget.y) {
       const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, foodTarget, grid);
@@ -173,22 +212,52 @@ export function tickAgent(
       const amount          = Math.min(here.foodValue, 3);
       here.foodValue        = Math.max(0, here.foodValue - amount);
       dwarf.inventory.food += amount;
-      dwarf.task            = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
+      const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
+      dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
     } else {
-      dwarf.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
+      const label = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
+      dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
     }
     return;
   }
 
-  // ── 5. Wander ──────────────────────────────────────────────────────────
+  // ── 5. Wander / Avoid ─────────────────────────────────────────────────
+  // When LLM intent is 'avoid' and we know where other dwarves are,
+  // pick the open tile that maximises Manhattan distance from the nearest
+  // rival within 5 tiles.  Falls back to random wander if no rival nearby.
   const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
   const open = dirs
     .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
     .filter(p => isWalkable(grid, p.x, p.y));
+
   if (open.length > 0) {
-    const next = open[Math.floor(Math.random() * open.length)];
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
+    let next: { x: number; y: number };
+
+    if (dwarf.llmIntent === 'avoid' && dwarves) {
+      const rival = dwarves
+        .filter(r => r.alive && r.id !== dwarf.id)
+        .map(r    => ({ r, dist: Math.abs(r.x - dwarf.x) + Math.abs(r.y - dwarf.y) }))
+        .filter(e  => e.dist <= 5)
+        .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
+
+      if (rival) {
+        next       = open.reduce((best, p) =>
+          (Math.abs(p.x - rival.x) + Math.abs(p.y - rival.y)) >
+          (Math.abs(best.x - rival.x) + Math.abs(best.y - rival.y)) ? p : best,
+        );
+        dwarf.task = `avoiding ${rival.name}`;
+      } else {
+        next       = open[Math.floor(Math.random() * open.length)];
+        dwarf.task = 'wandering';
+      }
+    } else {
+      next       = open[Math.floor(Math.random() * open.length)];
+      dwarf.task = 'wandering';
+    }
+
+    dwarf.x = next.x;
+    dwarf.y = next.y;
+  } else {
+    dwarf.task = 'wandering';
   }
-  dwarf.task = 'wandering';
 }
