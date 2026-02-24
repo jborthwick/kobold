@@ -88,8 +88,8 @@ function pathNextStep(
 // Priority cascade (highest first):
 //   1. Starvation damage / death
 //   2. Eat from inventory
-//   3. Harvest tile underfoot
-//   4. Follow player commandTarget
+//   3. Follow player commandTarget  ← player commands override harvesting
+//   4. Harvest tile underfoot
 //   5. Forage toward richest visible food
 //   6. Wander
 
@@ -129,17 +129,9 @@ export function tickAgent(
     return;
   }
 
-  // ── 3. Harvest tile underfoot ──────────────────────────────────────────
-  const here = grid[dwarf.y][dwarf.x];
-  if (here.foodValue > 0) {
-    const amount          = Math.min(here.foodValue, 3);
-    here.foodValue        = Math.max(0, here.foodValue - amount);
-    dwarf.inventory.food += amount;
-    dwarf.task            = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
-    return;
-  }
-
-  // ── 4. Follow player command ───────────────────────────────────────────
+  // ── 3. Follow player command ───────────────────────────────────────────
+  // Player commands take priority over autonomous harvesting so right-click
+  // actually moves the dwarf without interruption.
   if (dwarf.commandTarget) {
     const { x: tx, y: ty } = dwarf.commandTarget;
     if (dwarf.x === tx && dwarf.y === ty) {
@@ -152,6 +144,16 @@ export function tickAgent(
       dwarf.y    = next.y;
       dwarf.task = `→ (${tx},${ty})`;
     }
+    return;
+  }
+
+  // ── 4. Harvest tile underfoot ──────────────────────────────────────────
+  const here = grid[dwarf.y][dwarf.x];
+  if (here.foodValue > 0) {
+    const amount          = Math.min(here.foodValue, 3);
+    here.foodValue        = Math.max(0, here.foodValue - amount);
+    dwarf.inventory.food += amount;
+    dwarf.task            = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
     return;
   }
 
