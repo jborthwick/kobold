@@ -81,7 +81,7 @@ export class WorldScene extends Phaser.Scene {
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
     this.cameras.main.setZoom(2);
-    this.cameras.main.centerOn(200, 200); // NW food zone where dwarves start
+    this.cameras.main.centerOn(24 * TILE_SIZE, 35 * TILE_SIZE); // spawn zone center
 
     // ── Keyboard ────────────────────────────────────────────────────────
     this.wasd = {

@@ -11,12 +11,12 @@ export function spawnDwarves(grid: Tile[][]): Dwarf[] {
   const dwarves: Dwarf[] = [];
   for (let i = 0; i < INITIAL_DWARVES; i++) {
     let x: number, y: number;
-    // Spawn in center-left zone (20–28, 28–36) — cleared of food, between
-    // the river and farmland strip.  isWalkable() rejects river tiles (y=30–32)
-    // automatically, so the do-while retries until a walkable tile is found.
+    // Spawn in center-left zone (20–28, 33–37) — cleared of food, south of river.
+    // Dwarves must cross at x=19–21 or x=43–45 to reach NW forest.
+    // All tiles here are walkable grass (no water), so isWalkable never retries.
     do {
       x = rand(20, 28);
-      y = rand(28, 36);
+      y = rand(33, 37);
     } while (!isWalkable(grid, x, y));
 
     dwarves.push({

@@ -17,8 +17,8 @@ const WORLD_CONFIG = {
   farmGrowback:   0.5,
 
   // Sparse grass everywhere else (filler — barely worth eating)
-  grassFood:      1,
-  grassGrowback:  0.1,
+  grassFood:      0,
+  grassGrowback:  0.1,   // inert — growback() checks maxFood > 0, which is 0 for grass
 
   // SE ore peak (material — finite, doesn't regrow)
   oreMatMin:      8,
