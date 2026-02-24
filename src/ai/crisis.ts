@@ -20,7 +20,7 @@ const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tick
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
-const COOLDOWN_TICKS            = 50;  // ~7 s at ~7 ticks/s — min gap between calls
+const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/dwarf/hour
 const MODEL                     = 'claude-haiku-4-5';
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
@@ -86,20 +86,28 @@ export function detectCrisis(
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
 function buildPrompt(dwarf: Dwarf, situation: CrisisSituation): string {
+  // PIANO step 2 — inject short-term memory if present
+  const memBlock = dwarf.memory.length > 0
+    ? `\nRECENT DECISIONS:\n${dwarf.memory.map(m =>
+        `  [tick ${m.tick}] ${m.crisis}: "${m.action}"`).join('\n')}`
+    : '';
+
   return `You are ${dwarf.name}, a dwarf in a colony.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
 Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
 
 CRISIS: ${situation.description}
-Colony context: ${situation.colonyContext}
+Colony context: ${situation.colonyContext}${memBlock}
 
 Respond ONLY as valid JSON (no markdown, no extra text):
 {
   "action": "one short sentence — what you will do next",
+  "intent": "eat | forage | rest | avoid | none",
   "reasoning": "internal monologue, 1-2 sentences",
   "emotional_state": "3-5 words describing how you feel",
   "expectedOutcome": "one short sentence — what you expect to happen"
-}`;
+}
+intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still, avoid=move away from rivals, none=normal behaviour`;
 }
 
 // ── LLM Decision System ───────────────────────────────────────────────────────
