@@ -1,4 +1,5 @@
 export enum TileType {
+  Dirt     = 'dirt',
   Grass    = 'grass',
   Stone    = 'stone',
   Water    = 'water',

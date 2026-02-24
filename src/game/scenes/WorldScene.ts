@@ -12,12 +12,15 @@ import { llmSystem } from '../../ai/crisis';
 // Frames verified by pixel analysis (4-bit indexed PNG, 8-color palette):
 //   BG  = (71,45,60)  GREEN = (56,217,115)  GRAY  = (207,198,184)
 //   TAN = (191,121,88) BROWNDARK = (122,68,74) BLUE = (60,172,215)
-// Grass uses three ground-variation frames; noise selects per tile.
-const GRASS_FRAMES = [0, 1, 2]; // row 0 cols 0-2: plain dark → sparse dots → denser dots
+// Dirt uses three ground-variation frames; noise selects per tile.
+const DIRT_FRAMES  = [0, 1, 2]; // row 0 cols 0-2: plain dark → sparse dots → denser dots
+// Grass uses three green-tuft frames; noise selects per tile.
+const GRASS_FRAMES = [6, 7, 8]; // row 0 cols 6-8: green tufts (38/44 GREEN px) + darker variant
 
 const TILE_FRAMES: Record<TileType, number> = {
+  [TileType.Dirt]:      0,   // placeholder — overridden per-tile by DIRT_FRAMES below
+  [TileType.Grass]:     0,   // placeholder — overridden per-tile by GRASS_FRAMES below
   [TileType.Forest]:   54,   // row 1, col 5  – 110 green pixels (pine tree) ✓
-  [TileType.Grass]:     0,   // placeholder — overridden per-tile by grassFrame() below
   [TileType.Water]:   204,   // row 4, col 8  – 166 blue ✓
   [TileType.Stone]:    72,   // row 1, col 23 – 186 gray (stone tile) ✓
   [TileType.Farmland]:150,   // row 3, col 3  – 150 tan (soil tile) ✓
@@ -278,12 +281,14 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile = this.grid[y][x];
-        // Grass gets one of three ground-variation frames chosen by position noise.
+        // Dirt and Grass each get one of three variation frames chosen by position noise.
         const n     = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
         const noise = n - Math.floor(n);
-        const frame = tile.type === TileType.Grass
-          ? GRASS_FRAMES[Math.floor(noise * GRASS_FRAMES.length)]
-          : TILE_FRAMES[tile.type];
+        const frame = tile.type === TileType.Dirt
+          ? DIRT_FRAMES[Math.floor(noise * DIRT_FRAMES.length)]
+          : tile.type === TileType.Grass
+            ? GRASS_FRAMES[Math.floor(noise * GRASS_FRAMES.length)]
+            : TILE_FRAMES[tile.type];
         const t = this.terrainLayer.putTileAt(frame, x, y)!;
 
         // Dim food tiles as they deplete (multiplicative brightness mask).

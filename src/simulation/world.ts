@@ -47,10 +47,10 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-/** Return a bare grass tile with the minimum food value. */
-function makeGrass(): Tile {
+/** Return a bare dirt tile (barren ground, no food). */
+function makeDirt(): Tile {
   return {
-    type:          TileType.Grass,
+    type:          TileType.Dirt,
     foodValue:     WORLD_CONFIG.grassFood,
     materialValue: 0,
     maxFood:       WORLD_CONFIG.grassFood,
@@ -76,7 +76,7 @@ export function generateWorld(): Tile[][] {
   for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
     for (let x = 0; x < GRID_SIZE; x++) {
-      grid[y][x] = makeGrass();
+      grid[y][x] = makeDirt();
     }
   }
 
@@ -176,7 +176,7 @@ export function generateWorld(): Tile[][] {
   for (let y = 33; y <= 38; y++) {
     for (let x = 18; x <= 30; x++) {
       if (grid[y][x].type === TileType.Water) continue; // preserve river
-      grid[y][x] = makeGrass();
+      grid[y][x] = makeDirt();
     }
   }
 
