@@ -154,18 +154,20 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('wheel',
       (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
-        const oldZoom = cam.zoom;
-        const newZoom = Phaser.Math.Clamp(oldZoom * (deltaY > 0 ? 0.9 : 1.1), 0.5, 5);
+        const worldPx  = GRID_SIZE * TILE_SIZE;
+        // Minimum zoom = whichever axis would show beyond the map edge first
+        const minZoom  = Math.max(cam.width, cam.height) / worldPx;
+        const oldZoom  = cam.zoom;
+        const newZoom  = Phaser.Math.Clamp(oldZoom * (deltaY > 0 ? 0.9 : 1.1), minZoom, 5);
+        if (newZoom === oldZoom) return;
 
-        // World position under cursor at current zoom
-        const worldX = cam.scrollX + ptr.x / oldZoom;
-        const worldY = cam.scrollY + ptr.y / oldZoom;
-
+        // Phaser 3 uses a viewport-centred transform — scrollX is NOT the world position
+        // at the left edge, it's offset by halfWidth. The correct zoom-to-cursor formula
+        // adjusts scroll by (cursor-from-viewport-centre) × (zoom-factor-delta).
+        const f = 1 / oldZoom - 1 / newZoom;
         cam.zoom = newZoom;
-
-        // Shift scroll so the cursor world position stays fixed (zoom-to-cursor)
-        cam.scrollX = worldX - ptr.x / newZoom;
-        cam.scrollY = worldY - ptr.y / newZoom;
+        cam.scrollX += (ptr.x - cam.x - cam.width  / 2) * f;
+        cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
       },
     );
   }

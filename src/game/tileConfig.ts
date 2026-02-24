@@ -11,13 +11,13 @@ import { TileType } from '../shared/types';
  */
 export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Dirt]: [0, 1, 2],
-  [TileType.Grass]: [6, 7, 8],
+  [TileType.Grass]: [5, 6, 7],
   [TileType.Stone]: [103],
   [TileType.Water]: [253],
   [TileType.Forest]: [49, 50, 51, 52, 53, 54, 101, 102],
   [TileType.Farmland]: [310],
   [TileType.Ore]: [522],
-  [TileType.Mushroom]: [147],  // placeholder — reassign via T-key tile picker
+  [TileType.Mushroom]: [554],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
