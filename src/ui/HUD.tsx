@@ -3,12 +3,19 @@ import { bus } from '../shared/events';
 import type { GameState, Dwarf, OverlayMode } from '../shared/types';
 
 export function HUD() {
-  const [state, setState] = useState<GameState | null>(null);
+  const [state,      setState]      = useState<GameState | null>(null);
+  const [llmEnabled, setLlmEnabled] = useState(true);
 
   useEffect(() => {
     bus.on('gameState', setState);
     return () => bus.off('gameState', setState);
   }, []);
+
+  const toggleLLM = () => {
+    const next = !llmEnabled;
+    setLlmEnabled(next);
+    bus.emit('settingsChange', { llmEnabled: next });
+  };
 
   if (!state) return null;
 
@@ -25,6 +32,12 @@ export function HUD() {
         <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
         <Stat label="tick"    value={String(state.tick)} />
         <OverlayIndicator mode={state.overlayMode} />
+        <button
+          onClick={toggleLLM}
+          style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
+        >
+          {llmEnabled ? '🤖 LLM' : '💤 LLM'}
+        </button>
       </div>
 
       {selected && <DwarfPanel dwarf={selected} />}
@@ -169,6 +182,27 @@ const styles: Record<string, React.CSSProperties> = {
     height:       '100%',
     borderRadius: 4,
     transition:   'width 0.15s ease',
+  },
+  llmToggle: {
+    pointerEvents: 'auto' as const,
+    fontFamily:    'monospace',
+    fontSize:      10,
+    fontWeight:    'bold',
+    border:        'none',
+    borderRadius:  4,
+    padding:       '3px 8px',
+    cursor:        'pointer',
+    letterSpacing: '0.03em',
+    alignSelf:     'center',
+    transition:    'background 0.15s',
+  },
+  llmToggleOn: {
+    background: 'rgba(0,200,80,0.25)',
+    color:      '#4efa8a',
+  },
+  llmToggleOff: {
+    background: 'rgba(120,120,120,0.2)',
+    color:      '#777',
   },
   llmReasoning: {
     marginTop:  8,

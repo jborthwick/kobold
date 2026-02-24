@@ -113,6 +113,11 @@ export class WorldScene extends Phaser.Scene {
         this.drawOverlay();
       });
 
+    // ── Settings bus ────────────────────────────────────────────────────
+    bus.on('settingsChange', ({ llmEnabled }) => {
+      llmSystem.enabled = llmEnabled;
+    });
+
     this.setupInput();
   }
 

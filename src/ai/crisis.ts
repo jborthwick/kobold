@@ -119,6 +119,9 @@ type DecisionCallback = (
 ) => void;
 
 export class LLMDecisionSystem {
+  /** Set to false to suppress all LLM calls (e.g. dev toggle). */
+  public enabled = true;
+
   // One Promise per agent — prevents duplicate in-flight calls
   private pendingRequests = new Map<string, Promise<LLMDecision | null>>();
   // Per-agent cooldown: don't fire again until this tick
@@ -135,6 +138,7 @@ export class LLMDecisionSystem {
     currentTick: number,
     onDecision: DecisionCallback,
   ): void {
+    if (!this.enabled)                                         return;
     if (!dwarf.alive)                                          return;
     if (this.pendingRequests.has(dwarf.id))                    return;
     if ((this.cooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
