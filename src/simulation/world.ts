@@ -24,6 +24,16 @@ const WORLD_CONFIG = {
   oreMatMin:      8,
   oreMatMax:      12,
   oreGrowback:    0,
+
+  // Grass meadow belt (light food — transition zone south of river)
+  grassMeadowFoodMin:  2,
+  grassMeadowFoodMax:  4,
+  grassMeadowGrowback: 0.15,
+
+  // Mushroom hotspots (medium food, fast growback — secondary contested nodes)
+  mushroomFoodMin:  4,
+  mushroomFoodMax:  7,
+  mushroomGrowback: 0.5,   // 1.67× faster than forest's 0.3
 } as const;
 
 // Horizontal river at y=30–32.  Two narrow crossing gaps let dwarves pass.
@@ -95,6 +105,32 @@ export function generateWorld(): Tile[][] {
     }
   }
 
+  // ── Pass 2.5: Sparse Grass meadow belt ──────────────────────────────────────
+  // Converts ~30% of bare Dirt in the south-central zone (south of river, between
+  // spawn and farmland) into Grass with light food. Provides scattered pickup food
+  // for dwarves travelling between the crossing and the SW farmland strip.
+  // Pass 6 clears the spawn zone last, so no Grass in the spawn rectangle.
+  for (let y = 33; y < 58; y++) {
+    for (let x = 10; x < 55; x++) {
+      const t = grid[y][x];
+      if (t.type !== TileType.Dirt) continue;           // don't overwrite Water/Forest/Ore
+      if (tileNoise(x + 13, y + 3) >= 0.30) continue;  // 30% of eligible tiles
+      const foodMax = lerp(
+        WORLD_CONFIG.grassMeadowFoodMin,
+        WORLD_CONFIG.grassMeadowFoodMax,
+        tileNoise(x + 7, y + 19),
+      );
+      grid[y][x] = {
+        type:          TileType.Grass,
+        foodValue:     foodMax * (0.7 + Math.random() * 0.3),
+        materialValue: 0,
+        maxFood:       foodMax,
+        maxMaterial:   0,
+        growbackRate:  WORLD_CONFIG.grassMeadowGrowback,
+      };
+    }
+  }
+
   // ── Pass 3: NW forest peak ───────────────────────────────────────────────────
   // 60% of tiles in (x<28, y<30) become dense forest (food 8–12).
   // Extending to y<30 brings forest right to the south bank of the river so
@@ -119,6 +155,44 @@ export function generateWorld(): Tile[][] {
         };
       }
       // Remaining 40% keep the grass tile from pass 1
+    }
+  }
+
+  // ── Pass 3.5: Mushroom hotspot clusters ─────────────────────────────────────
+  // 7 deterministic cluster centres in the central/south zone, each filling a
+  // 2-tile radius at 75% density (noise-thinned for natural-looking patches).
+  // Fast growback (0.5/tick) makes these secondary contested food nodes.
+  // Pass 6 clears any mushrooms in the spawn rectangle.
+  const MUSHROOM_CENTRES = [
+    { x: 17, y: 40 }, { x: 33, y: 44 }, { x: 48, y: 39 },
+    { x: 25, y: 51 }, { x: 41, y: 55 }, { x: 12, y: 55 }, { x: 56, y: 47 },
+  ];
+  const MUSHROOM_RADIUS = 2;
+
+  for (const centre of MUSHROOM_CENTRES) {
+    for (let dy = -MUSHROOM_RADIUS; dy <= MUSHROOM_RADIUS; dy++) {
+      for (let dx = -MUSHROOM_RADIUS; dx <= MUSHROOM_RADIUS; dx++) {
+        const x = centre.x + dx;
+        const y = centre.y + dy;
+        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+        const t = grid[y][x];
+        if (t.type === TileType.Water  || t.type === TileType.Forest ||
+            t.type === TileType.Ore    || t.type === TileType.Stone)  continue;
+        if (tileNoise(x + 23, y + 41) > 0.75) continue;  // 75% fill density
+        const foodMax = lerp(
+          WORLD_CONFIG.mushroomFoodMin,
+          WORLD_CONFIG.mushroomFoodMax,
+          tileNoise(x + 3, y + 13),
+        );
+        grid[y][x] = {
+          type:          TileType.Mushroom,
+          foodValue:     foodMax * (0.7 + Math.random() * 0.3),
+          materialValue: 0,
+          maxFood:       foodMax,
+          maxMaterial:   0,
+          growbackRate:  WORLD_CONFIG.mushroomGrowback,
+        };
+      }
     }
   }
 

@@ -6,6 +6,7 @@ export enum TileType {
   Forest   = 'forest',
   Farmland = 'farmland',
   Ore      = 'ore',
+  Mushroom = 'mushroom',
 }
 
 export interface Tile {

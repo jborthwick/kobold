@@ -17,6 +17,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Forest]: [49, 50, 51, 52, 53, 54, 101, 102],
   [TileType.Farmland]: [310],
   [TileType.Ore]: [522],
+  [TileType.Mushroom]: [147],  // placeholder — reassign via T-key tile picker
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */

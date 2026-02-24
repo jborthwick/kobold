@@ -153,9 +153,19 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.input.on('wheel',
-      (_ptr: unknown, _objs: unknown, _dx: number, deltaY: number) => {
-        const z = cam.zoom * (deltaY > 0 ? 0.9 : 1.1);
-        cam.zoom = Phaser.Math.Clamp(z, 0.4, 6);
+      (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
+        const oldZoom = cam.zoom;
+        const newZoom = Phaser.Math.Clamp(oldZoom * (deltaY > 0 ? 0.9 : 1.1), 0.5, 5);
+
+        // World position under cursor at current zoom
+        const worldX = cam.scrollX + ptr.x / oldZoom;
+        const worldY = cam.scrollY + ptr.y / oldZoom;
+
+        cam.zoom = newZoom;
+
+        // Shift scroll so the cursor world position stays fixed (zoom-to-cursor)
+        cam.scrollX = worldX - ptr.x / newZoom;
+        cam.scrollY = worldY - ptr.y / newZoom;
       },
     );
   }
@@ -397,7 +407,7 @@ export class WorldScene extends Phaser.Scene {
   update(time: number, delta: number) {
     // WASD camera pan
     const cam   = this.cameras.main;
-    const speed = CAM_PAN_SPEED * (delta / 1000);
+    const speed = CAM_PAN_SPEED * (delta / 1000) / cam.zoom; // scale with zoom for consistent apparent speed
     if (this.wasd.W.isDown) cam.scrollY -= speed;
     if (this.wasd.S.isDown) cam.scrollY += speed;
     if (this.wasd.A.isDown) cam.scrollX -= speed;
