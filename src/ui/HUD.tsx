@@ -31,6 +31,7 @@ export function HUD() {
         <Stat label="food"    value={state.totalFood.toFixed(1)} />
         <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
         <Stat label="tick"    value={String(state.tick)} />
+        <PauseSpeed paused={state.paused} speed={state.speed} />
         <OverlayIndicator mode={state.overlayMode} />
         <button
           onClick={toggleLLM}
@@ -50,6 +51,18 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div style={styles.stat}>
       <span style={styles.statLabel}>{label}</span>
       <span style={styles.statValue}>{value}</span>
+    </div>
+  );
+}
+
+function PauseSpeed({ paused, speed }: { paused: boolean; speed: number }) {
+  const speedLabel = speed === 1 ? '1×' : speed < 1 ? `${speed}×` : `${speed}×`;
+  return (
+    <div style={styles.stat}>
+      <span style={styles.statLabel}>speed</span>
+      <span style={{ ...styles.statValue, color: paused ? '#e74c3c' : '#fff' }}>
+        {paused ? '⏸' : speedLabel}
+      </span>
     </div>
   );
 }

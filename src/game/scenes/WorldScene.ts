@@ -21,6 +21,9 @@ export class WorldScene extends Phaser.Scene {
   private selectedDwarfId: string | null = null;
   private terrainDirty = true;
   private lastTickTime = 0;
+  private paused = false;
+  private speedMultiplier = 1;
+  private readonly SPEED_STEPS = [0.25, 0.5, 1, 2, 4];
 
   // Active player command tile (shown as flag)
   private commandTile: { x: number; y: number } | null = null;
@@ -75,7 +78,7 @@ export class WorldScene extends Phaser.Scene {
     // ── Camera ──────────────────────────────────────────────────────────
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
-    this.cameras.main.setZoom(2);
+    this.cameras.main.setZoom(1.2);
     // Centre camera on the dynamically-placed spawn zone
     this.cameras.main.centerOn(
       (spawnZone.x + spawnZone.w / 2) * TILE_SIZE,
@@ -117,6 +120,31 @@ export class WorldScene extends Phaser.Scene {
     this.input.keyboard!
       .addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET)
       .on('down', () => cycleSelected(1));
+
+    // ── SPACE: pause / unpause ───────────────────────────────────────────
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+      .on('down', () => { this.paused = !this.paused; this.emitGameState(); });
+
+    // ── = / − keys: change speed ─────────────────────────────────────────
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.EQUALS)
+      .on('down', () => {
+        const i = this.SPEED_STEPS.indexOf(this.speedMultiplier);
+        if (i < this.SPEED_STEPS.length - 1) {
+          this.speedMultiplier = this.SPEED_STEPS[i + 1];
+          this.emitGameState();
+        }
+      });
+    this.input.keyboard!
+      .addKey(Phaser.Input.Keyboard.KeyCodes.MINUS)
+      .on('down', () => {
+        const i = this.SPEED_STEPS.indexOf(this.speedMultiplier);
+        if (i > 0) {
+          this.speedMultiplier = this.SPEED_STEPS[i - 1];
+          this.emitGameState();
+        }
+      });
 
     // ── Settings bus ────────────────────────────────────────────────────
     bus.on('settingsChange', ({ llmEnabled }) => {
@@ -177,8 +205,9 @@ export class WorldScene extends Phaser.Scene {
     this.input.on('wheel',
       (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
         const worldPx  = GRID_SIZE * TILE_SIZE;
-        // Minimum zoom = whichever axis would show beyond the map edge first
-        const minZoom  = Math.max(cam.width, cam.height) / worldPx;
+        // Minimum zoom: 0.6 = world renders at ~614px, roughly filling the canvas
+        // left of the event log without too much dead space around the map edges
+        const minZoom  = 0.6;
         const oldZoom  = cam.zoom;
         const newZoom  = Phaser.Math.Clamp(oldZoom * (deltaY > 0 ? 0.9 : 1.1), minZoom, 5);
         if (newZoom === oldZoom) return;
@@ -311,16 +340,21 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
+    this.emitGameState();
+  }
+
+  private emitGameState() {
     const alive = this.dwarves.filter(d => d.alive);
-    const state: GameState = {
+    bus.emit('gameState', {
       tick:            this.tick,
       dwarves:         this.dwarves.map(d => ({ ...d })),
       totalFood:       alive.reduce((s, d) => s + d.inventory.food, 0),
       totalMaterials:  alive.reduce((s, d) => s + d.inventory.materials, 0),
       selectedDwarfId: this.selectedDwarfId,
       overlayMode:     this.overlayMode,
-    };
-    bus.emit('gameState', state);
+      paused:          this.paused,
+      speed:           this.speedMultiplier,
+    });
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────
@@ -444,8 +478,8 @@ export class WorldScene extends Phaser.Scene {
     if (this.wasd.A.isDown) cam.scrollX -= speed;
     if (this.wasd.D.isDown) cam.scrollX += speed;
 
-    // Simulation tick
-    if (time - this.lastTickTime >= TICK_RATE_MS) {
+    // Simulation tick — skipped when paused; interval shrinks at higher speeds
+    if (!this.paused && time - this.lastTickTime >= TICK_RATE_MS / this.speedMultiplier) {
       this.lastTickTime = time;
       this.gameTick();
     }

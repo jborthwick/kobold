@@ -76,4 +76,6 @@ export interface GameState {
   totalMaterials: number;
   selectedDwarfId: string | null;
   overlayMode: OverlayMode;
+  paused: boolean;
+  speed: number;  // multiplier: 0.25 | 0.5 | 1 | 2 | 4
 }
