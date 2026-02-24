@@ -94,6 +94,21 @@ function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
       {dwarf.llmReasoning && (
         <div style={styles.llmReasoning}>💭 "{dwarf.llmReasoning}"</div>
       )}
+      {dwarf.memory.length > 0 && (
+        <div style={styles.memorySection}>
+          <div style={styles.memoryHeader}>MEMORY</div>
+          {[...dwarf.memory].reverse().map((m, i) => (
+            <div key={i} style={styles.memoryEntry}>
+              <span style={styles.memoryTick}>[{m.tick}]</span>
+              <span style={styles.memoryCrisis}>{m.crisis}</span>
+              {m.outcome
+                ? <span style={styles.memoryBad}> ✗ {m.outcome}</span>
+                : <span style={styles.memoryAction}> {m.action}</span>
+              }
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -218,5 +233,39 @@ const styles: Record<string, React.CSSProperties> = {
     fontStyle:  'italic',
     fontSize:   10,
     lineHeight: 1.4,
+  },
+  memorySection: {
+    marginTop:  8,
+    borderTop:  '1px solid #333',
+    paddingTop: 6,
+  },
+  memoryHeader: {
+    fontSize:      8,
+    color:         '#555',
+    letterSpacing: '0.1em',
+    marginBottom:  4,
+  },
+  memoryEntry: {
+    fontSize:    9,
+    lineHeight:  '1.5',
+    color:       '#777',
+    overflow:    'hidden',
+    textOverflow:'ellipsis',
+    whiteSpace:  'nowrap',
+  },
+  memoryTick: {
+    color:       '#444',
+    marginRight: 3,
+  },
+  memoryCrisis: {
+    color:       '#88a',
+    marginRight: 3,
+    fontWeight:  'bold',
+  },
+  memoryAction: {
+    color: '#666',
+  },
+  memoryBad: {
+    color: '#e74c3c',
   },
 };
