@@ -27,10 +27,10 @@ const WORLD_CONFIG = {
   grassMeadowFoodMax:  4,
   grassMeadowGrowback: 0.02,
 
-  // Mushroom hotspots (medium food, slow growback)
-  mushroomFoodMin:  4,
-  mushroomFoodMax:  7,
-  mushroomGrowback: 0.08,
+  // Mushroom hotspots — scarce by design to force exploration between patches
+  mushroomFoodMin:  3,
+  mushroomFoodMax:  5,
+  mushroomGrowback: 0.02,
 } as const;
 
 // ── Result type ────────────────────────────────────────────────────────────────

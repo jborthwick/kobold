@@ -69,7 +69,7 @@ function bestFoodTile(
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
-  let bestValue = 0.5;
+  let bestValue = 1; // ignore tiles with < 1 food — avoids chasing micro-regrowth fractions
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -91,7 +91,7 @@ function bestMaterialTile(
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
-  let bestValue = 0.5;
+  let bestValue = 1;
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -185,9 +185,11 @@ export function tickAgent(
   // threshold first — giving the LLM a chance to react before they eat.
   if (dwarf.hunger > 70 && dwarf.inventory.food > 0) {
     const bite        = Math.min(dwarf.inventory.food, 3);
+    const oldHunger   = dwarf.hunger;
     dwarf.inventory.food -= bite;
     dwarf.hunger      = Math.max(0, dwarf.hunger - bite * 20);
     dwarf.task        = 'eating';
+    onLog?.(`ate ${bite} food (hunger ${oldHunger.toFixed(0)} → ${dwarf.hunger.toFixed(0)})`, 'info');
     return;
   }
 
@@ -289,16 +291,20 @@ export function tickAgent(
     }
 
     const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
-    if (FORAGEABLE_TILES.has(here.type) && here.foodValue > 0 && headroom > 0) {
+    if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1 && headroom > 0) {
       // Deplete tile aggressively, but yield less to inventory — encourages exploration
       const depletionRate   = dwarf.role === 'forager' ? 6 : 5;
       const harvestYield    = dwarf.role === 'forager' ? 2 : 1;
-      const depleted        = Math.min(here.foodValue, depletionRate);
-      here.foodValue        = Math.max(0, here.foodValue - depleted);
+      const hadFood         = here.foodValue;
+      const depleted        = Math.min(hadFood, depletionRate);
+      here.foodValue        = Math.max(0, hadFood - depleted);
       const amount          = Math.min(harvestYield, depleted, headroom);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
       dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
+      if (here.foodValue === 0) {
+        onLog?.(`depleted ${here.type} patch at (${dwarf.x},${dwarf.y})`, 'info');
+      }
     } else if (headroom <= 0) {
       dwarf.task = 'inventory full';
     } else {
@@ -318,13 +324,17 @@ export function tickAgent(
         dwarf.y    = next.y;
       }
       const here = grid[dwarf.y][dwarf.x];
-      if (here.materialValue > 0) {
-        const mined        = Math.min(here.materialValue, 2);
-        here.materialValue = Math.max(0, here.materialValue - mined);
+      if (here.materialValue >= 1) {
+        const hadMat       = here.materialValue;
+        const mined        = Math.min(hadMat, 2);
+        here.materialValue = Math.max(0, hadMat - mined);
         dwarf.inventory.materials = Math.min(
           dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
         );
         dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
+        if (here.materialValue === 0 && hadMat >= 1) {
+          onLog?.(`depleted ore vein at (${dwarf.x},${dwarf.y})`, 'info');
+        }
       } else {
         dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
       }

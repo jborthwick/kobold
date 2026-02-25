@@ -91,7 +91,7 @@ export function MiniMap() {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     position:      'absolute',
-    top:           60,
+    bottom:        16,
     left:          12,
     background:    'rgba(0,0,0,0.75)',
     borderRadius:  6,

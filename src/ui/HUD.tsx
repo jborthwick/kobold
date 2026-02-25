@@ -89,16 +89,16 @@ function PauseSpeed({ paused, speed }: { paused: boolean; speed: number }) {
   return (
     <div style={styles.pauseSpeedGroup}>
       <button
-        onClick={() => emit('speedDown')}
-        style={{ ...styles.ctrlBtn, ...styles.ctrlBtnNeutral }}
-        title="Slower (−)"
-      >−</button>
-
-      <button
         onClick={() => emit('pause')}
         style={{ ...styles.ctrlBtn, ...(paused ? styles.ctrlBtnPaused : styles.ctrlBtnPlay) }}
         title="Pause / unpause (SPACE)"
       >{paused ? '⏸' : '▶'}</button>
+
+      <button
+        onClick={() => emit('speedDown')}
+        style={{ ...styles.ctrlBtn, ...styles.ctrlBtnNeutral }}
+        title="Slower (−)"
+      >−</button>
 
       <span style={styles.speedLabel}>{speed}×</span>
 
@@ -138,9 +138,12 @@ function roleColor(role: DwarfRole): string {
 
 function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
   return (
-    <div style={styles.panel}>
+    <div style={{ ...styles.panel, ...(!dwarf.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{dwarf.name}</div>
-      <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 6 }}>[{dwarf.role.toUpperCase()}]</div>
+      {dwarf.alive
+        ? <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 6 }}>[{dwarf.role.toUpperCase()}]</div>
+        : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 6 }}>[DECEASED]</div>
+      }
       <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
@@ -218,7 +221,7 @@ const styles: Record<string, React.CSSProperties> = {
   panel: {
     position:   'absolute',
     bottom:     16,
-    left:       12,
+    right:      372,
     background: 'rgba(0,0,0,0.75)',
     padding:    '10px 14px',
     borderRadius: 8,
@@ -233,6 +236,10 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     pointerEvents: 'auto',
   } as React.CSSProperties,
+  panelDead: {
+    opacity:     0.7,
+    borderLeft:  '2px solid #e74c3c',
+  },
   panelName: {
     fontSize:   15,
     fontWeight: 'bold',

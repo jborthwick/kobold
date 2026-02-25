@@ -5,7 +5,7 @@ import { spawnDwarves, tickAgent } from '../../simulation/agents';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState, type TileInfo, type MiniMapData } from '../../shared/types';
-import { llmSystem } from '../../ai/crisis';
+import { llmSystem, detectCrisis } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 
@@ -44,6 +44,8 @@ export class WorldScene extends Phaser.Scene {
   private dwarfGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
   // Off-screen arrow indicator for selected dwarf
   private offScreenGfx!: Phaser.GameObjects.Graphics;
+  // Per-dwarf last-known crisis type for change detection
+  private dwarfCrisisState = new Map<string, string | null>();
 
   // WASD keys
   private wasd!: {
@@ -207,10 +209,11 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (didDrag || p.rightButtonReleased()) return;
-      // Left tap: select dwarf at tile
+      // Left tap: select dwarf at tile — prefer alive, fall back to dead ghost
       const tx = Math.floor(p.worldX / TILE_SIZE);
       const ty = Math.floor(p.worldY / TILE_SIZE);
-      const hit = this.dwarves.find(d => d.alive && d.x === tx && d.y === ty);
+      const hit = this.dwarves.find(d =>  d.alive && d.x === tx && d.y === ty)
+               ?? this.dwarves.find(d => !d.alive && d.x === tx && d.y === ty);
       this.selectedDwarfId = hit?.id ?? null;
     });
 
@@ -299,6 +302,33 @@ export class WorldScene extends Phaser.Scene {
           level,
         });
       });
+
+      // Log crisis state transitions (onset and resolution) — LLM-independent
+      if (d.alive) {
+        const crisis = detectCrisis(d, this.dwarves, this.grid);
+        const curr   = crisis?.type ?? null;
+        const prev   = this.dwarfCrisisState.get(d.id) ?? null;
+        if (curr !== prev) {
+          this.dwarfCrisisState.set(d.id, curr);
+          if (curr) {
+            bus.emit('logEntry', {
+              tick:      this.tick,
+              dwarfId:   d.id,
+              dwarfName: d.name,
+              message:   `crisis: ${curr}`,
+              level:     'warn',
+            });
+          } else if (prev) {
+            bus.emit('logEntry', {
+              tick:      this.tick,
+              dwarfId:   d.id,
+              dwarfName: d.name,
+              message:   `crisis resolved (${prev})`,
+              level:     'info',
+            });
+          }
+        }
+      }
 
       // Fire async LLM crisis check — never blocks the game loop
       llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick,
@@ -533,6 +563,14 @@ export class WorldScene extends Phaser.Scene {
         }
         spr.destroy();
         this.dwarfSprites.delete(id);
+      }
+    }
+
+    // Red selection ring on ghost sprites of dead dwarves
+    for (const [id, spr] of this.dwarfGhostSprites) {
+      if (id === this.selectedDwarfId) {
+        this.selectionGfx.lineStyle(2, 0xff4444, 0.85);
+        this.selectionGfx.strokeCircle(spr.x, spr.y, TILE_SIZE / 2 + 3);
       }
     }
 
