@@ -1,5 +1,5 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type Depot, type OreStockpile, type Goblin, type ResourceSite } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type Depot, type OreStockpile, type Goblin, type ResourceSite, type ColonyGoal } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
@@ -297,6 +297,86 @@ export function pathNextStep(
   return path[1] ?? from;
 }
 
+// ── Fort-building helper ───────────────────────────────────────────────────
+/**
+ * Returns all wall-slot candidates for the two-room H-shaped fort.
+ *
+ * Layout (D = depot, S = stockpile, M = MARGIN, 8 tiles apart):
+ *
+ *   y-M: ■ ■ ■ ■ ■ ─ ─ ─ ─ ─ ■ ■ ■ ■ ■   ← top wall + H top-bar
+ *   y-1: ■   depot room   ■  corridor  ■  stockpile room  ■
+ *   y 0: ■      [D]        ■   open    ■      [S]          ■
+ *   y+1: ■                 ■   open    ■                   ■
+ *   y+M: ■ ■ _ _ ■ ■ ■    ·   open   ·    ■ ■ _ _ ■ ■ ■
+ *                dep gate   corridor      stockpile gate
+ *
+ * MARGIN = 2 (generation 0) → 3 (generation ≥ 1).
+ * Nearest-first selection means MARGIN=2 fills before MARGIN=3 starts.
+ */
+function fortWallSlots(
+  depot:      { x: number; y: number },
+  stockpile:  { x: number; y: number },
+  grid:       Tile[][],
+  dwarves:    Dwarf[] | undefined,
+  selfId:     string,
+  generation: number,
+): Array<{ x: number; y: number }> {
+  const maxMargin = 2 + (generation >= 1 ? 1 : 0);
+  const slots: Array<{ x: number; y: number }> = [];
+
+  const blocked = (x: number, y: number): boolean =>
+    dwarves?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y) ?? false;
+
+  for (let margin = 2; margin <= maxMargin; margin++) {
+    // ── Depot room perimeter ────────────────────────────────────────
+    const dx0 = depot.x - margin, dx1 = depot.x + margin;
+    const dy0 = depot.y - margin, dy1 = depot.y + margin;
+    for (let y = dy0; y <= dy1; y++) {
+      for (let x = dx0; x <= dx1; x++) {
+        if (x !== dx0 && x !== dx1 && y !== dy0 && y !== dy1) continue;
+        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+        if (y === dy1 && Math.abs(x - depot.x) <= 1) continue;           // south gate
+        if (x === depot.x && y === depot.y) continue;                    // depot tile
+        const t = grid[y][x];
+        if (t.type === TileType.Wall || t.type === TileType.Water
+            || t.type === TileType.Ore) continue;
+        if (!blocked(x, y)) slots.push({ x, y });
+      }
+    }
+
+    // ── Stockpile room perimeter ────────────────────────────────────
+    const sx0 = stockpile.x - margin, sx1 = stockpile.x + margin;
+    const sy0 = stockpile.y - margin, sy1 = stockpile.y + margin;
+    for (let y = sy0; y <= sy1; y++) {
+      for (let x = sx0; x <= sx1; x++) {
+        if (x !== sx0 && x !== sx1 && y !== sy0 && y !== sy1) continue;
+        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
+        if (y === sy1 && Math.abs(x - stockpile.x) <= 1) continue;       // south gate
+        if (x === stockpile.x && y === stockpile.y) continue;            // stockpile tile
+        const t = grid[y][x];
+        if (t.type === TileType.Wall || t.type === TileType.Water
+            || t.type === TileType.Ore) continue;
+        if (!blocked(x, y)) slots.push({ x, y });
+      }
+    }
+
+    // ── Top corridor bar — connects the two rooms across the top ────
+    // Fills the gap between room1 right-edge and room2 left-edge at y-margin.
+    const topY    = depot.y - margin;
+    const barXmin = depot.x + margin + 1;
+    const barXmax = stockpile.x - margin - 1;
+    for (let x = barXmin; x <= barXmax; x++) {
+      if (x < 0 || x >= GRID_SIZE || topY < 0 || topY >= GRID_SIZE) continue;
+      const t = grid[topY][x];
+      if (t.type === TileType.Wall || t.type === TileType.Water
+          || t.type === TileType.Ore) continue;
+      if (!blocked(x, topY)) slots.push({ x, y: topY });
+    }
+  }
+
+  return slots;
+}
+
 // ── Behavior Tree ──────────────────────────────────────────────────────────
 // Priority cascade (highest first):
 //   1.  Starvation damage / death
@@ -319,6 +399,7 @@ export function tickAgent(
   depot?:      Depot,
   goblins?:    Goblin[],
   stockpile?:  OreStockpile,
+  colonyGoal?: ColonyGoal,
 ): void {
   if (!dwarf.alive) return;
 
@@ -675,41 +756,23 @@ export function tickAgent(
     }
   }
 
-  // ── 4.3b. Miner fort-building — place walls enclosing depot + stockpile ──
-  // Builds a rectangular perimeter around both buildings with a MARGIN-tile
-  // border. A 3-tile south gate at the bottom-center stays open permanently.
+  // ── 4.3b. Miner fort-building — H-shaped two-room fort ───────────────
+  // Builds two separate enclosed rooms (one around the depot, one around the
+  // stockpile) connected by a shared top bar, forming an H-shape.  Each room
+  // has its own 3-tile south gate; the corridor between rooms stays open.
+  // MARGIN starts at 2 and grows to 3 after the first colony goal completes
+  // (generation ≥ 1), so the fort expands organically.
   // Uses 3 stockpile.ore per wall segment.
   if (dwarf.role === 'miner' && depot && stockpile && stockpile.ore >= 3
       && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
-    const MARGIN = 2;
-    const x0 = Math.min(depot.x, stockpile.x) - MARGIN;
-    const x1 = Math.max(depot.x, stockpile.x) + MARGIN;
-    const y0 = Math.min(depot.y, stockpile.y) - MARGIN;
-    const y1 = Math.max(depot.y, stockpile.y) + MARGIN;
-    // Gate: 3-tile opening at south-center of the enclosure
-    const gateCx = Math.floor((depot.x + stockpile.x) / 2);
+    const generation = colonyGoal?.generation ?? 0;
+    const slots = fortWallSlots(depot, stockpile, grid, dwarves, dwarf.id, generation);
 
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
-    for (let by = y0; by <= y1; by++) {
-      for (let bx = x0; bx <= x1; bx++) {
-        if (bx !== x0 && bx !== x1 && by !== y0 && by !== y1) continue; // perimeter only
-        if (bx < 0 || bx >= GRID_SIZE || by < 0 || by >= GRID_SIZE) continue;
-        // South gate: 3-tile opening at bottom-center of the enclosure
-        if (by === y1 && Math.abs(bx - gateCx) <= 1) continue;
-        // Never build on the depot or stockpile tiles
-        if (bx === depot.x && by === depot.y) continue;
-        if (bx === stockpile.x && by === stockpile.y) continue;
-        const t = grid[by][bx];
-        if (t.type === TileType.Wall || t.type === TileType.Water
-            || t.type === TileType.Ore) continue; // don't wall over ore or water
-        const dist = Math.abs(bx - dwarf.x) + Math.abs(by - dwarf.y);
-        // Never build on a tile occupied by another alive dwarf
-        const occupied = dwarves?.some(
-          d => d.alive && d.id !== dwarf.id && d.x === bx && d.y === by,
-        ) ?? false;
-        if (dist > 0 && !occupied && dist < nearestDist) { nearestDist = dist; nearestSlot = { x: bx, y: by }; }
-      }
+    for (const s of slots) {
+      const dist = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
+      if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }
 
     if (nearestSlot) {

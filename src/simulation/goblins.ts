@@ -75,8 +75,8 @@ export function maybeSpawnRaid(
     newGoblins.push({
       id:        `goblin-${nextGoblinId++}`,
       x, y,
-      health:    30,
-      maxHealth: 30,
+      health:    20,
+      maxHealth: 20,
       targetId:  null,
     });
   }
@@ -194,8 +194,8 @@ export function spawnInitialGoblins(grid: Tile[][], count: number): Goblin[] {
     goblins.push({
       id:        `goblin-${nextGoblinId++}`,
       x, y,
-      health:    30,
-      maxHealth: 30,
+      health:    20,
+      maxHealth: 20,
       targetId:  null,
     });
   }

@@ -109,9 +109,9 @@ export class WorldScene extends Phaser.Scene {
       food:    0,
       maxFood: 50,
     };
-    // Stockpile sits 3 tiles east of the depot within the spawn zone
+    // Stockpile sits 8 tiles east of the depot (separate room in the H-fort)
     this.stockpile = {
-      x:      Math.min(depotX + 3, spawnZone.x + spawnZone.w - 1),
+      x:      depotX + 8,
       y:      depotY,
       ore:    80,
       maxOre: 100,
@@ -376,7 +376,7 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      }, this.depot, this.goblins, this.stockpile);
+      }, this.depot, this.goblins, this.stockpile, this.colonyGoal ?? undefined);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }

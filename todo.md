@@ -29,9 +29,9 @@ TODO:
 
 
 Dwarf fort upgrades:
-[ ] add more space between the food and ore storages
-[ ] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
-[ ] dwarves should be able to expand their fort as needed
+[x] add more space between the food and ore storages
+[x] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
+[x] dwarves should be able to expand their fort as needed
 
 
 Questions (don't start without clarifying):
