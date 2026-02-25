@@ -105,18 +105,25 @@ const FIGHTER_FIGHT_BACK   = 18;  // fighters deal ~2× damage — kills goblin 
 
 /**
  * Move all goblins one step toward their target, or attack on contact.
+ * Goblins move at ~75% speed (staggered skip every 4th tick per goblin)
+ * so fighters can reliably close on them.
  * Mutates goblin positions/health in place.
  */
 export function tickGoblins(
   goblins: Goblin[],
   dwarves: Dwarf[],
   grid:    Tile[][],
+  tick:    number,
 ): GoblinTickResult {
   const result: GoblinTickResult = { attacks: [], goblinDeaths: [], kills: [], logs: [] };
   const alive = dwarves.filter(d => d.alive);
   if (alive.length === 0) return result;
 
-  for (const g of goblins) {
+  for (let gi = 0; gi < goblins.length; gi++) {
+    const g = goblins[gi];
+    // Staggered 75%-speed: each goblin skips its move on a different tick
+    // so they don't all pause simultaneously (gi offsets the skip cycle).
+    if ((tick + gi) % 4 === 0) continue;
     // Re-target if current target is dead or unset
     let target = g.targetId ? alive.find(d => d.id === g.targetId) ?? null : null;
     if (!target) {

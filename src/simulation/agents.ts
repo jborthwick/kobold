@@ -486,17 +486,27 @@ export function tickAgent(
     }, null);
     if (nearest && nearest.dist <= HUNT_RADIUS) {
       if (nearest.dist > 0) {
-        const next = pathNextStep(
+        // First step
+        const step1 = pathNextStep(
           { x: dwarf.x, y: dwarf.y },
           { x: nearest.g.x, y: nearest.g.y },
           grid,
         );
-        dwarf.x = next.x;
-        dwarf.y = next.y;
+        dwarf.x = step1.x;
+        dwarf.y = step1.y;
+        // Sprint — take a second step so fighters reliably close on fleeing goblins
+        const step2 = pathNextStep(
+          { x: dwarf.x, y: dwarf.y },
+          { x: nearest.g.x, y: nearest.g.y },
+          grid,
+        );
+        dwarf.x = step2.x;
+        dwarf.y = step2.y;
       }
-      dwarf.task = nearest.dist === 0
+      const distAfterMove = Math.abs(nearest.g.x - dwarf.x) + Math.abs(nearest.g.y - dwarf.y);
+      dwarf.task = distAfterMove === 0
         ? 'fighting goblin!'
-        : `→ goblin (${nearest.dist} tiles)`;
+        : `→ goblin (${distAfterMove} tiles)`;
       return;
     }
   }

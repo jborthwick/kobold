@@ -451,7 +451,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (this.goblins.length > 0) {
-      const gr = tickGoblins(this.goblins, this.dwarves, this.grid);
+      const gr = tickGoblins(this.goblins, this.dwarves, this.grid, this.tick);
 
       // Apply damage to targeted dwarves
       for (const { dwarfId, damage } of gr.attacks) {

@@ -25,7 +25,7 @@ TODO:
 [x] update dwarf HUD panel to show inventory (food, ore, etc)
 [x] hide vision and metabolism from the dwarf HUD panel
 [x] if dwarf inventory is full, they should probably return home to unload. sometimes the get stuck out in a field with a full inventory.
-[ ] The fighter needs an easier way to chase down goblins they find. Goblins should move slightly slower than dwarves, or a fighter should be able to speed up when chasing goblins
+[x] The fighter needs an easier way to chase down goblins they find. Goblins should move slightly slower than dwarves, or a fighter should be able to speed up when chasing goblins
 
 
 Dwarf fort upgrades:
