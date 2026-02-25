@@ -26,12 +26,13 @@ export interface Inventory {
 
 /** Hostile NPC — spawns in raids from map edges. */
 export interface Goblin {
-  id:        string;
-  x:         number;
-  y:         number;
-  health:    number;
-  maxHealth: number;
-  targetId:  string | null;  // id of the dwarf currently being chased
+  id:              string;
+  x:               number;
+  y:               number;
+  health:          number;
+  maxHealth:       number;
+  targetId:        string | null;  // id of the dwarf currently being chased
+  staggeredUntil?: number;         // tick until which the goblin cannot move (post-hit stagger)
 }
 
 // PIANO step 5 — structured intent the LLM can set to override the BT
@@ -50,10 +51,11 @@ export interface ResourceSite {
 
 // PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
 export interface MemoryEntry {
-  tick:     number;
-  crisis:   string;   // CrisisSituation.type
-  action:   string;   // decision.action text
-  outcome?: string;   // backfilled by VERIFY step (~40 ticks later)
+  tick:       number;
+  crisis:     string;   // CrisisSituation.type
+  action:     string;   // decision.action text
+  reasoning?: string;   // LLM internal monologue (only present for LLM-originated entries)
+  outcome?:   string;   // backfilled by VERIFY step (~40 ticks later)
 }
 
 // Agent role — assigned at spawn, permanent
@@ -82,12 +84,15 @@ export interface Dwarf {
   wanderExpiry:    number;           // tick at which to repick a new wander waypoint
   knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
   knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
-  homeTile:        { x: number; y: number };  // fort/depot center — the colony's home base
+  homeTile:        { x: number; y: number };  // fort/stockpile center — the colony's home base
   role:            DwarfRole;
   relations:       Record<string, number>;  // keyed by dwarf.id; 0–100 (50 = neutral)
   trait:           DwarfTrait;  // permanent personality trait
   bio:             string;      // quirky backstory blurb
   goal:            string;      // personal objective
+  baseName:        string;      // name without roman numeral suffix (e.g. "Bomer")
+  generation:      number;      // 1 for original dwarves, increments for each succession
+  causeOfDeath?:   string;      // set when dwarf dies; shown in HUD + passed to successor
 }
 
 export interface LogEntry {
@@ -111,18 +116,18 @@ export interface ColonyGoal {
   generation:  number;   // how many full cycles completed (scales difficulty)
 }
 
-// Communal food depot — one per colony, placed at center of spawn zone.
-export interface Depot {
+// Communal food stockpile — one per colony, placed at center of spawn zone.
+export interface FoodStockpile {
   x:       number;  // tile coords
   y:       number;
   food:    number;  // current stored food
   maxFood: number;  // food storage cap
 }
 
-// Communal ore stockpile — placed near the food depot; filled by miners.
+// Communal ore stockpile — placed near the food stockpile; filled by miners.
 // Miners draw from it when building fort walls.
 export interface OreStockpile {
-  x:      number;  // tile coords (distinct from depot)
+  x:      number;  // tile coords (distinct from food stockpile)
   y:      number;
   ore:    number;  // current stored ore
   maxOre: number;  // storage cap
@@ -159,6 +164,6 @@ export interface GameState {
   paused: boolean;
   speed: number;  // multiplier: 0.25 | 0.5 | 1 | 2 | 4
   colonyGoal: ColonyGoal;
-  depots:     Depot[];
-  stockpiles: OreStockpile[];
+  foodStockpiles: FoodStockpile[];
+  oreStockpiles:  OreStockpile[];
 }

@@ -26,23 +26,33 @@ TODO:
 [x] hide vision and metabolism from the dwarf HUD panel
 [x] if dwarf inventory is full, they should probably return home to unload. sometimes the get stuck out in a field with a full inventory.
 [x] The fighter needs an easier way to chase down goblins they find. Goblins should move slightly slower than dwarves, or a fighter should be able to speed up when chasing goblins
-[ ] Successor dwarves should have a roman numeral of their generation appended to the end of their name. So Bomer's succesor would be Bomer II, and then Bomer III, Bomer IV
-[ ] add how a dwarf died to their hud panel for deceased dwarfs. Successors should remember how they predecessors died too.
-[ ] Fighters still struggle to catchup and slay goblins they are chasing (they get stuck chasing for long periods)
-[ ] Use a configurable sprite for Food depots and ore stockpiles
-[ ] bug: LLM crisis calls don't appear to be happening anymore when enabled
-[ ] bug: console doesn't clear on page refresh / game restart
-[ ] bug: it takes too long for a fighter to catch and slay a goblin, they get stuck in really long chases
-
-
-
+[x] Successor dwarves should have a roman numeral of their generation appended to the end of their name. So Bomer's succesor would be Bomer II, and then Bomer III, Bomer IV
+[x] add how a dwarf died to their hud panel for deceased dwarfs. Successors should remember how they predecessors died too.
+[x] Fighters still struggle to catchup and slay goblins they are chasing (they get stuck chasing for long periods)
+[x] Use a configurable sprite for Food depots and ore stockpiles
+[x] bug: console doesn't clear on page refresh / game restart
+[x] bug: it takes too long for a fighter to catch and slay a goblin, they get stuck in really long chases. maybe add a stagger state to enemies after the get hit for a few ticks to allow the fighter to catchup?
+[ ] Allow resource tiles (mushrooms, ore, etc) to be depleted and removed (turned back into dirt)
+[ ] Allow new mushroom patches to appear on map every so often
+[x] Rename depots to stockpiles for all resources types to simplify language
+[ ] new feature: add a new 'lumberjack' dwarf class that harvests trees and adds them to a new stockpile type (wood)
+[x] update dwarf panel to keep a history of every response and integrate responses and memories into a single list along by tick time
+[x] Remove the text label from stockpiles
+[x] Make stockpiles clickable to see their information, like dwarves.
+[x] Make goblins (enemies in general) clickable to see their information, like dwarves
+[x] Dwarves (and enemies) can still get stuck in walls as they're being built
+[ ] Allow camera panning past the edges of the map (since the conosle/HUD covers a good portion of the scren)
+[ ] bug: i think goblins are no long staggering when hit, fighters are chasing them forever again
+[ ] Add when goblins are slain to the console
+[ ] Add new memories to the console
+[ ] Remove crisis start/end from console for now as its spamming
+[ ] Make console history persist through the whole session (may require pagination)
+[ ] Relationship status of the deceased should be told to successors (just like death cause)
 
 
 Dwarf fort upgrades:
 [x] add more space between the food and ore storages
 [x] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
 [x] dwarves should be able to expand their fort as needed
+[ ] Investigate fort design. after the first few rooms the builder starts just encircling the already created rooms instead of expanding the fort with more rooms. 
 
-
-Questions (don't start without clarifying):
-[ ] question: should only a leader dwarf be able to call the llm?

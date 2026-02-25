@@ -121,6 +121,14 @@ export function tickGoblins(
 
   for (let gi = 0; gi < goblins.length; gi++) {
     const g = goblins[gi];
+    // Safety escape: if goblin is on a non-walkable tile (wall placed under it), nudge out
+    if (!isWalkable(grid, g.x, g.y)) {
+      const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+      const escape = dirs.find(d => isWalkable(grid, g.x + d.x, g.y + d.y));
+      if (escape) { g.x += escape.x; g.y += escape.y; }
+    }
+    // Skip movement if staggered from a recent hit
+    if (g.staggeredUntil !== undefined && tick < g.staggeredUntil) continue;
     // Staggered 75%-speed: each goblin skips its move on a different tick
     // so they don't all pause simultaneously (gi offsets the skip cycle).
     if ((tick + gi) % 4 === 0) continue;
@@ -142,7 +150,10 @@ export function tickGoblins(
     if (dist === 0) {
       // ── Attack ──────────────────────────────────────────────────────
       result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
-      g.health -= target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
+      const dmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
+      g.health -= dmg;
+      // Stagger: goblin can't move for 6 ticks after being hit
+      g.staggeredUntil = tick + 6;
       if (g.health <= 0) {
         result.goblinDeaths.push(g.id);
         result.kills.push({ dwarfId: target.id });

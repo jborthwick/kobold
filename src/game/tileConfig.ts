@@ -26,4 +26,6 @@ export const SPRITE_CONFIG: Record<string, number> = {
   dwarf: 318,
   goblin: 124,
   tombstone: 686,
+  foodStockpile: 439,
+  oreStockpile: 241,
 };

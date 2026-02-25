@@ -5,10 +5,11 @@ import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY } from '../..
 import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type Depot, type OreStockpile } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, detectCrisis, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
+import { saveGame, loadGame, type SaveData } from '../../shared/save';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
@@ -57,15 +58,18 @@ export class WorldScene extends Phaser.Scene {
   private spawnZone!: { x: number; y: number; w: number; h: number };
   private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
 
-  // Colony goal + depots + ore stockpiles (expand as each fills up)
+  // Colony goal + food stockpiles + ore stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
   private goblinKillCount = 0;
-  private depots:         Depot[]         = [];
-  private stockpiles:     OreStockpile[]  = [];
-  private depotGfxList:   Phaser.GameObjects.Graphics[] = [];
-  private depotLblList:   Phaser.GameObjects.Text[]     = [];
-  private stockpileGfxList: Phaser.GameObjects.Graphics[] = [];
-  private stockpileLblList: Phaser.GameObjects.Text[]     = [];
+  private foodStockpiles:        FoodStockpile[]  = [];
+  private oreStockpiles:         OreStockpile[]   = [];
+  private foodStockpileGfxList:  Phaser.GameObjects.Graphics[] = [];
+  private foodStockpileImgList:  Phaser.GameObjects.Image[]    = [];
+  private oreStockpileGfxList:   Phaser.GameObjects.Graphics[] = [];
+  private oreStockpileImgList:   Phaser.GameObjects.Image[]    = [];
+
+  // Event log history (persisted to save, restored on load)
+  private logHistory: LogEntry[] = [];
 
   // WASD keys
   private wasd!: {
@@ -83,7 +87,7 @@ export class WorldScene extends Phaser.Scene {
     const scale = 1 + generation * 0.5;
     switch (type) {
       case 'stockpile_food':
-        return { type, description: `Fill the depot with ${Math.round(30 * scale)} food`, progress: 0, target: Math.round(30 * scale), generation };
+        return { type, description: `Fill the food stockpile with ${Math.round(30 * scale)} food`, progress: 0, target: Math.round(30 * scale), generation };
       case 'survive_ticks':
         return { type, description: `Survive ${Math.round(500 * scale)} ticks together`, progress: 0, target: Math.round(500 * scale), generation };
       case 'defeat_goblins':
@@ -92,30 +96,52 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    const { grid, spawnZone } = generateWorld();
-    this.grid      = grid;
-    this.spawnZone = spawnZone;
-    this.dwarves   = spawnDwarves(this.grid, spawnZone);
-    // homeTile is set after depot placement below — updated in a second pass
-    resetGoblins();
-    this.goblins = spawnInitialGoblins(this.grid, 3);
+    // ── Branch: load saved game or start a new one ──────────────────────
+    const mode = (this.game.registry.get('startMode') as string) ?? 'new';
+    const save = mode === 'load' ? loadGame() : null;
 
-    // ── Depots + Ore Stockpiles ─────────────────────────────────────────
-    // Each array starts with one unit; more are appended automatically when
-    // the last unit fills up.  New units spawn 3 tiles south so the fort
-    // rooms grow downward to enclose them.
-    const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
-    const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
-    this.depots     = [{ x: depotX,     y: depotY, food: 0, maxFood: 200 }];
-    this.stockpiles = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
-    this.depotGfxList     = [];
-    this.depotLblList     = [];
-    this.stockpileGfxList = [];
-    this.stockpileLblList = [];
-    this.goblinKillCount = 0;
-    this.colonyGoal = WorldScene.makeGoal('stockpile_food', 0);
-    // Stamp every dwarf with their home fort location now that the depot is placed
-    for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
+    if (save) {
+      bus.emit('restoreLog', save.logHistory ?? []);
+      // Restore all simulation state from the save file
+      this.grid               = save.grid;
+      this.spawnZone          = save.spawnZone;
+      this.dwarves            = save.dwarves;
+      this.goblins            = save.goblins;
+      this.tick               = save.tick;
+      this.colonyGoal         = save.colonyGoal;
+      this.foodStockpiles     = save.foodStockpiles;
+      this.oreStockpiles      = save.oreStockpiles;
+      this.goblinKillCount    = save.goblinKillCount;
+      this.pendingSuccessions = save.pendingSuccessions;
+      this.commandTile        = save.commandTile;
+      this.speedMultiplier    = save.speed;
+      this.overlayMode        = save.overlayMode;
+      resetGoblins(); // reset raid timer to prevent an immediate raid on resume
+    } else {
+      bus.emit('clearLog', undefined);
+      this.logHistory = [];
+      // New game — procedural world + fresh dwarves
+      const { grid, spawnZone } = generateWorld();
+      this.grid      = grid;
+      this.spawnZone = spawnZone;
+      this.dwarves   = spawnDwarves(this.grid, spawnZone);
+      resetGoblins();
+      this.goblins = spawnInitialGoblins(this.grid, 3);
+
+      const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
+      const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
+      this.foodStockpiles  = [{ x: depotX,     y: depotY, food: 0, maxFood: 200 }];
+      this.oreStockpiles   = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
+      this.goblinKillCount = 0;
+      this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
+      for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
+    }
+
+    // ── Reset graphics tracking arrays (always fresh per scene) ─────────
+    this.foodStockpileGfxList = [];
+    this.foodStockpileImgList = [];
+    this.oreStockpileGfxList  = [];
+    this.oreStockpileImgList  = [];
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -132,20 +158,34 @@ export class WorldScene extends Phaser.Scene {
     this.overlayGfx   = this.add.graphics();
     this.flagGfx      = this.add.graphics();
     this.selectionGfx = this.add.graphics();
-    // Create initial graphics for the first depot and stockpile
-    this.addDepotGraphics(this.depots[0]);
-    this.addStockpileGraphics(this.stockpiles[0]);
+
+    // Add graphics for all stockpiles (may be >1 when loading a saved game)
+    for (const sp of this.foodStockpiles) this.addFoodStockpileGraphics(sp);
+    for (const sp of this.oreStockpiles)  this.addOreStockpileGraphics(sp);
+
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
+
+    // Pre-create tombstone sprites for dwarves that were already dead when saved
+    if (save) {
+      const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? DWARF_FRAME;
+      for (const d of this.dwarves.filter(dw => !dw.alive)) {
+        const px = d.x * TILE_SIZE + TILE_SIZE / 2;
+        const py = d.y * TILE_SIZE + TILE_SIZE / 2;
+        const ghost = this.add.sprite(px, py, 'tiles', TOMBSTONE_FRAME);
+        ghost.setTint(0xaaaaaa);
+        this.dwarfGhostSprites.set(d.id, ghost);
+      }
+      this.drawFlag(); // restore yellow flag if one was active
+    }
 
     // ── Camera ──────────────────────────────────────────────────────────
     const worldPx = GRID_SIZE * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldPx, worldPx);
     this.cameras.main.setZoom(1.2);
-    // Centre camera on the dynamically-placed spawn zone
     this.cameras.main.centerOn(
-      (spawnZone.x + spawnZone.w / 2) * TILE_SIZE,
-      (spawnZone.y + spawnZone.h / 2) * TILE_SIZE,
+      (this.spawnZone.x + this.spawnZone.w / 2) * TILE_SIZE,
+      (this.spawnZone.y + this.spawnZone.h / 2) * TILE_SIZE,
     );
 
     // ── Keyboard ────────────────────────────────────────────────────────
@@ -199,16 +239,54 @@ export class WorldScene extends Phaser.Scene {
     }
 
     // ── Settings / control bus ───────────────────────────────────────────
-    bus.on('controlChange', ({ action }) => {
+    // Store handler refs so they can be removed on scene shutdown (avoids stale
+    // listeners firing on a destroyed scene when the player starts a new colony).
+    const controlHandler = ({ action }: { action: 'pause' | 'speedUp' | 'speedDown' | 'newColony' }) => {
       if (action === 'pause')     this.togglePause();
       if (action === 'speedUp')   this.adjustSpeed(1);
       if (action === 'speedDown') this.adjustSpeed(-1);
-    });
-    bus.on('settingsChange', ({ llmEnabled }) => {
+      // 'newColony' is handled by App.tsx; WorldScene has nothing to do
+    };
+    const settingsHandler = ({ llmEnabled }: { llmEnabled: boolean }) => {
       llmSystem.enabled = llmEnabled;
+    };
+    const logCaptureHandler = (entry: LogEntry) => {
+      this.logHistory.push(entry);
+      if (this.logHistory.length > 200) this.logHistory.shift();
+    };
+    bus.on('controlChange', controlHandler);
+    bus.on('settingsChange', settingsHandler);
+    bus.on('logEntry', logCaptureHandler);
+
+    // Remove bus listeners when this scene is destroyed (new-colony flow)
+    this.events.once('destroy', () => {
+      bus.off('controlChange', controlHandler);
+      bus.off('settingsChange', settingsHandler);
+      bus.off('logEntry', logCaptureHandler);
     });
 
     this.setupInput();
+  }
+
+  /** Serialise the full simulation state into a plain object suitable for JSON. */
+  private buildSaveData(): SaveData {
+    return {
+      version:            1,
+      tick:               this.tick,
+      grid:               this.grid,
+      dwarves:            this.dwarves.map(d => ({ ...d })),
+      goblins:            this.goblins.map(g => ({ ...g })),
+      colonyGoal:         { ...this.colonyGoal },
+      foodStockpiles:     this.foodStockpiles.map(s => ({ ...s })),
+      oreStockpiles:      this.oreStockpiles.map(s => ({ ...s })),
+      goblinKillCount:    this.goblinKillCount,
+      spawnZone:          { ...this.spawnZone },
+      pendingSuccessions: this.pendingSuccessions.map(s => ({ ...s })),
+      commandTile:        this.commandTile ? { ...this.commandTile } : null,
+      speed:              this.speedMultiplier,
+      overlayMode:        this.overlayMode,
+      logHistory:         [...this.logHistory],
+    };
   }
 
   // ── Input ──────────────────────────────────────────────────────────────
@@ -266,12 +344,40 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (didDrag || p.rightButtonReleased()) return;
-      // Left tap: select dwarf at tile — prefer alive, fall back to dead ghost
       const tx = Math.floor(p.worldX / TILE_SIZE);
       const ty = Math.floor(p.worldY / TILE_SIZE);
+
+      // Check for stockpile click first (food, then ore)
+      const foodIdx = this.foodStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      if (foodIdx >= 0) {
+        this.selectedDwarfId = null;
+        bus.emit('goblinSelect', null);
+        bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
+        return;
+      }
+      const oreIdx = this.oreStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      if (oreIdx >= 0) {
+        this.selectedDwarfId = null;
+        bus.emit('goblinSelect', null);
+        bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
+        return;
+      }
+
+      // Check for goblin click
+      const goblin = this.goblins.find(g => g.x === tx && g.y === ty);
+      if (goblin) {
+        this.selectedDwarfId = null;
+        bus.emit('stockpileSelect', null);
+        bus.emit('goblinSelect', goblin);
+        return;
+      }
+
+      // Left tap: select dwarf at tile — prefer alive, fall back to dead ghost
       const hit = this.dwarves.find(d =>  d.alive && d.x === tx && d.y === ty)
                ?? this.dwarves.find(d => !d.alive && d.x === tx && d.y === ty);
       this.selectedDwarfId = hit?.id ?? null;
+      bus.emit('stockpileSelect', null);
+      bus.emit('goblinSelect', null);
     });
 
     this.input.on('wheel',
@@ -359,7 +465,7 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      }, this.depots, this.goblins, this.stockpiles, this.colonyGoal ?? undefined);
+      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -404,7 +510,7 @@ export class WorldScene extends Phaser.Scene {
           }
 
           // Push to rolling memory (uncapped; last 5 entries used in LLM prompts)
-          dwarf.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action });
+          dwarf.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action, reasoning: decision.reasoning });
 
           bus.emit('logEntry', {
             tick:      this.tick,
@@ -443,8 +549,9 @@ export class WorldScene extends Phaser.Scene {
           d.health = Math.max(0, d.health - damage);
           d.morale = Math.max(0, d.morale - 5);
           if (d.health <= 0) {
-            d.alive = false;
-            d.task  = 'dead';
+            d.alive        = false;
+            d.task         = 'dead';
+            d.causeOfDeath = 'killed by goblins';
             bus.emit('logEntry', {
               tick:      this.tick,
               dwarfId:   d.id,
@@ -507,7 +614,7 @@ export class WorldScene extends Phaser.Scene {
       if (!dead) continue;
 
       const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.dwarves, this.tick);
-      successor.homeTile = { x: this.depots[0].x, y: this.depots[0].y };
+      successor.homeTile = { x: this.foodStockpiles[0].x, y: this.foodStockpiles[0].y };
       this.dwarves.push(successor);
 
       bus.emit('logEntry', {
@@ -521,39 +628,42 @@ export class WorldScene extends Phaser.Scene {
       // LLM arrival thought — detached, never blocks the game loop
       if (llmSystem.enabled) {
         callSuccessionLLM(dead, successor).then(text => {
-          successor.llmReasoning = text
-            ?? `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+          const thought = text ?? `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+          successor.llmReasoning = thought;
+          successor.memory.push({ tick: this.tick, crisis: 'arrival', action: `arrived to replace ${dead.name}`, reasoning: thought });
         });
       } else {
-        successor.llmReasoning = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+        const thought = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+        successor.llmReasoning = thought;
+        successor.memory.push({ tick: this.tick, crisis: 'arrival', action: `arrived to replace ${dead.name}`, reasoning: thought });
       }
     }
 
     // ── Storage expansion — spawn a new unit when the last one fills ────────
     // New units spawn on the nearest open adjacent tile (BFS), so they
     // naturally fill existing room interior before pushing the walls out.
-    const lastDepot = this.depots[this.depots.length - 1];
-    if (lastDepot.food >= lastDepot.maxFood) {
-      const allOccupied = [...this.depots, ...this.stockpiles];
-      const pos = this.findNearestOpenTile(this.depots, allOccupied);
+    const lastFoodStockpile = this.foodStockpiles[this.foodStockpiles.length - 1];
+    if (lastFoodStockpile.food >= lastFoodStockpile.maxFood) {
+      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
+      const pos = this.findNearestOpenTile(this.foodStockpiles, allOccupied);
       if (pos) {
-        const nd: Depot = { ...pos, food: 0, maxFood: 200 };
-        this.depots.push(nd);
-        this.addDepotGraphics(nd);
+        const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
+        this.foodStockpiles.push(nd);
+        this.addFoodStockpileGraphics(nd);
         bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
-          message: `New food depot established (${this.depots.length} total)!`, level: 'info' });
+          message: `New food stockpile established (${this.foodStockpiles.length} total)!`, level: 'info' });
       }
     }
-    const lastStockpile = this.stockpiles[this.stockpiles.length - 1];
-    if (lastStockpile.ore >= lastStockpile.maxOre) {
-      const allOccupied = [...this.depots, ...this.stockpiles];
-      const pos = this.findNearestOpenTile(this.stockpiles, allOccupied);
+    const lastOreStockpile = this.oreStockpiles[this.oreStockpiles.length - 1];
+    if (lastOreStockpile.ore >= lastOreStockpile.maxOre) {
+      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
+      const pos = this.findNearestOpenTile(this.oreStockpiles, allOccupied);
       if (pos) {
         const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
-        this.stockpiles.push(ns);
-        this.addStockpileGraphics(ns);
+        this.oreStockpiles.push(ns);
+        this.addOreStockpileGraphics(ns);
         bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
-          message: `New ore stockpile established (${this.stockpiles.length} total)!`, level: 'info' });
+          message: `New ore stockpile established (${this.oreStockpiles.length} total)!`, level: 'info' });
       }
     }
 
@@ -572,6 +682,9 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.tick % 5 === 0) this.emitMiniMap();
     this.emitGameState();
+
+    // Auto-save every 300 ticks (~45 s at default speed)
+    if (this.tick % 100 === 0) saveGame(this.buildSaveData());
   }
 
   private togglePause() {
@@ -624,8 +737,8 @@ export class WorldScene extends Phaser.Scene {
       paused:          this.paused,
       speed:           this.speedMultiplier,
       colonyGoal:      { ...this.colonyGoal },
-      depots:          this.depots.map(d => ({ ...d })),
-      stockpiles:      this.stockpiles.map(s => ({ ...s })),
+      foodStockpiles:  this.foodStockpiles.map(d => ({ ...d })),
+      oreStockpiles:   this.oreStockpiles.map(s => ({ ...s })),
     });
   }
 
@@ -635,7 +748,7 @@ export class WorldScene extends Phaser.Scene {
     const alive = this.dwarves.filter(d => d.alive);
     switch (this.colonyGoal.type) {
       case 'stockpile_food':
-        this.colonyGoal.progress = this.depots.reduce((sum, d) => sum + d.food, 0);
+        this.colonyGoal.progress = this.foodStockpiles.reduce((sum, d) => sum + d.food, 0);
         break;
       case 'survive_ticks':
         this.colonyGoal.progress = this.tick;
@@ -665,7 +778,7 @@ export class WorldScene extends Phaser.Scene {
     const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
     // Reset relevant counters so the new goal tracks from zero
-    // Note: depot food and stockpile ore are intentionally NOT cleared on goal completion
+    // Note: food stockpile and ore stockpile totals are intentionally NOT cleared on goal completion
     if (next === 'defeat_goblins') this.goblinKillCount = 0;
     this.colonyGoal = WorldScene.makeGoal(next, gen);
   }
@@ -709,63 +822,43 @@ export class WorldScene extends Phaser.Scene {
     return null;
   }
 
-  /** Create Phaser graphics + label objects for a newly added depot. */
-  private addDepotGraphics(depot: Depot): void {
-    const gfx = this.add.graphics();
-    const lbl = this.add.text(
-      depot.x * TILE_SIZE + TILE_SIZE / 2,
-      depot.y * TILE_SIZE - 4,
-      '',
-      { fontSize: '8px', color: '#f0c040', fontFamily: 'monospace' },
-    ).setOrigin(0.5, 1);
-    this.depotGfxList.push(gfx);
-    this.depotLblList.push(lbl);
+  /** Create Phaser graphics + sprite objects for a newly added food stockpile. */
+  private addFoodStockpileGraphics(stockpile: FoodStockpile): void {
+    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.foodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.foodStockpile));
+    this.foodStockpileGfxList.push(this.add.graphics());
   }
 
-  /** Create Phaser graphics + label objects for a newly added stockpile. */
-  private addStockpileGraphics(stockpile: OreStockpile): void {
-    const gfx = this.add.graphics();
-    const lbl = this.add.text(
-      stockpile.x * TILE_SIZE + TILE_SIZE / 2,
-      stockpile.y * TILE_SIZE - 4,
-      '',
-      { fontSize: '8px', color: '#ff8800', fontFamily: 'monospace' },
-    ).setOrigin(0.5, 1);
-    this.stockpileGfxList.push(gfx);
-    this.stockpileLblList.push(lbl);
+  /** Create Phaser graphics + sprite objects for a newly added ore stockpile. */
+  private addOreStockpileGraphics(stockpile: OreStockpile): void {
+    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.oreStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile));
+    this.oreStockpileGfxList.push(this.add.graphics());
   }
 
-  private drawDepot() {
-    for (let i = 0; i < this.depots.length; i++) {
-      const d   = this.depots[i];
-      const gfx = this.depotGfxList[i];
-      const lbl = this.depotLblList[i];
-      if (!gfx || !lbl) continue;
+  private drawFoodStockpile() {
+    for (let i = 0; i < this.foodStockpiles.length; i++) {
+      const d   = this.foodStockpiles[i];
+      const gfx = this.foodStockpileGfxList[i];
+      if (!gfx) continue;
       const px = d.x * TILE_SIZE, py = d.y * TILE_SIZE;
       gfx.clear();
       gfx.lineStyle(2, 0xf0c040, 0.9);
       gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-      const alpha = d.food > 0 ? 0.12 + (d.food / d.maxFood) * 0.25 : 0.06;
-      gfx.fillStyle(0xf0c040, alpha);
-      gfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      lbl.setText(d.food > 0 ? `D:${d.food.toFixed(0)}` : 'D');
     }
   }
 
-  private drawStockpile() {
-    for (let i = 0; i < this.stockpiles.length; i++) {
-      const s   = this.stockpiles[i];
-      const gfx = this.stockpileGfxList[i];
-      const lbl = this.stockpileLblList[i];
-      if (!gfx || !lbl) continue;
+  private drawOreStockpile() {
+    for (let i = 0; i < this.oreStockpiles.length; i++) {
+      const s   = this.oreStockpiles[i];
+      const gfx = this.oreStockpileGfxList[i];
+      if (!gfx) continue;
       const px = s.x * TILE_SIZE, py = s.y * TILE_SIZE;
       gfx.clear();
       gfx.lineStyle(2, 0xff8800, 0.9);
       gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-      const alpha = s.ore > 0 ? 0.12 + (s.ore / s.maxOre) * 0.25 : 0.06;
-      gfx.fillStyle(0xff8800, alpha);
-      gfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      lbl.setText(s.ore > 0 ? `S:${s.ore.toFixed(0)}` : 'S');
     }
   }
 
@@ -979,8 +1072,8 @@ export class WorldScene extends Phaser.Scene {
       this.drawOverlay(); // refresh density whenever food values change
     }
     this.drawAgents();
-    this.drawDepot();
-    this.drawStockpile();
+    this.drawFoodStockpile();
+    this.drawOreStockpile();
     this.drawOffScreenIndicator();
   }
 }

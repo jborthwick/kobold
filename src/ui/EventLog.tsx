@@ -15,8 +15,16 @@ export function EventLog() {
         return next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next;
       });
     };
+    const clearHandler = () => setEntries([]);
+    const restoreHandler = (entries: LogEntry[]) => setEntries(entries.slice(-MAX_ENTRIES));
     bus.on('logEntry', handler);
-    return () => bus.off('logEntry', handler);
+    bus.on('clearLog', clearHandler);
+    bus.on('restoreLog', restoreHandler);
+    return () => {
+      bus.off('logEntry', handler);
+      bus.off('clearLog', clearHandler);
+      bus.off('restoreLog', restoreHandler);
+    };
   }, []);
 
   // Auto-scroll to bottom on new entries

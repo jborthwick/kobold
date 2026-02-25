@@ -12,6 +12,7 @@
 
 import type { Dwarf, Tile, LLMIntent, Goblin, ColonyGoal } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
+import { bus } from '../shared/events';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -138,19 +139,17 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[],
       }).join('\n')}`
     : '';
 
-  // Relationship context — mention top ally and top rival if they deviate from neutral (50)
+  // Relationship context — include all dwarves whose relation has meaningfully diverged from neutral
   const others = dwarves.filter(d => d.id !== dwarf.id && d.alive);
-  const ally   = others.length > 0
-    ? others.reduce((a, b) =>
-        (dwarf.relations[a.id] ?? 50) >= (dwarf.relations[b.id] ?? 50) ? a : b)
-    : null;
-  const rival  = others.length > 0
-    ? others.reduce((a, b) =>
-        (dwarf.relations[a.id] ?? 50) <= (dwarf.relations[b.id] ?? 50) ? a : b)
-    : null;
   const relParts: string[] = [];
-  if (ally  && (dwarf.relations[ally.id]  ?? 50) > 55) relParts.push(`Trusted ally: ${ally.name} (bond ${(dwarf.relations[ally.id]  ?? 50).toFixed(0)}/100)`);
-  if (rival && (dwarf.relations[rival.id] ?? 50) < 45) relParts.push(`Rival: ${rival.name} (tension ${(100 - (dwarf.relations[rival.id] ?? 50)).toFixed(0)}/100)`);
+  others
+    .filter(d => (dwarf.relations[d.id] ?? 50) > 60)
+    .sort((a, b) => (dwarf.relations[b.id] ?? 50) - (dwarf.relations[a.id] ?? 50))
+    .forEach(d => relParts.push(`Ally: ${d.name} (bond ${(dwarf.relations[d.id] ?? 50).toFixed(0)}/100)`));
+  others
+    .filter(d => (dwarf.relations[d.id] ?? 50) < 40)
+    .sort((a, b) => (dwarf.relations[a.id] ?? 50) - (dwarf.relations[b.id] ?? 50))
+    .forEach(d => relParts.push(`Rival: ${d.name} (tension ${(100 - (dwarf.relations[d.id] ?? 50)).toFixed(0)}/100)`));
   const relBlock = relParts.length > 0 ? `\nRelationships: ${relParts.join('. ')}` : '';
 
   const goalLine = colonyGoal
@@ -206,6 +205,11 @@ export class LLMDecisionSystem {
   private cooldownUntil   = new Map<string, number>();
   // PIANO step 6 — pending outcome verifications
   private pendingVerifications = new Map<string, VerifySnapshot>();
+
+  // Session-level token counters
+  public sessionInputTokens  = 0;
+  public sessionOutputTokens = 0;
+  public sessionCallCount    = 0;
 
   /**
    * Check for a crisis, fire an async LLM call if one is found and the agent
@@ -313,7 +317,7 @@ export class LLMDecisionSystem {
         return null;
       }
 
-      const data    = await res.json() as { content?: { text?: string }[] };
+      const data    = await res.json() as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
       const raw     = data?.content?.[0]?.text ?? '';
       // Some models wrap JSON in markdown fences — strip them before parsing
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -323,6 +327,21 @@ export class LLMDecisionSystem {
       // Provide defaults for optional fields
       decision.emotional_state ??= 'uncertain';
       decision.expectedOutcome  ??= 'unknown outcome';
+
+      // Track token usage and broadcast to UI
+      const inTok  = data.usage?.input_tokens  ?? 0;
+      const outTok = data.usage?.output_tokens ?? 0;
+      this.sessionInputTokens  += inTok;
+      this.sessionOutputTokens += outTok;
+      this.sessionCallCount++;
+      bus.emit('tokenUsage', {
+        inputTotal:  this.sessionInputTokens,
+        outputTotal: this.sessionOutputTokens,
+        callCount:   this.sessionCallCount,
+        lastInput:   inTok,
+        lastOutput:  outTok,
+      });
+
       return decision;
     } catch (err) {
       const name = (err as Error).name;
@@ -365,7 +384,19 @@ export async function callSuccessionLLM(dead: Dwarf, successor: Dwarf): Promise<
       }),
     });
     if (!res.ok) return null;
-    const data = await res.json() as { content?: { text?: string }[] };
+    const data = await res.json() as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+    const inTok  = data.usage?.input_tokens  ?? 0;
+    const outTok = data.usage?.output_tokens ?? 0;
+    llmSystem.sessionInputTokens  += inTok;
+    llmSystem.sessionOutputTokens += outTok;
+    llmSystem.sessionCallCount++;
+    bus.emit('tokenUsage', {
+      inputTotal:  llmSystem.sessionInputTokens,
+      outputTotal: llmSystem.sessionOutputTokens,
+      callCount:   llmSystem.sessionCallCount,
+      lastInput:   inTok,
+      lastOutput:  outTok,
+    });
     return data?.content?.[0]?.text?.trim().slice(0, 120) ?? null;
   } catch {
     return null;
