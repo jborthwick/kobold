@@ -224,10 +224,10 @@ export function spawnSuccessor(
       action: `${dead.name}'s greatest rival was ${rivalDwarf.name}` });
   }
 
-  // Inherit relations muted 40% toward neutral (50)
+  // Inherit relations muted 50% toward neutral (50) — keeps meaningful bonds but dampened
   const relations: Record<string, number> = {};
   for (const [id2, score] of Object.entries(dead.relations)) {
-    relations[id2] = Math.round(50 + (score - 50) * 0.4);
+    relations[id2] = Math.round(50 + (score - 50) * 0.5);
   }
 
   return {

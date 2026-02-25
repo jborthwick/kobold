@@ -152,8 +152,8 @@ export function tickGoblins(
       result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
       const dmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
       g.health -= dmg;
-      // Stagger: goblin can't move for 6 ticks after being hit
-      g.staggeredUntil = tick + 6;
+      // Stagger: goblin can't move for 12 ticks after being hit (~1.7 s at 7 tps)
+      g.staggeredUntil = tick + 12;
       if (g.health <= 0) {
         result.goblinDeaths.push(g.id);
         result.kills.push({ dwarfId: target.id });
