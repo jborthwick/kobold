@@ -7,7 +7,7 @@ import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
-import { tickWorldEvents, resetWorldEvents } from '../../simulation/events';
+import { tickWorldEvents, getNextEventTick, setNextEventTick } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
 
@@ -113,8 +113,9 @@ export class WorldScene extends Phaser.Scene {
       this.commandTile        = save.commandTile;
       this.speedMultiplier    = save.speed;
       this.overlayMode        = save.overlayMode;
-      resetGoblins();       // reset raid timer to prevent an immediate raid on resume
-      resetWorldEvents(this.tick); // re-anchor event timer so no burst of back-to-back events
+      resetGoblins(); // reset raid timer to prevent an immediate raid on resume
+      // Restore world-event schedule; fall back to a fresh window if save predates this field
+      setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
     } else {
       bus.emit('clearLog', undefined);
       this.logHistory = [];
@@ -284,6 +285,7 @@ export class WorldScene extends Phaser.Scene {
       speed:              this.speedMultiplier,
       overlayMode:        this.overlayMode,
       logHistory:         [...this.logHistory],
+      nextWorldEventTick: getNextEventTick(),
     };
   }
 

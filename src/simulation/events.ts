@@ -25,14 +25,11 @@ function scheduleNext(): void {
     Math.floor(Math.random() * (EVENT_MAX_INTERVAL - EVENT_MIN_INTERVAL));
 }
 
-/**
- * Re-anchor the event timer to `currentTick` — call this when loading a saved
- * game so the module-level counter doesn't fire a burst of back-to-back events.
- */
-export function resetWorldEvents(currentTick: number): void {
-  nextEventTick = currentTick + EVENT_MIN_INTERVAL +
-    Math.floor(Math.random() * (EVENT_MAX_INTERVAL - EVENT_MIN_INTERVAL));
-}
+/** Returns the tick at which the next world event is scheduled — save this value. */
+export function getNextEventTick(): number { return nextEventTick; }
+
+/** Restores the world event schedule from a saved value. */
+export function setNextEventTick(tick: number): void { nextEventTick = tick; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

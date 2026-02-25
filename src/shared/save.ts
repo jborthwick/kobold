@@ -16,6 +16,7 @@ export interface SaveData {
   speed: number;
   overlayMode: OverlayMode;
   logHistory: LogEntry[];
+  nextWorldEventTick: number;
 }
 
 const KEY = 'kobold_save_v1';
