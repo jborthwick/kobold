@@ -1,17 +1,19 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
-import { spawnDwarves, tickAgent } from '../../simulation/agents';
+import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY } from '../../simulation/agents';
+import { maybeSpawnRaid, tickGoblins, resetGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type GameState, type TileInfo, type MiniMapData } from '../../shared/types';
-import { llmSystem, detectCrisis } from '../../ai/crisis';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData } from '../../shared/types';
+import { llmSystem, detectCrisis, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
-const DWARF_FRAME = SPRITE_CONFIG.dwarf;
+const DWARF_FRAME   = SPRITE_CONFIG.dwarf;
+const GOBLIN_FRAME  = SPRITE_CONFIG.goblin;    // editable via T-key tile picker
 const CAM_PAN_SPEED  = 200; // world pixels per second for WASD pan
 
 export class WorldScene extends Phaser.Scene {
@@ -47,6 +49,14 @@ export class WorldScene extends Phaser.Scene {
   // Per-dwarf last-known crisis type for change detection
   private dwarfCrisisState = new Map<string, string | null>();
 
+  // Goblin raid state
+  private goblins: Goblin[] = [];
+  private goblinSprites = new Map<string, Phaser.GameObjects.Sprite>();
+
+  // Succession state
+  private spawnZone!: { x: number; y: number; w: number; h: number };
+  private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
+
   // WASD keys
   private wasd!: {
     W: Phaser.Input.Keyboard.Key;
@@ -61,8 +71,11 @@ export class WorldScene extends Phaser.Scene {
 
   create() {
     const { grid, spawnZone } = generateWorld();
-    this.grid    = grid;
-    this.dwarves = spawnDwarves(this.grid, spawnZone);
+    this.grid      = grid;
+    this.spawnZone = spawnZone;
+    this.dwarves   = spawnDwarves(this.grid, spawnZone);
+    this.goblins = [];
+    resetGoblins();
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -331,7 +344,7 @@ export class WorldScene extends Phaser.Scene {
       }
 
       // Fire async LLM crisis check — never blocks the game loop
-      llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick,
+      llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick, this.goblins,
         (dwarf, decision, situation) => {
           dwarf.llmReasoning = decision.reasoning;
           dwarf.task         = decision.action;  // show LLM action string as task label
@@ -358,6 +371,65 @@ export class WorldScene extends Phaser.Scene {
     }
 
     growback(this.grid);
+
+    // ── Goblin raids ───────────────────────────────────────────────────────
+    const raid = maybeSpawnRaid(this.grid, this.dwarves, this.tick);
+    if (raid) {
+      this.goblins.push(...raid.goblins);
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   'goblin',
+        dwarfName: 'RAID',
+        message:   `⚔ ${raid.count} goblins storm from the ${raid.edge}!`,
+        level:     'error',
+      });
+    }
+
+    if (this.goblins.length > 0) {
+      const gr = tickGoblins(this.goblins, this.dwarves, this.grid);
+
+      // Apply damage to targeted dwarves
+      for (const { dwarfId, damage } of gr.attacks) {
+        const d = this.dwarves.find(dw => dw.id === dwarfId);
+        if (d && d.alive) {
+          d.health = Math.max(0, d.health - damage);
+          d.morale = Math.max(0, d.morale - 5);
+          if (d.health <= 0) {
+            d.alive = false;
+            d.task  = 'dead';
+            bus.emit('logEntry', {
+              tick:      this.tick,
+              dwarfId:   d.id,
+              dwarfName: d.name,
+              message:   'killed by goblins!',
+              level:     'error',
+            });
+            this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
+          }
+        }
+      }
+
+      // Emit goblin action log entries
+      for (const { message, level } of gr.logs) {
+        bus.emit('logEntry', {
+          tick:      this.tick,
+          dwarfId:   'goblin',
+          dwarfName: 'GOBLIN',
+          message,
+          level,
+        });
+      }
+
+      // Remove dead goblins and their sprites
+      if (gr.goblinDeaths.length > 0) {
+        const deadIds = new Set(gr.goblinDeaths);
+        this.goblins  = this.goblins.filter(g => !deadIds.has(g.id));
+        for (const id of gr.goblinDeaths) {
+          const spr = this.goblinSprites.get(id);
+          if (spr) { spr.destroy(); this.goblinSprites.delete(id); }
+        }
+      }
+    }
 
     // World events — blight / bounty / ore discovery
     const ev = tickWorldEvents(this.grid, this.tick);
@@ -413,6 +485,7 @@ export class WorldScene extends Phaser.Scene {
       dwarves: this.dwarves
         .filter(d => d.alive)
         .map(d => ({ x: d.x, y: d.y, hunger: d.hunger })),
+      goblins: this.goblins.map(g => ({ x: g.x, y: g.y })),
       viewport: {
         x: view.x / tpx,
         y: view.y / tpx,
@@ -605,6 +678,20 @@ export class WorldScene extends Phaser.Scene {
       if (d.commandTarget) {
         this.selectionGfx.lineStyle(1, 0x00ffff, 0.7);
         this.selectionGfx.strokeCircle(px, py, TILE_SIZE / 2 + 1);
+      }
+    }
+
+    // ── Goblin sprites ──────────────────────────────────────────────────────
+    for (const g of this.goblins) {
+      const px = g.x * TILE_SIZE + TILE_SIZE / 2;
+      const py = g.y * TILE_SIZE + TILE_SIZE / 2;
+      let spr = this.goblinSprites.get(g.id);
+      if (!spr) {
+        spr = this.add.sprite(px, py, 'tiles', GOBLIN_FRAME);
+        spr.setTint(0xff6600); // bright orange — clearly hostile
+        this.goblinSprites.set(g.id, spr);
+      } else {
+        spr.setPosition(px, py);
       }
     }
   }

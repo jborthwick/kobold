@@ -23,6 +23,16 @@ export interface Inventory {
   materials: number;
 }
 
+/** Hostile NPC — spawns in raids from map edges. */
+export interface Goblin {
+  id:        string;
+  x:         number;
+  y:         number;
+  health:    number;
+  maxHealth: number;
+  targetId:  string | null;  // id of the dwarf currently being chased
+}
+
 // PIANO step 5 — structured intent the LLM can set to override the BT
 export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
 
@@ -57,6 +67,7 @@ export interface Dwarf {
   llmIntentExpiry: number;           // tick after which intent is discarded
   memory:          MemoryEntry[];    // last 5 decisions, oldest-first
   role:            DwarfRole;
+  relations:       Record<string, number>;  // keyed by dwarf.id; 0–100 (50 = neutral)
 }
 
 export interface LogEntry {
@@ -84,6 +95,8 @@ export interface MiniMapData {
   tiles:    { type: TileType; foodRatio: number; matRatio: number }[][];
   /** Alive dwarf positions and hunger (0–100). */
   dwarves:  { x: number; y: number; hunger: number }[];
+  /** Goblin positions. */
+  goblins:  { x: number; y: number }[];
   /** Camera viewport in tile-space. */
   viewport: { x: number; y: number; w: number; h: number };
 }

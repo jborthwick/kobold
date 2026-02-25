@@ -78,6 +78,14 @@ export function MiniMap() {
       ctx.fillStyle = `rgb(${dr},${dg},60)`;
       ctx.fillRect(d.x * SCALE, d.y * SCALE, SCALE + 1, SCALE + 1);
     }
+
+    // ── Goblin dots (red) ─────────────────────────────────────────────────
+    if (data.goblins) {
+      ctx.fillStyle = 'rgb(255,80,0)';
+      for (const g of data.goblins) {
+        ctx.fillRect(g.x * SCALE, g.y * SCALE, SCALE + 1, SCALE + 1);
+      }
+    }
   }, [data]);
 
   return (

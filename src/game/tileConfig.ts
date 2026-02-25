@@ -23,4 +23,5 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
 /** Single-frame sprite assignments for non-terrain game objects. */
 export const SPRITE_CONFIG: Record<string, number> = {
   dwarf: 318,
+  goblin: 124,
 };

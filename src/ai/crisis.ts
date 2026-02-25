@@ -10,7 +10,7 @@
  * In production this will be a Cloudflare Worker at the same path.
  */
 
-import type { Dwarf, Tile, LLMIntent } from '../shared/types';
+import type { Dwarf, Tile, LLMIntent, Goblin } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -20,21 +20,38 @@ const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tick
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
+const GOBLIN_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within this distance
 const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/dwarf/hour
 const MODEL                     = 'claude-haiku-4-5';
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
 export function detectCrisis(
-  dwarf:   Dwarf,
-  dwarves: Dwarf[],
-  _grid:   Tile[][],
+  dwarf:    Dwarf,
+  dwarves:  Dwarf[],
+  _grid:    Tile[][],
+  goblins?: Goblin[],
 ): CrisisSituation | null {
   if (!dwarf.alive) return null;
 
   const alive      = dwarves.filter(d => d.alive);
   const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
   const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
+
+  // ── Goblin raid — checked first (most urgent) ─────────────────────────────
+  if (goblins && goblins.length > 0) {
+    const nearest = goblins.reduce<{ goblin: Goblin; dist: number } | null>((best, g) => {
+      const d = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
+      return (!best || d < best.dist) ? { goblin: g, dist: d } : best;
+    }, null);
+    if (nearest && nearest.dist <= GOBLIN_RAID_AWARENESS) {
+      return {
+        type:          'goblin_raid',
+        description:   `Goblins are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
+        colonyContext: `${goblins.length} goblin${goblins.length !== 1 ? 's' : ''} in the area. ${ctx}`,
+      };
+    }
+  }
 
   // Low supplies — fires when inventory nearly empty AND hunger is rising.
   // This catches the realistic crisis *before* starvation, while there's
@@ -136,7 +153,7 @@ Respond ONLY as valid JSON (no markdown, no extra text):
   "emotional_state": "3-5 words describing how you feel",
   "expectedOutcome": "one short sentence — what you expect to happen"
 }
-intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still, avoid=move away from rivals, none=normal behaviour`;
+intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still, avoid=move away from rivals/goblins, none=normal behaviour`;
 }
 
 // ── LLM Decision System ───────────────────────────────────────────────────────
@@ -172,21 +189,22 @@ export class LLMDecisionSystem {
    * isn't on cooldown.  Never awaited — the game loop must not block.
    */
   requestDecision(
-    dwarf:      Dwarf,
-    dwarves:    Dwarf[],
-    grid:       Tile[][],
+    dwarf:       Dwarf,
+    dwarves:     Dwarf[],
+    grid:        Tile[][],
     currentTick: number,
-    onDecision: DecisionCallback,
+    goblins:     Goblin[],
+    onDecision:  DecisionCallback,
   ): void {
     if (!this.enabled)                                         return;
     if (!dwarf.alive)                                          return;
     if (this.pendingRequests.has(dwarf.id))                    return;
     if ((this.cooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
 
-    const situation = detectCrisis(dwarf, dwarves, grid);
+    const situation = detectCrisis(dwarf, dwarves, grid, goblins);
     if (!situation) return;
 
-    const promise = this.callLLM(dwarf, situation);
+    const promise = this.callLLM(dwarf, situation, dwarves);
     this.pendingRequests.set(dwarf.id, promise);
 
     // Detached — resolves on its own; game loop continues
@@ -251,6 +269,7 @@ export class LLMDecisionSystem {
   private async callLLM(
     dwarf:     Dwarf,
     situation: CrisisSituation,
+    dwarves:   Dwarf[],
   ): Promise<LLMDecision | null> {
     try {
       const res = await fetch('/api/llm-proxy', {
@@ -260,7 +279,7 @@ export class LLMDecisionSystem {
         body: JSON.stringify({
           model:      MODEL,
           max_tokens: 256,
-          messages: [{ role: 'user', content: buildPrompt(dwarf, situation) }],
+          messages: [{ role: 'user', content: buildPrompt(dwarf, situation, dwarves) }],
         }),
       });
 

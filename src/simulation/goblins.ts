@@ -1,0 +1,155 @@
+/**
+ * Goblin raid simulation.
+ *
+ * Raids spawn from map edges every 500–900 ticks in groups of 2–4 goblins.
+ * Each goblin moves one tile per tick toward the nearest alive dwarf.
+ * When a goblin reaches a dwarf's tile it attacks; the dwarf fights back.
+ * Dead goblins are reported in GoblinTickResult.goblinDeaths and removed by WorldScene.
+ */
+
+import type { Goblin, Dwarf, Tile } from '../shared/types';
+import { GRID_SIZE } from '../shared/constants';
+import { isWalkable } from './world';
+import { pathNextStep } from './agents';
+
+// ── Raid scheduler ────────────────────────────────────────────────────────────
+
+const RAID_INTERVAL_MIN = 500;   // ticks between raids (~70 s at 7 tps)
+const RAID_INTERVAL_MAX = 900;
+
+// Module-level state — reset when a new world is generated
+let nextRaidAt  = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
+let nextGoblinId = 0;
+
+/** Reset scheduler — call this in WorldScene.create() so new games get fresh timers. */
+export function resetGoblins(): void {
+  nextRaidAt   = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
+  nextGoblinId = 0;
+}
+
+const EDGE_NAMES = ['north', 'east', 'south', 'west'] as const;
+
+export interface RaidSpawnResult {
+  goblins: Goblin[];
+  edge:    string;
+  count:   number;
+}
+
+/**
+ * Called each tick. Returns a raid group if the cooldown has expired,
+ * otherwise returns null.  Mutates the scheduler.
+ */
+export function maybeSpawnRaid(
+  grid:    Tile[][],
+  dwarves: Dwarf[],
+  tick:    number,
+): RaidSpawnResult | null {
+  if (tick < nextRaidAt) return null;
+
+  const alive = dwarves.filter(d => d.alive);
+  if (alive.length === 0) return null;
+
+  // Schedule the next raid
+  nextRaidAt = tick + RAID_INTERVAL_MIN +
+    Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
+
+  const count = 2 + Math.floor(Math.random() * 3); // 2–4 goblins
+  const edge  = Math.floor(Math.random() * 4);      // 0=N, 1=E, 2=S, 3=W
+  const newGoblins: Goblin[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let x = 0, y = 0, attempts = 0;
+    do {
+      switch (edge) {
+        case 0: x = Math.floor(Math.random() * GRID_SIZE); y = 0;             break;
+        case 1: x = GRID_SIZE - 1;                         y = Math.floor(Math.random() * GRID_SIZE); break;
+        case 2: x = Math.floor(Math.random() * GRID_SIZE); y = GRID_SIZE - 1; break;
+        default: x = 0;                                    y = Math.floor(Math.random() * GRID_SIZE); break;
+      }
+      attempts++;
+    } while (!isWalkable(grid, x, y) && attempts < 30);
+
+    if (!isWalkable(grid, x, y)) continue; // edge is all water/stone — skip this goblin
+
+    newGoblins.push({
+      id:        `goblin-${nextGoblinId++}`,
+      x, y,
+      health:    30,
+      maxHealth: 30,
+      targetId:  null,
+    });
+  }
+
+  return newGoblins.length > 0
+    ? { goblins: newGoblins, edge: EDGE_NAMES[edge], count: newGoblins.length }
+    : null;
+}
+
+// ── Per-tick simulation ───────────────────────────────────────────────────────
+
+export interface GoblinTickResult {
+  /** Attacks dealt this tick — WorldScene applies damage to dwarves. */
+  attacks:      Array<{ dwarfId: string; damage: number }>;
+  /** Goblin IDs whose health reached 0 — WorldScene removes them. */
+  goblinDeaths: string[];
+  /** Log entries to emit. */
+  logs: Array<{ message: string; level: 'info' | 'warn' | 'error' }>;
+}
+
+const GOBLIN_ATTACK_DAMAGE = 5;  // hp per hit to dwarf
+const DWARF_FIGHT_BACK     = 8;  // hp per hit to goblin (dwarves are tough)
+
+/**
+ * Move all goblins one step toward their target, or attack on contact.
+ * Mutates goblin positions/health in place.
+ */
+export function tickGoblins(
+  goblins: Goblin[],
+  dwarves: Dwarf[],
+  grid:    Tile[][],
+): GoblinTickResult {
+  const result: GoblinTickResult = { attacks: [], goblinDeaths: [], logs: [] };
+  const alive = dwarves.filter(d => d.alive);
+  if (alive.length === 0) return result;
+
+  for (const g of goblins) {
+    // Re-target if current target is dead or unset
+    let target = g.targetId ? alive.find(d => d.id === g.targetId) ?? null : null;
+    if (!target) {
+      // Pick nearest alive dwarf
+      target = alive.reduce<Dwarf | null>((best, d) => {
+        const dist  = Math.abs(d.x - g.x) + Math.abs(d.y - g.y);
+        const bDist = best ? Math.abs(best.x - g.x) + Math.abs(best.y - g.y) : Infinity;
+        return dist < bDist ? d : best;
+      }, null);
+      g.targetId = target?.id ?? null;
+    }
+    if (!target) continue;
+
+    const dist = Math.abs(target.x - g.x) + Math.abs(target.y - g.y);
+
+    if (dist === 0) {
+      // ── Attack ──────────────────────────────────────────────────────
+      result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
+      g.health -= DWARF_FIGHT_BACK;
+      result.logs.push({
+        message: `attacks ${target.name}! (-${GOBLIN_ATTACK_DAMAGE} hp)`,
+        level:   'error',
+      });
+      if (g.health <= 0) {
+        result.goblinDeaths.push(g.id);
+        result.logs.push({
+          message: `${target.name} slew a goblin!`,
+          level:   'warn',
+        });
+      }
+    } else {
+      // ── Move toward target using A* ──────────────────────────────────
+      const next = pathNextStep({ x: g.x, y: g.y }, { x: target.x, y: target.y }, grid);
+      g.x = next.x;
+      g.y = next.y;
+    }
+  }
+
+  return result;
+}

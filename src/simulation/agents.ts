@@ -109,8 +109,9 @@ function bestMaterialTile(
  * Returns the next tile to step onto when moving from `from` toward `to`,
  * using rot.js A* for obstacle-aware pathfinding.
  * Falls back to staying in place if the destination is unreachable.
+ * Exported so goblins can share the same pathfinding logic.
  */
-function pathNextStep(
+export function pathNextStep(
   from: { x: number; y: number },
   to:   { x: number; y: number },
   grid: Tile[][],
