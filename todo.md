@@ -49,9 +49,9 @@ TODO:
 [x] Make console history persist through the whole session (so you can scroll back through it)
 [x] Relationship status of the deceased should be told to successors (just like death cause)
 [x] Update zoom to be smoother and/or less sensitive. right now just barely touching zoom throws us to the max or min levels
-[ ] Increase mushroom patch growth rate (separate normal patch growth from world event rolls, but keep an extra big growth as world event)
-[ ] bug: if the game is paused, switching selected dwarves does not update the dwarf info hud
-[ ] add number of goblins slain to each dwarves info panel
+[x] Increase mushroom patch growth rate (separate normal patch growth from world event rolls, but keep an extra big growth as world event)
+[x] bug: if the game is paused, switching selected dwarves does not update the dwarf info hud
+[x] add number of goblins slain to each dwarves info panel
 
 
 Dwarf fort upgrades:

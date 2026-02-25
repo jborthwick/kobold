@@ -92,6 +92,7 @@ export interface Dwarf {
   goal:            string;      // personal objective
   baseName:        string;      // name without roman numeral suffix (e.g. "Bomer")
   generation:      number;      // 1 for original dwarves, increments for each succession
+  goblinKills:     number;      // lifetime count of goblins slain by this dwarf
   causeOfDeath?:   string;      // set when dwarf dies; shown in HUD + passed to successor
 }
 

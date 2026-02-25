@@ -436,6 +436,9 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {dwarf.inventory.food.toFixed(1)}</span>
         <span style={{ color: '#ff8800' }}>⛏ {dwarf.inventory.materials.toFixed(1)}</span>
+        {dwarf.goblinKills > 0 && (
+          <span style={{ color: '#e74c3c' }}>⚔ {dwarf.goblinKills} kill{dwarf.goblinKills !== 1 ? 's' : ''}</span>
+        )}
       </div>
       <div style={styles.task}>{dwarf.task}</div>
       {(ally || rival) && (

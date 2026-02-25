@@ -157,6 +157,7 @@ export function spawnDwarves(
       knownFoodSites:  [],
       knownOreSites:   [],
       homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
+      goblinKills:     0,
     });
   }
   return dwarves;
@@ -260,6 +261,7 @@ export function spawnSuccessor(
     knownFoodSites:  [],
     knownOreSites:   [],
     homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
+    goblinKills:     0,
   };
 }
 

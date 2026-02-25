@@ -120,14 +120,16 @@ function applyMushroomSpread(grid: Tile[][]): string | null {
   const centre = randomItem(candidates);
   if (!centre) return null;
 
-  const radius  = 2 + Math.floor(Math.random() * 2); // 2–3 tiles
+  // World-event spread is deliberately large (3–5 tile radius, up to 14 tiles)
+  // so it feels distinct from the steady per-tick growback on existing tiles.
+  const radius  = 3 + Math.floor(Math.random() * 3); // 3–5 tiles
   const affected = coordsInRadius(grid, centre.x, centre.y, radius);
   let count = 0;
   for (const { x, y } of affected) {
     const t = grid[y][x];
-    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.55 && count < 7) {
+    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.6 && count < 14) {
       const fMax = 3 + Math.floor(Math.random() * 3); // 3–5
-      grid[y][x] = { type: TileType.Mushroom, foodValue: fMax, maxFood: fMax, materialValue: 0, maxMaterial: 0, growbackRate: 0.02 };
+      grid[y][x] = { type: TileType.Mushroom, foodValue: fMax, maxFood: fMax, materialValue: 0, maxMaterial: 0, growbackRate: 0.08 };
       count++;
     }
   }

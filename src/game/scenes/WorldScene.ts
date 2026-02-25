@@ -219,6 +219,7 @@ export class WorldScene extends Phaser.Scene {
       const currentIdx = alive.findIndex(d => d.id === this.selectedDwarfId);
       const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
       this.selectedDwarfId = alive[nextIdx].id;
+      this.emitGameState(); // update panel immediately even when paused
     };
     this.input.keyboard!
       .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
@@ -382,6 +383,7 @@ export class WorldScene extends Phaser.Scene {
       this.selectedDwarfId = hit?.id ?? null;
       bus.emit('stockpileSelect', null);
       bus.emit('goblinSelect', null);
+      this.emitGameState(); // update panel immediately even when paused
     });
 
     this.input.on('wheel',
@@ -580,6 +582,7 @@ export class WorldScene extends Phaser.Scene {
         for (const { dwarfId } of gr.kills) {
           const killer = this.dwarves.find(dw => dw.id === dwarfId && dw.alive);
           if (killer) {
+            killer.goblinKills += 1;
             killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
             bus.emit('logEntry', {
               tick:      this.tick,

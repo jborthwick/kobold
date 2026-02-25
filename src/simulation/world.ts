@@ -27,10 +27,12 @@ const WORLD_CONFIG = {
   grassMeadowFoodMax:  4,
   grassMeadowGrowback: 0.02,
 
-  // Mushroom hotspots — scarce by design to force exploration between patches
+  // Mushroom hotspots — grow back 4× faster than before so patches stay viable
+  // between harvests.  Large spread events (world-event rolls) keep the "special
+  // growth" feel by creating whole new patches rather than just refilling tiles.
   mushroomFoodMin:  3,
   mushroomFoodMax:  5,
-  mushroomGrowback: 0.02,
+  mushroomGrowback: 0.08,
 } as const;
 
 // ── Result type ────────────────────────────────────────────────────────────────
