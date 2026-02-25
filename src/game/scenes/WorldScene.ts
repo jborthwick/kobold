@@ -7,7 +7,7 @@ import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
-import { tickWorldEvents, getNextEventTick, setNextEventTick } from '../../simulation/events';
+import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
 
@@ -596,7 +596,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // World events — blight / bounty / ore discovery
+    // World events — blight / bounty / ore discovery / large mushroom bloom
     const ev = tickWorldEvents(this.grid, this.tick);
     if (ev.fired) {
       bus.emit('logEntry', {
@@ -605,6 +605,18 @@ export class WorldScene extends Phaser.Scene {
         dwarfName: 'WORLD',
         message:   ev.message,
         level:     'warn',
+      });
+    }
+
+    // Small steady mushroom sprouting — every 150 ticks, a fresh 1–4 tile patch
+    const sprout = tickMushroomSprout(this.grid, this.tick);
+    if (sprout) {
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   'world',
+        dwarfName: 'WORLD',
+        message:   `🍄 ${sprout}`,
+        level:     'info',
       });
     }
 

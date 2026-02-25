@@ -770,9 +770,9 @@ export function tickAgent(
       const hadFood         = here.foodValue;
       const depleted        = Math.min(hadFood, depletionRate);
       here.foodValue        = Math.max(0, hadFood - depleted);
-      // Depleted mushroom tiles stay as Mushroom type so growback() can refill them
-      // at 0.08/tick (~40–60 ticks to full).  bestFoodTile() already ignores tiles
-      // with foodValue < 1 so dwarves won't chase empty patches.
+      // Fully depleted tile reverts to bare dirt — forces dwarves to seek fresh patches.
+      // New patches sprout periodically via tickMushroomSprout() in WorldScene.
+      if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
       const amount          = Math.min(harvestYield, depleted, headroom);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';

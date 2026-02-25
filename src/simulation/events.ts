@@ -165,6 +165,51 @@ function applyOreDiscovery(grid: Tile[][]): string | null {
   return `Ore vein discovered near (${centre.x},${centre.y}) — ${count} new ore tiles`;
 }
 
+// ── Steady mushroom sprouting ─────────────────────────────────────────────────
+
+/**
+ * Small natural mushroom sprout — fires every 150 ticks (~21 s at 7 tps).
+ * Creates a tiny new patch (radius 1, up to 4 tiles) in a depleted or open area,
+ * keeping the map viable after dwarves strip early patches.
+ *
+ * Deliberately smaller than the world-event spread (which does radius 3–5, up to 14
+ * tiles) so the world event still feels like a meaningful bonus.
+ */
+const MUSHROOM_SPROUT_INTERVAL = 150;
+
+export function tickMushroomSprout(grid: Tile[][], tick: number): string | null {
+  if (tick === 0 || tick % MUSHROOM_SPROUT_INTERVAL !== 0) return null;
+
+  // Candidates: Dirt/Grass with no living mushroom patch within 2 tiles
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const candidates: GridCoord[] = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const t = grid[y][x];
+      if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+      const nearMushroom = coordsInRadius(grid, x, y, 2)
+        .some(({ x: nx, y: ny }) => grid[ny][nx].type === TileType.Mushroom);
+      if (!nearMushroom) candidates.push({ x, y });
+    }
+  }
+  const centre = randomItem(candidates);
+  if (!centre) return null;
+
+  const affected = coordsInRadius(grid, centre.x, centre.y, 1); // small radius — tiny patch
+  let count = 0;
+  for (const { x, y } of affected) {
+    const t = grid[y][x];
+    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.7 && count < 4) {
+      const fMax = 3 + Math.floor(Math.random() * 3); // 3–5
+      grid[y][x] = { type: TileType.Mushroom, foodValue: fMax, maxFood: fMax, materialValue: 0, maxMaterial: 0, growbackRate: 0.08 };
+      count++;
+    }
+  }
+  if (count === 0) return null;
+  return `A small mushroom patch sprouted near (${centre.x},${centre.y})`;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface WorldEventResult {
