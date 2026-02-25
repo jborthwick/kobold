@@ -168,14 +168,14 @@ function applyOreDiscovery(grid: Tile[][]): string | null {
 // ── Steady mushroom sprouting ─────────────────────────────────────────────────
 
 /**
- * Small natural mushroom sprout — fires every 150 ticks (~21 s at 7 tps).
- * Creates a tiny new patch (radius 1, up to 4 tiles) in a depleted or open area,
+ * Steady mushroom sprouting — fires every 60 ticks (~8 s at 7 tps).
+ * Creates a moderate patch (radius 2, up to 8 tiles) in a depleted or open area,
  * keeping the map viable after dwarves strip early patches.
  *
- * Deliberately smaller than the world-event spread (which does radius 3–5, up to 14
- * tiles) so the world event still feels like a meaningful bonus.
+ * Deliberately smaller than the world-event spread (radius 3–5, up to 14 tiles)
+ * so the world event still feels like a meaningful bonus.
  */
-const MUSHROOM_SPROUT_INTERVAL = 150;
+const MUSHROOM_SPROUT_INTERVAL = 60;
 
 export function tickMushroomSprout(grid: Tile[][], tick: number): string | null {
   if (tick === 0 || tick % MUSHROOM_SPROUT_INTERVAL !== 0) return null;
@@ -196,18 +196,18 @@ export function tickMushroomSprout(grid: Tile[][], tick: number): string | null 
   const centre = randomItem(candidates);
   if (!centre) return null;
 
-  const affected = coordsInRadius(grid, centre.x, centre.y, 1); // small radius — tiny patch
+  const affected = coordsInRadius(grid, centre.x, centre.y, 2); // radius 2 — moderate patch
   let count = 0;
   for (const { x, y } of affected) {
     const t = grid[y][x];
-    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.7 && count < 4) {
+    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.7 && count < 8) {
       const fMax = 3 + Math.floor(Math.random() * 3); // 3–5
       grid[y][x] = { type: TileType.Mushroom, foodValue: fMax, maxFood: fMax, materialValue: 0, maxMaterial: 0, growbackRate: 0.08 };
       count++;
     }
   }
   if (count === 0) return null;
-  return `A small mushroom patch sprouted near (${centre.x},${centre.y})`;
+  return `A mushroom patch sprouted near (${centre.x},${centre.y})`;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
