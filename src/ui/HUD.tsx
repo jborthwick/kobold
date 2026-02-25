@@ -259,18 +259,19 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
       <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
-      <div style={styles.panelRow}>food: {dwarf.inventory.food.toFixed(1)}</div>
-      <div style={styles.panelRow}>vision: {dwarf.vision}</div>
-      <div style={styles.panelRow}>metabolism: {dwarf.metabolism}/tick</div>
+      <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
+        <span>🍄 {dwarf.inventory.food.toFixed(1)}</span>
+        <span style={{ color: '#ff8800' }}>⛏ {dwarf.inventory.materials.toFixed(1)}</span>
+      </div>
       <div style={styles.task}>{dwarf.task}</div>
+      {dwarf.llmReasoning && (
+        <div style={styles.llmReasoning}>💭 "{dwarf.llmReasoning}"</div>
+      )}
       {(ally || rival) && (
         <div style={styles.relSection}>
           {ally  && <div style={styles.relAlly}>♥ {ally.name} ({ally.score})</div>}
           {rival && <div style={styles.relRival}>⚔ {rival.name} ({100 - rival.score})</div>}
         </div>
-      )}
-      {dwarf.llmReasoning && (
-        <div style={styles.llmReasoning}>💭 "{dwarf.llmReasoning}"</div>
       )}
       {dwarf.memory.length > 0 && (
         <div style={styles.memorySection}>

@@ -18,7 +18,20 @@ TODO:
 [x] console: make it less noisey (remove each health update, each wall placement, etc)
 [x] have minors favor ore over food when they have enough food
 [x] have dwarves favor finding food over their base goals (i.e. fighter chasing goblins) at certain hunger/health thresholds
+[x] Dwarves should only remember resouces (food, etc) that they can act on (e.g. they should not remember trees cause they can only forage mushrooms)
+[x] Dwarves should remember general patches/fields of resources, not specific tiles. So if there's a group of 10 mushrooms, they only remember that as one patch, not as 10 distinct resources.
+[x] bug: the dwarf panel used to show the llm messages, but i'm not seeing it anymore
+[x] bug: dwarves can get stuck yielding to each other for long bouts
+[x] update dwarf HUD panel to show inventory (food, ore, etc)
+[x] hide vision and metabolism from the dwarf HUD panel
+[x] if dwarf inventory is full, they should probably return home to unload. sometimes the get stuck out in a field with a full inventory.
+[ ] The fighter needs an easier way to chase down goblins they find. Goblins should move slightly slower than dwarves, or a fighter should be able to speed up when chasing goblins
 
+
+Dwarf fort upgrades:
+[ ] add more space between the food and ore storages
+[ ] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
+[ ] dwarves should be able to expand their fort as needed
 
 
 Questions (don't start without clarifying):

@@ -51,12 +51,32 @@ cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
 | Event bus | mitt (200 bytes) | ✅ live | Typed events for Phaser ↔ React |
 | LLM | claude-haiku-4-5 | ✅ live | Via Vite dev-server proxy at `/api/llm-proxy` |
 | Art assets | Kenney 1-bit Pack | ✅ live | `colored_packed.png` 49×22, 16×16 px, CC0 |
-| ECS | Koota (pmndrs) | ⏸ deferred | Plain TS interfaces used instead |
+| ECS | Koota (pmndrs) | ⏸ deferred | Plain TS interfaces used instead; revisit at ~20+ dwarves |
 | Worker RPC | Comlink (Google) | ⏸ deferred | Simulation runs on main thread for now |
 | Backend | Cloudflare Workers + Hono | ⏸ deferred | Vite proxy used in dev; CF Worker is Phase 3 |
 | KV store | Cloudflare KV | ⏸ deferred | No rate-limiting yet |
 | Map editor | Tiled Map Editor | ✗ replaced | Procedural world gen + in-game tile picker (T key) |
 | Grid plugin | RexRainbow Board | ✗ not needed | rot.js A* is sufficient |
+
+### Koota ECS — when and how to revisit
+
+**Trigger:** ~20+ simultaneous dwarves, or a measurable tick budget on entity iteration / React re-renders.
+ECS cache-coherency and archetype-query benefits don't appear at 5–10 entities; the simulation bottleneck
+at current scale is rot.js A* pathfinding, not entity iteration.
+
+**If migrating, do dwarves first — never migrate tiles.**
+The `grid[y][x]` 2D array gives O(1) spatial lookup that ECS entity queries cannot match; replacing it
+would be a regression. Dwarves are the right candidate because:
+- Component split is clear: `Position`, `Vitals`, `Inventory`, `LLMState`, `AgentMemory`, `SocialGraph`, `SpatialMemory` (~7 components)
+- Koota's `useQuery` hooks would eliminate the current every-tick full-snapshot re-render in `ColonyGoalPanel` / `SelectedDwarfPanel`
+
+**Hard problems to resolve before starting:**
+1. `tickAgent` takes a mutable `Dwarf` reference and mutates it in place (~200 lines of BT) — must become `world.set(entity, Component, value)` throughout.
+2. LLM async callbacks close over the `Dwarf` object reference. With Koota they'd close over an entity ID and need `world.isAlive(entity)` checks before mutating (dwarf may have died while the LLM call was in-flight).
+3. `Map<string, Phaser.Sprite>` keyed by `dwarf.id` string → `Map<Entity, Phaser.Sprite>`; Koota recycles entity IDs by default, so sprite cleanup must be airtight.
+4. `Dwarf` is trivially JSON-serializable today; Koota entities are not — write a serialization round-trip test before touching WorldScene if save/load is planned.
+
+**Suggested phases:** (A) Dwarves only, grid stays plain 2D array → (B) Goblins → (C) Tiles only if growback/overlay iteration becomes measurable at very high entity counts.
 
 ---
 

@@ -12,15 +12,44 @@ function rand(min: number, max: number) {
 const SITE_RECORD_THRESHOLD = 3;
 /** Max remembered sites per type per dwarf. */
 const MAX_KNOWN_SITES = 5;
+/**
+ * Manhattan radius within which two tiles are treated as the same patch.
+ * Prevents a cluster of 10 adjacent mushrooms from burning all 5 memory
+ * slots on individual tiles from the same group.
+ */
+const PATCH_MERGE_RADIUS = 4;
 
 /**
  * Upsert a resource site into a dwarf's memory list.
- * Updates value/tick if already known; otherwise adds it, evicting the
- * weakest (lowest-value) entry when the cap is reached.
+ * 1. Exact tile already known → refresh value + tick in place.
+ * 2. Within PATCH_MERGE_RADIUS of an existing entry → same patch; upgrade
+ *    the representative to the richer tile or just refresh its tick.
+ * 3. New distinct patch → append, evicting the weakest entry when full.
+ *
+ * Only forageable/minable tiles should be passed in — callers are
+ * responsible for filtering by FORAGEABLE_TILES or materialValue > 0
+ * before calling, so non-harvestable tiles (Forest, Stone, etc.) are
+ * never stored.
  */
 function recordSite(sites: ResourceSite[], x: number, y: number, value: number, tick: number): void {
+  // 1. Exact tile already known — refresh
   const idx = sites.findIndex(s => s.x === x && s.y === y);
   if (idx >= 0) { sites[idx] = { x, y, value, tick }; return; }
+
+  // 2. Close enough to an existing patch — merge rather than add a new slot
+  const nearIdx = sites.findIndex(
+    s => Math.abs(s.x - x) + Math.abs(s.y - y) <= PATCH_MERGE_RADIUS,
+  );
+  if (nearIdx >= 0) {
+    if (value > sites[nearIdx].value) {
+      sites[nearIdx] = { x, y, value, tick };  // upgrade to richer tile
+    } else {
+      sites[nearIdx] = { ...sites[nearIdx], tick };  // just refresh freshness
+    }
+    return;
+  }
+
+  // 3. New distinct patch
   if (sites.length < MAX_KNOWN_SITES) { sites.push({ x, y, value, tick }); return; }
   // Evict lowest-value entry so we keep the richest patches
   const weakIdx = sites.reduce((min, s, i) => s.value < sites[min].value ? i : min, 0);
@@ -481,8 +510,12 @@ export function tickAgent(
   //   LLM intent forage → 15
   // Miners skip food foraging when not yet hungry — they prefer to mine.
   // Below hunger 50 they fall straight through to ore-related BT steps.
-  const skipFoodForage = dwarf.role === 'miner' && dwarf.hunger < 50
-    && dwarf.llmIntent !== 'forage';
+  // Dwarves with a full inventory also skip — step 4.2 handles depot routing,
+  // and step 5 wander (with its 25% home-drift) handles the depot-full case.
+  // This prevents the fill-up → rush-to-food → fill-up loop.
+  const inventoryFull  = dwarf.inventory.food >= MAX_INVENTORY_FOOD;
+  const skipFoodForage = inventoryFull
+    || (dwarf.role === 'miner' && dwarf.hunger < 50 && dwarf.llmIntent !== 'forage');
   const radius = dwarf.llmIntent === 'forage' ? 15
     : dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15)
     : dwarf.vision;
@@ -512,13 +545,25 @@ export function tickAgent(
       if (rival) {
         // Losing a resource contest breeds mild resentment
         dwarf.relations[rival.id] = Math.max(0, (dwarf.relations[rival.id] ?? 50) - 5);
+        // Step away to break the standoff rather than blocking indefinitely
+        const escapeDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
+        const escapeOpen = escapeDirs
+          .map(d => ({ x: dwarf.x + d.dx, y: dwarf.y + d.dy }))
+          .filter(p => isWalkable(grid, p.x, p.y));
+        if (escapeOpen.length > 0) {
+          const step = escapeOpen[Math.floor(Math.random() * escapeOpen.length)];
+          dwarf.x = step.x;
+          dwarf.y = step.y;
+        }
         dwarf.task = `yielding to ${rival.name}`;
         return;
       }
     }
 
+    // inventoryFull → skipFoodForage → foodTarget=null, so we only reach this
+    // point when there IS headroom.  Re-compute here for the harvest cap.
     const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
-    if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1 && headroom > 0) {
+    if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
       // Deplete tile aggressively, but yield less to inventory — encourages exploration
       const depletionRate   = dwarf.role === 'forager' ? 6 : 5;
       const harvestYield    = dwarf.role === 'forager' ? 2 : 1;
@@ -529,8 +574,6 @@ export function tickAgent(
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
       dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
-    } else if (headroom <= 0) {
-      dwarf.task = 'inventory full';
     } else {
       const label = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
       dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
@@ -569,18 +612,48 @@ export function tickAgent(
 
   // ── 4.3c. Remembered food site ────────────────────────────────────────────
   // When no food is visible, path toward the best-remembered food patch rather
-  // than immediately wandering.  On arrival, forget the site if depleted; the
-  // next tick's scan will harvest it if it has regrown.
-  // Sated miners skip this so they head to ore instead of detour to food patches.
+  // than immediately wandering.  On arrival:
+  //   • If the representative tile is still harvestable → refresh memory.
+  //   • If depleted or tile type changed → scan PATCH_MERGE_RADIUS for any
+  //     surviving forageable tile and redirect the patch record to it.
+  //   • If the whole patch is gone → evict the entry.
+  // This means memory tracks the richest *surviving* tile in a patch, not
+  // a single tile that may have been eaten out from under the dwarf.
+  // Sated miners skip this so they head to ore instead of detouring to food.
   if (!skipFoodForage && dwarf.knownFoodSites.length > 0) {
     const best = dwarf.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
     if (dwarf.x === best.x && dwarf.y === best.y) {
-      // We arrived — update or evict the memory entry
-      const tv = grid[dwarf.y][dwarf.x].foodValue;
-      if (tv < 1) {
-        dwarf.knownFoodSites = dwarf.knownFoodSites.filter(s => !(s.x === best.x && s.y === best.y));
+      // Arrived — check if representative tile is still harvestable
+      const tileHere  = grid[dwarf.y][dwarf.x];
+      const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
+      if (!stillGood) {
+        // Scan patch radius for any surviving forageable tile
+        let better: ResourceSite | null = null;
+        for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
+          for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
+            const nx = best.x + dx;
+            const ny = best.y + dy;
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            const t = grid[ny][nx];
+            if (!FORAGEABLE_TILES.has(t.type) || t.foodValue < 1) continue;
+            if (!better || t.foodValue > better.value) {
+              better = { x: nx, y: ny, value: t.foodValue, tick: currentTick };
+            }
+          }
+        }
+        if (better) {
+          // Redirect the patch record to the richest surviving tile nearby
+          dwarf.knownFoodSites = dwarf.knownFoodSites.map(
+            s => (s.x === best.x && s.y === best.y) ? better! : s,
+          );
+        } else {
+          // Patch exhausted — evict
+          dwarf.knownFoodSites = dwarf.knownFoodSites.filter(
+            s => !(s.x === best.x && s.y === best.y),
+          );
+        }
       } else {
-        recordSite(dwarf.knownFoodSites, best.x, best.y, tv, currentTick);
+        recordSite(dwarf.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
       }
       // Fall through — step 4 will harvest on the next tick if the tile has food
     } else {
@@ -674,13 +747,36 @@ export function tickAgent(
 
   // ── 4.45. Remembered ore vein (miners) ───────────────────────────────────
   // When no ore is in vision, path toward the best-remembered ore site before
-  // resorting to wander.  Forget depleted sites on arrival.
+  // resorting to wander.  On arrival: refresh if still rich, scan the patch
+  // radius for a surviving neighbour tile if depleted, evict if whole vein gone.
   if (dwarf.role === 'miner' && dwarf.knownOreSites.length > 0) {
     const best = dwarf.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
     if (dwarf.x === best.x && dwarf.y === best.y) {
       const mv = grid[dwarf.y][dwarf.x].materialValue;
       if (mv < 1) {
-        dwarf.knownOreSites = dwarf.knownOreSites.filter(s => !(s.x === best.x && s.y === best.y));
+        // Scan patch radius for any surviving ore tile before evicting
+        let better: ResourceSite | null = null;
+        for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
+          for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
+            const nx = best.x + dx;
+            const ny = best.y + dy;
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            const t = grid[ny][nx];
+            if (t.materialValue < 1) continue;
+            if (!better || t.materialValue > better.value) {
+              better = { x: nx, y: ny, value: t.materialValue, tick: currentTick };
+            }
+          }
+        }
+        if (better) {
+          dwarf.knownOreSites = dwarf.knownOreSites.map(
+            s => (s.x === best.x && s.y === best.y) ? better! : s,
+          );
+        } else {
+          dwarf.knownOreSites = dwarf.knownOreSites.filter(
+            s => !(s.x === best.x && s.y === best.y),
+          );
+        }
       } else {
         recordSite(dwarf.knownOreSites, best.x, best.y, mv, currentTick);
       }
