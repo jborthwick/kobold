@@ -384,12 +384,17 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('wheel',
       (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
-        const worldPx  = GRID_SIZE * TILE_SIZE;
         // Minimum zoom: 0.6 = world renders at ~614px, roughly filling the canvas
         // left of the event log without too much dead space around the map edges
         const minZoom  = 0.6;
         const oldZoom  = cam.zoom;
-        const newZoom  = Phaser.Math.Clamp(oldZoom * (deltaY > 0 ? 0.9 : 1.1), minZoom, 5);
+
+        // Clamp deltaY to ±100 so a single trackpad flick doesn't jump the full range.
+        // Then use a small logarithmic step (3% per 100px of delta) so the zoom feels
+        // proportional rather than jumping 10% per tick.
+        const clampedDelta = Phaser.Math.Clamp(deltaY, -100, 100);
+        const factor = 1 - clampedDelta * 0.0003;   // e.g. deltaY=100 → factor=0.97 (−3%)
+        const newZoom  = Phaser.Math.Clamp(oldZoom * factor, minZoom, 5);
         if (newZoom === oldZoom) return;
 
         // Phaser 3 uses a viewport-centred transform — scrollX is NOT the world position
@@ -639,7 +644,7 @@ export class WorldScene extends Phaser.Scene {
     const lastFoodStockpile = this.foodStockpiles[this.foodStockpiles.length - 1];
     if (lastFoodStockpile.food >= lastFoodStockpile.maxFood) {
       const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
-      const pos = this.findNearestOpenTile(this.foodStockpiles, allOccupied);
+      const pos = this.findNextStockpileSlot(this.foodStockpiles, allOccupied);
       if (pos) {
         const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
         this.foodStockpiles.push(nd);
@@ -651,7 +656,7 @@ export class WorldScene extends Phaser.Scene {
     const lastOreStockpile = this.oreStockpiles[this.oreStockpiles.length - 1];
     if (lastOreStockpile.ore >= lastOreStockpile.maxOre) {
       const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
-      const pos = this.findNearestOpenTile(this.oreStockpiles, allOccupied);
+      const pos = this.findNextStockpileSlot(this.oreStockpiles, allOccupied);
       if (pos) {
         const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
         this.oreStockpiles.push(ns);
@@ -814,6 +819,42 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     return null;
+  }
+
+  /**
+   * Returns the preferred slot for the next stockpile unit in a growing column.
+   *
+   * Places the new unit directly 3 tiles south of the southernmost existing unit
+   * (same X column as the first anchor) so the room grows as a tidy column and
+   * the miner adds a fresh room section rather than encircling an existing blob.
+   *
+   *   [U₁] y=10
+   *   [U₂] y=13  ← preferred: southmost.y + 3
+   *   [U₃] y=16  ← and so on
+   *
+   * Falls back to BFS-nearest-open if the preferred tile is occupied, a wall,
+   * water, or out of bounds.
+   */
+  private findNextStockpileSlot(
+    existing: Array<{ x: number; y: number }>,
+    allOccupied: Array<{ x: number; y: number }>,
+  ): { x: number; y: number } | null {
+    const anchor    = existing[0];
+    const southmost = existing.reduce((prev, cur) => cur.y > prev.y ? cur : prev, existing[0]);
+    const preferred = { x: anchor.x, y: southmost.y + 3 };
+
+    const occupiedSet = new Set(allOccupied.map(p => `${p.x},${p.y}`));
+    const inBounds    = preferred.x >= 0 && preferred.x < GRID_SIZE
+                     && preferred.y >= 0 && preferred.y < GRID_SIZE;
+    if (inBounds
+        && !occupiedSet.has(`${preferred.x},${preferred.y}`)
+        && this.grid[preferred.y][preferred.x].type !== TileType.Water
+        && this.grid[preferred.y][preferred.x].type !== TileType.Wall) {
+      return preferred;
+    }
+
+    // Fallback: BFS nearest open tile
+    return this.findNearestOpenTile(existing, allOccupied);
   }
 
   /** Create Phaser graphics + sprite objects for a newly added food stockpile. */
