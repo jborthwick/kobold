@@ -700,6 +700,8 @@ export function tickAgent(
       const hadFood         = here.foodValue;
       const depleted        = Math.min(hadFood, depletionRate);
       here.foodValue        = Math.max(0, hadFood - depleted);
+      // Fully depleted tile reverts to bare dirt — forces dwarves to seek new patches
+      if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
       const amount          = Math.min(harvestYield, depleted, headroom);
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
@@ -948,6 +950,8 @@ export function tickAgent(
         const hadMat       = here.materialValue;
         const mined        = Math.min(hadMat, 2);
         here.materialValue = Math.max(0, hadMat - mined);
+        // Exhausted ore vein reverts to bare stone — miners must find new veins
+        if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
         dwarf.inventory.materials = Math.min(
           dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
         );

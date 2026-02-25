@@ -6,7 +6,7 @@ import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type LogEntry } from '../../shared/types';
-import { llmSystem, detectCrisis, callSuccessionLLM } from '../../ai/crisis';
+import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
@@ -47,9 +47,6 @@ export class WorldScene extends Phaser.Scene {
   private dwarfGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
   // Off-screen arrow indicator for selected dwarf
   private offScreenGfx!: Phaser.GameObjects.Graphics;
-  // Per-dwarf last-known crisis type for change detection
-  private dwarfCrisisState = new Map<string, string | null>();
-
   // Goblin raid state
   private goblins: Goblin[] = [];
   private goblinSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -470,33 +467,6 @@ export class WorldScene extends Phaser.Scene {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
 
-      // Log crisis state transitions (onset and resolution) — LLM-independent
-      if (d.alive) {
-        const crisis = detectCrisis(d, this.dwarves, this.grid, this.goblins);
-        const curr   = crisis?.type ?? null;
-        const prev   = this.dwarfCrisisState.get(d.id) ?? null;
-        if (curr !== prev) {
-          this.dwarfCrisisState.set(d.id, curr);
-          if (curr) {
-            bus.emit('logEntry', {
-              tick:      this.tick,
-              dwarfId:   d.id,
-              dwarfName: d.name,
-              message:   `crisis: ${curr}`,
-              level:     'warn',
-            });
-          } else if (prev) {
-            bus.emit('logEntry', {
-              tick:      this.tick,
-              dwarfId:   d.id,
-              dwarfName: d.name,
-              message:   `crisis resolved (${prev})`,
-              level:     'info',
-            });
-          }
-        }
-      }
-
       // Fire async LLM crisis check — never blocks the game loop
       llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick, this.goblins,
         (dwarf, decision, situation) => {
@@ -560,6 +530,16 @@ export class WorldScene extends Phaser.Scene {
               level:     'error',
             });
             this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
+          } else {
+            // Survived — log the hit and add a memory so the LLM knows they were in combat
+            d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by goblin, ${d.health.toFixed(0)} hp remaining` });
+            bus.emit('logEntry', {
+              tick:      this.tick,
+              dwarfId:   d.id,
+              dwarfName: d.name,
+              message:   `⚔ hit by goblin! (${d.health.toFixed(0)} hp)`,
+              level:     'warn',
+            });
           }
         }
       }
@@ -587,7 +567,16 @@ export class WorldScene extends Phaser.Scene {
         // Add kill memory to the dwarves that scored the kill
         for (const { dwarfId } of gr.kills) {
           const killer = this.dwarves.find(dw => dw.id === dwarfId && dw.alive);
-          if (killer) killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
+          if (killer) {
+            killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
+            bus.emit('logEntry', {
+              tick:      this.tick,
+              dwarfId:   killer.id,
+              dwarfName: killer.name,
+              message:   '⚔ slew a goblin!',
+              level:     'warn',
+            });
+          }
         }
       }
     }

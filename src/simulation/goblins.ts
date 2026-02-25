@@ -157,10 +157,6 @@ export function tickGoblins(
       if (g.health <= 0) {
         result.goblinDeaths.push(g.id);
         result.kills.push({ dwarfId: target.id });
-        result.logs.push({
-          message: `${target.name} slew a goblin!`,
-          level:   'warn',
-        });
       }
     } else if (dist > WANDER_RANGE) {
       // ── Wander — random step when no dwarf is close ──────────────────

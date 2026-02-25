@@ -32,8 +32,8 @@ TODO:
 [x] Use a configurable sprite for Food depots and ore stockpiles
 [x] bug: console doesn't clear on page refresh / game restart
 [x] bug: it takes too long for a fighter to catch and slay a goblin, they get stuck in really long chases. maybe add a stagger state to enemies after the get hit for a few ticks to allow the fighter to catchup?
-[ ] Allow resource tiles (mushrooms, ore, etc) to be depleted and removed (turned back into dirt)
-[ ] Allow new mushroom patches to appear on map every so often
+[x] Allow resource tiles (mushrooms, ore, etc) to be depleted and removed (turned back into dirt)
+[x] Allow new mushroom patches to appear on map every so often
 [x] Rename depots to stockpiles for all resources types to simplify language
 [ ] new feature: add a new 'lumberjack' dwarf class that harvests trees and adds them to a new stockpile type (wood)
 [x] update dwarf panel to keep a history of every response and integrate responses and memories into a single list along by tick time
@@ -43,10 +43,10 @@ TODO:
 [x] Dwarves (and enemies) can still get stuck in walls as they're being built
 [ ] Allow camera panning past the edges of the map (since the conosle/HUD covers a good portion of the scren)
 [ ] bug: i think goblins are no long staggering when hit, fighters are chasing them forever again
-[ ] Add when goblins are slain to the console
-[ ] Add new memories to the console
-[ ] Remove crisis start/end from console for now as its spamming
-[ ] Make console history persist through the whole session (may require pagination)
+[x] Add when goblins are slain to the console
+[x] Add any new dwarf memories to the console
+[x] Remove crisis start/end from console for now as its spamming
+[x] Make console history persist through the whole session (so you can scroll back through it)
 [ ] Relationship status of the deceased should be told to successors (just like death cause)
 
 
@@ -54,5 +54,7 @@ Dwarf fort upgrades:
 [x] add more space between the food and ore storages
 [x] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
 [x] dwarves should be able to expand their fort as needed
-[ ] Investigate fort design. after the first few rooms the builder starts just encircling the already created rooms instead of expanding the fort with more rooms. 
+[ ] Investigate fort design. after the first few rooms the builder starts just encircling the already created rooms instead of expanding the fort with more rooms.
+[ ] Let builders add doors as part of the wall building
+[ ] Add a goal of enclosing the whole fort eventually, so there's only a few doors to get in and out
 

@@ -97,6 +97,38 @@ function applyBounty(grid: Tile[][]): string | null {
   return `Bountiful harvest at (${centre.x},${centre.y}) — food yields boosted in a 5-tile radius`;
 }
 
+function applyMushroomSpread(grid: Tile[][]): string | null {
+  // Candidate tiles: Dirt or Grass with no mushroom already within 4 tiles
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const candidates: GridCoord[] = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const t = grid[y][x];
+      if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+      const nearMushroom = coordsInRadius(grid, x, y, 4)
+        .some(({ x: nx, y: ny }) => grid[ny][nx].type === TileType.Mushroom);
+      if (!nearMushroom) candidates.push({ x, y });
+    }
+  }
+  const centre = randomItem(candidates);
+  if (!centre) return null;
+
+  const radius  = 2 + Math.floor(Math.random() * 2); // 2–3 tiles
+  const affected = coordsInRadius(grid, centre.x, centre.y, radius);
+  let count = 0;
+  for (const { x, y } of affected) {
+    const t = grid[y][x];
+    if ((t.type === TileType.Dirt || t.type === TileType.Grass) && Math.random() < 0.55 && count < 7) {
+      const fMax = 3 + Math.floor(Math.random() * 3); // 3–5
+      grid[y][x] = { type: TileType.Mushroom, foodValue: fMax, maxFood: fMax, materialValue: 0, maxMaterial: 0, growbackRate: 0.02 };
+      count++;
+    }
+  }
+  if (count === 0) return null;
+  return `Mushrooms sprouted near (${centre.x},${centre.y}) — ${count} new patches`;
+}
+
 function applyOreDiscovery(grid: Tile[][]): string | null {
   // Pick from walkable (non-water) non-ore tiles as spawn centre
   const candidates: GridCoord[] = [];
@@ -141,12 +173,14 @@ export function tickWorldEvents(grid: Tile[][], tick: number): WorldEventResult 
   const roll = Math.random();
   let msg: string | null = null;
 
-  if (roll < 0.35) {
+  if (roll < 0.25) {
     msg = applyBlight(grid);
-  } else if (roll < 0.7) {
+  } else if (roll < 0.5) {
     msg = applyBounty(grid);
-  } else {
+  } else if (roll < 0.75) {
     msg = applyOreDiscovery(grid);
+  } else {
+    msg = applyMushroomSpread(grid);
   }
 
   if (!msg) return { fired: false, message: '' };
