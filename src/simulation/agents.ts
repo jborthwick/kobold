@@ -387,12 +387,27 @@ function fortWallSlots(
   const anchorD = foodStockpiles[0];
   const anchorS = oreStockpiles[0];
 
-  // ── Food stockpile room perimeter — bounding box across all food stockpile positions ────
-  // Rooms grow in any direction as new storage units are placed.
-  const dMinX = Math.min(...foodStockpiles.map(d => d.x)) - MARGIN;
-  const dMaxX = Math.max(...foodStockpiles.map(d => d.x)) + MARGIN;
-  const dMinY = Math.min(...foodStockpiles.map(d => d.y)) - MARGIN;
-  const dMaxY = Math.max(...foodStockpiles.map(d => d.y)) + MARGIN;
+  // ── Pre-plan rooms for a 3-col × 3-row grid (9 units each) ────────────────
+  // Rooms grow AWAY from each other so the corridor-side inner walls never move.
+  // This means the room is fully walled from the start and no interior dividers
+  // form as subsequent stockpile units fill the room one by one.
+  const COL_STEP  = 3;
+  const ROW_STEP  = 3;
+  const ROOM_COLS = 3;   // 3 columns per room
+  const ROOM_ROWS = 3;   // pre-build for 3 rows (9 units); grows naturally beyond that
+
+  const foodLeft = anchorD.x < anchorS.x;  // typical: food room is to the left
+  const dExpDir  = foodLeft ? -1 : 1;       // food expands away from ore (leftward)
+  const sExpDir  = foodLeft ?  1 : -1;       // ore expands away from food (rightward)
+
+  // Food room — corridor-side wall (dMaxX) stays fixed; outer wall grows left
+  const dMinX = Math.min(anchorD.x, anchorD.x + dExpDir * (ROOM_COLS - 1) * COL_STEP) - MARGIN;
+  const dMaxX = Math.max(anchorD.x, anchorD.x + dExpDir * (ROOM_COLS - 1) * COL_STEP) + MARGIN;
+  const dMinY = anchorD.y - MARGIN;
+  const dMaxY = Math.max(
+    anchorD.y + (ROOM_ROWS - 1) * ROW_STEP + MARGIN,
+    Math.max(...foodStockpiles.map(d => d.y)) + MARGIN,
+  );
   for (let y = dMinY; y <= dMaxY; y++) {
     for (let x = dMinX; x <= dMaxX; x++) {
       if (x !== dMinX && x !== dMaxX && y !== dMinY && y !== dMaxY) continue;
@@ -402,11 +417,14 @@ function fortWallSlots(
     }
   }
 
-  // ── Ore stockpile room perimeter — bounding box across all ore stockpile positions
-  const sMinX = Math.min(...oreStockpiles.map(s => s.x)) - MARGIN;
-  const sMaxX = Math.max(...oreStockpiles.map(s => s.x)) + MARGIN;
-  const sMinY = Math.min(...oreStockpiles.map(s => s.y)) - MARGIN;
-  const sMaxY = Math.max(...oreStockpiles.map(s => s.y)) + MARGIN;
+  // Ore room — corridor-side wall (sMinX) stays fixed; outer wall grows right
+  const sMinX = Math.min(anchorS.x, anchorS.x + sExpDir * (ROOM_COLS - 1) * COL_STEP) - MARGIN;
+  const sMaxX = Math.max(anchorS.x, anchorS.x + sExpDir * (ROOM_COLS - 1) * COL_STEP) + MARGIN;
+  const sMinY = anchorS.y - MARGIN;
+  const sMaxY = Math.max(
+    anchorS.y + (ROOM_ROWS - 1) * ROW_STEP + MARGIN,
+    Math.max(...oreStockpiles.map(s => s.y)) + MARGIN,
+  );
   for (let y = sMinY; y <= sMaxY; y++) {
     for (let x = sMinX; x <= sMaxX; x++) {
       if (x !== sMinX && x !== sMaxX && y !== sMinY && y !== sMaxY) continue;
@@ -417,6 +435,7 @@ function fortWallSlots(
   }
 
   // ── Top corridor bar — H cross-piece at the shared top edge ──────────
+  // barXmin/barXmax use the corridor-side walls which never move (anchorD/S.x ± MARGIN)
   const topY    = Math.min(dMinY, sMinY);
   const barXmin = dMaxX + 1;
   const barXmax = sMinX - 1;

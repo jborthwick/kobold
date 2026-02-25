@@ -661,7 +661,7 @@ export class WorldScene extends Phaser.Scene {
     const lastFoodStockpile = this.foodStockpiles[this.foodStockpiles.length - 1];
     if (lastFoodStockpile.food >= lastFoodStockpile.maxFood) {
       const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
-      const pos = this.findNextStockpileSlot(this.foodStockpiles, allOccupied);
+      const pos = this.findNextStockpileSlot(this.foodStockpiles, allOccupied, this.oreStockpiles);
       if (pos) {
         const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
         this.foodStockpiles.push(nd);
@@ -673,7 +673,7 @@ export class WorldScene extends Phaser.Scene {
     const lastOreStockpile = this.oreStockpiles[this.oreStockpiles.length - 1];
     if (lastOreStockpile.ore >= lastOreStockpile.maxOre) {
       const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
-      const pos = this.findNextStockpileSlot(this.oreStockpiles, allOccupied);
+      const pos = this.findNextStockpileSlot(this.oreStockpiles, allOccupied, this.foodStockpiles);
       if (pos) {
         const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
         this.oreStockpiles.push(ns);
@@ -846,38 +846,64 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Returns the preferred slot for the next stockpile unit in a growing column.
+   * Returns the next slot in a 3-column × N-row grid for the growing stockpile room.
    *
-   * Places the new unit directly 3 tiles south of the southernmost existing unit
-   * (same X column as the first anchor) so the room grows as a tidy column and
-   * the miner adds a fresh room section rather than encircling an existing blob.
+   * Fills all 3 columns within a row before starting the next row — so the walls
+   * (built in fortWallSlots for the full 3×3 target size) never need to be rebuilt
+   * and no interior dividers form as the room fills up.
    *
-   *   [U₁] y=10
-   *   [U₂] y=13  ← preferred: southmost.y + 3
-   *   [U₃] y=16  ← and so on
+   * Rooms expand AWAY from each other to keep the corridor gap intact:
+   *   food room  → expands left  (cols: anchor, anchor-3, anchor-6)
+   *   ore room   → expands right (cols: anchor, anchor+3, anchor+6)
    *
-   * Falls back to BFS-nearest-open if the preferred tile is occupied, a wall,
-   * water, or out of bounds.
+   *   [U₁][U₂][U₃]  ← row 0 fills left-to-right first
+   *   [U₄][U₅][U₆]  ← row 1 starts only after row 0 is full
+   *   [U₇][U₈][U₉]  ← row 2, etc.
+   *
+   * @param otherGroup  The other room's stockpiles — used to determine which
+   *                    direction is safe to expand (away from that room).
    */
   private findNextStockpileSlot(
-    existing: Array<{ x: number; y: number }>,
-    allOccupied: Array<{ x: number; y: number }>,
+    existing:     Array<{ x: number; y: number }>,
+    allOccupied:  Array<{ x: number; y: number }>,
+    otherGroup?:  Array<{ x: number; y: number }>,
   ): { x: number; y: number } | null {
-    const anchor    = existing[0];
-    const southmost = existing.reduce((prev, cur) => cur.y > prev.y ? cur : prev, existing[0]);
-    const preferred = { x: anchor.x, y: southmost.y + 3 };
-
+    const anchor      = existing[0];
     const occupiedSet = new Set(allOccupied.map(p => `${p.x},${p.y}`));
-    const inBounds    = preferred.x >= 0 && preferred.x < GRID_SIZE
-                     && preferred.y >= 0 && preferred.y < GRID_SIZE;
-    if (inBounds
-        && !occupiedSet.has(`${preferred.x},${preferred.y}`)
-        && this.grid[preferred.y][preferred.x].type !== TileType.Water
-        && this.grid[preferred.y][preferred.x].type !== TileType.Wall) {
-      return preferred;
+
+    // Expand away from the other room so the corridor-side wall never moves
+    const expandDir = (!otherGroup || otherGroup.length === 0)
+      ? -1  // default: expand left
+      : (otherGroup[0].x > anchor.x ? -1 : 1);
+
+    // 3-column offsets: center first, then safe direction
+    const colOffsets = [0, expandDir * 3, expandDir * 6];
+
+    const isValid = (x: number, y: number): boolean =>
+      x >= 0 && x < GRID_SIZE
+      && y >= 0 && y < GRID_SIZE
+      && !occupiedSet.has(`${x},${y}`)
+      && this.grid[y][x].type !== TileType.Water
+      && this.grid[y][x].type !== TileType.Wall;
+
+    // Distinct rows currently in use, sorted top→bottom
+    const rows = [...new Set(existing.map(p => p.y))].sort((a, b) => a - b);
+
+    // Fill all 3 columns in each existing row before starting a new row
+    for (const row of rows) {
+      for (const off of colOffsets) {
+        const x = anchor.x + off;
+        if (isValid(x, row)) return { x, y: row };
+      }
     }
 
-    // Fallback: BFS nearest open tile
+    // All existing rows are full — open a new row 3 tiles south
+    const nextRow = (rows[rows.length - 1] ?? anchor.y) + 3;
+    for (const off of colOffsets) {
+      const x = anchor.x + off;
+      if (isValid(x, nextRow)) return { x, y: nextRow };
+    }
+
     return this.findNearestOpenTile(existing, allOccupied);
   }
 
