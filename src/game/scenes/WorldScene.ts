@@ -306,6 +306,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     for (const d of this.dwarves) {
+      const wasAlive = d.alive;
       tickAgent(d, this.grid, this.tick, this.dwarves, (message, level) => {
         bus.emit('logEntry', {
           tick:      this.tick,
@@ -315,10 +316,13 @@ export class WorldScene extends Phaser.Scene {
           level,
         });
       });
+      if (wasAlive && !d.alive) {
+        this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
+      }
 
       // Log crisis state transitions (onset and resolution) — LLM-independent
       if (d.alive) {
-        const crisis = detectCrisis(d, this.dwarves, this.grid);
+        const crisis = detectCrisis(d, this.dwarves, this.grid, this.goblins);
         const curr   = crisis?.type ?? null;
         const prev   = this.dwarfCrisisState.get(d.id) ?? null;
         if (curr !== prev) {
@@ -441,6 +445,37 @@ export class WorldScene extends Phaser.Scene {
         message:   ev.message,
         level:     'warn',
       });
+    }
+
+    // ── Succession — spawn queued replacements ──────────────────────────────
+    for (let i = this.pendingSuccessions.length - 1; i >= 0; i--) {
+      const s = this.pendingSuccessions[i];
+      if (this.tick < s.spawnAtTick) continue;
+      this.pendingSuccessions.splice(i, 1);
+
+      const dead = this.dwarves.find(d => d.id === s.deadDwarfId);
+      if (!dead) continue;
+
+      const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.dwarves, this.tick);
+      this.dwarves.push(successor);
+
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   successor.id,
+        dwarfName: successor.name,
+        message:   `arrives to take ${dead.name}'s place. [${successor.role.toUpperCase()}]`,
+        level:     'info',
+      });
+
+      // LLM arrival thought — detached, never blocks the game loop
+      if (llmSystem.enabled) {
+        callSuccessionLLM(dead, successor).then(text => {
+          successor.llmReasoning = text
+            ?? `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+        });
+      } else {
+        successor.llmReasoning = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+      }
     }
 
     this.terrainDirty = true;

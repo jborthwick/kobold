@@ -143,15 +143,15 @@ function placeOreCluster(grid: Tile[][], cx: number, cy: number, radius: number)
  * Skip Water, Forest, Ore, Stone.
  */
 function placeMushroomCluster(grid: Tile[][], cx: number, cy: number) {
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
       const x = cx + dx;
       const y = cy + dy;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
       const t = grid[y][x];
       if (t.type === TileType.Water  || t.type === TileType.Forest ||
           t.type === TileType.Ore    || t.type === TileType.Stone)  continue;
-      if (tileNoise(x + 23, y + 41) > 0.75) continue;
+      if (tileNoise(x + 23, y + 41) > 0.6) continue;
 
       const fMax = lerp(WORLD_CONFIG.mushroomFoodMin, WORLD_CONFIG.mushroomFoodMax, tileNoise(x + 3, y + 13));
       grid[y][x] = {
@@ -316,7 +316,7 @@ export function generateWorld(): WorldGenResult {
   }
 
   // ── Pass 6: Mushroom clusters ────────────────────────────────────────────────
-  const numMushrooms = 5 + Math.floor(Math.random() * 4);
+  const numMushrooms = 8 + Math.floor(Math.random() * 5);
   for (let i = 0; i < numMushrooms; i++) {
     placeMushroomCluster(
       grid,

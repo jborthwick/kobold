@@ -1,4 +1,5 @@
 TODO:
-[ ] make dead dwarves selectable to see info panel
-[ ] dwarves should not try to share food with dead dwarves
-[ ] 
+[ ] More things should add memories: sharing food, being attacked by goblins, slaying goblins, etc
+[ ] Extend memory longer than 5 entries
+[ ] have a few goblins spawn at the beginning and wander, instead of just later as a raid
+

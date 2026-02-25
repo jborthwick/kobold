@@ -1,5 +1,5 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
@@ -55,9 +55,77 @@ export function spawnDwarves(
       llmIntent:       null,
       llmIntentExpiry: 0,
       memory:          [],
+      relations:       {},   // populated lazily as dwarves interact
     });
   }
   return dwarves;
+}
+
+// ── Succession ─────────────────────────────────────────────────────────────
+
+/** Ticks before a successor arrives after a death (~43 s at 7 ticks/s). */
+export const SUCCESSION_DELAY = 300;
+
+/**
+ * Spawn a new dwarf that inherits fragments of the predecessor's memory and
+ * (muted) relationships.  Called by WorldScene when a pendingSuccession matures.
+ */
+export function spawnSuccessor(
+  dead:       Dwarf,
+  grid:       Tile[][],
+  spawnZone:  { x: number; y: number; w: number; h: number },
+  allDwarves: Dwarf[],
+  tick:       number,
+): Dwarf {
+  // Pick a name not currently used by any alive dwarf; fall back to "<name> II"
+  const aliveNames = new Set(allDwarves.filter(d => d.alive).map(d => d.name));
+  const name = DWARF_NAMES.find(n => !aliveNames.has(n))
+            ?? `${DWARF_NAMES[rand(0, DWARF_NAMES.length - 1)]} II`;
+
+  const role  = ROLE_ORDER[Math.floor(Math.random() * ROLE_ORDER.length)];
+  const stats = ROLE_STATS[role];
+
+  let x: number, y: number;
+  do {
+    x = spawnZone.x + rand(0, spawnZone.w - 1);
+    y = spawnZone.y + rand(0, spawnZone.h - 1);
+  } while (!isWalkable(grid, x, y));
+
+  // Inherit last 2 memory entries, reframed as colony lore
+  const inheritedMemory: MemoryEntry[] = dead.memory.slice(-2).map(m => ({
+    tick,
+    crisis:  'inheritance',
+    action:  `${dead.name} once: "${m.action}"`,
+    outcome: m.outcome,
+  }));
+
+  // Inherit relations muted 40% toward neutral (50)
+  const relations: Record<string, number> = {};
+  for (const [id2, score] of Object.entries(dead.relations)) {
+    relations[id2] = Math.round(50 + (score - 50) * 0.4);
+  }
+
+  return {
+    id:            `dwarf-${Date.now()}`,
+    name,
+    x, y,
+    health:        100,
+    maxHealth:     100,
+    hunger:        rand(10, 30),
+    metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
+    vision:        rand(stats.visionMin, stats.visionMax),
+    inventory:     { food: rand(5, 12), materials: 0 },
+    morale:        60 + rand(0, 20),
+    alive:         true,
+    task:          'just arrived',
+    role,
+    commandTarget:   null,
+    llmReasoning:    null,
+    llmIntent:       null,
+    llmIntentExpiry: 0,
+    memory:          inheritedMemory,
+    relations,
+  };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -239,6 +307,9 @@ export function tickAgent(
       const gift = 3;
       dwarf.inventory.food -= gift;
       needy.inventory.food  = Math.min(MAX_INVENTORY_FOOD, needy.inventory.food + gift);
+      // Sharing builds positive ties: giver +10, recipient +15
+      dwarf.relations[needy.id] = Math.min(100, (dwarf.relations[needy.id] ?? 50) + 10);
+      needy.relations[dwarf.id] = Math.min(100, (needy.relations[dwarf.id] ?? 50) + 15);
       dwarf.task = `sharing food → ${needy.name}`;
       onLog?.(`shared ${gift} food with ${needy.name} (hunger ${needy.hunger.toFixed(0)})`, 'info');
       return;

@@ -326,3 +326,38 @@ export class LLMDecisionSystem {
 
 // Singleton — shared across the WorldScene
 export const llmSystem = new LLMDecisionSystem();
+
+// ── Succession LLM ────────────────────────────────────────────────────────────
+
+/**
+ * One-shot plain-text call — generates the successor's first thought on arrival.
+ * Returns a short sentence (≤120 chars) or null on failure / timeout.
+ * Never throws; always safe to fire-and-forget.
+ */
+export async function callSuccessionLLM(dead: Dwarf, successor: Dwarf): Promise<string | null> {
+  const memSnippet = dead.memory.length > 0
+    ? ` Their last known acts: ${dead.memory.slice(-2).map(m => `"${m.action}"`).join(', ')}.`
+    : '';
+  const prompt =
+    `You are ${successor.name}, a new ${successor.role} dwarf arriving at a small colony. ` +
+    `${dead.name} (${dead.role}) recently died here.${memSnippet} ` +
+    `In one sentence (max 15 words), what is your first thought on arriving? ` +
+    `Reply with just the sentence, no quotes.`;
+  try {
+    const res = await fetch('/api/llm-proxy', {
+      method:  'POST',
+      headers: { 'content-type': 'application/json' },
+      signal:  AbortSignal.timeout(5_000),
+      body: JSON.stringify({
+        model:      MODEL,
+        max_tokens: 60,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { content?: { text?: string }[] };
+    return data?.content?.[0]?.text?.trim().slice(0, 120) ?? null;
+  } catch {
+    return null;
+  }
+}
