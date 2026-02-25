@@ -96,6 +96,7 @@ export class WorldScene extends Phaser.Scene {
     this.grid      = grid;
     this.spawnZone = spawnZone;
     this.dwarves   = spawnDwarves(this.grid, spawnZone);
+    // homeTile is set after depot placement below — updated in a second pass
     resetGoblins();
     this.goblins = spawnInitialGoblins(this.grid, 3);
 
@@ -117,6 +118,8 @@ export class WorldScene extends Phaser.Scene {
     };
     this.goblinKillCount = 0;
     this.colonyGoal = WorldScene.makeGoal('stockpile_food', 0);
+    // Stamp every dwarf with their home fort location now that the depot is placed
+    for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -456,7 +459,6 @@ export class WorldScene extends Phaser.Scene {
         if (d && d.alive) {
           d.health = Math.max(0, d.health - damage);
           d.morale = Math.max(0, d.morale - 5);
-          d.memory.push({ tick: this.tick, crisis: 'goblin_attack', action: `attacked by a goblin (−${damage} hp, health ${d.health.toFixed(0)})` });
           if (d.health <= 0) {
             d.alive = false;
             d.task  = 'dead';
@@ -522,6 +524,7 @@ export class WorldScene extends Phaser.Scene {
       if (!dead) continue;
 
       const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.dwarves, this.tick);
+      successor.homeTile = { x: this.depot.x, y: this.depot.y };
       this.dwarves.push(successor);
 
       bus.emit('logEntry', {

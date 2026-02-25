@@ -10,9 +10,16 @@ TODO:
 
 [x] dwarf hud should not have less opacity for dead dwarves
 [x] use a tombstone sprite for dead dwarves instead of a flipped red dwarf
-[x] ore is gathered to another community stockpile
+[x] ore is gathered to another community stockpiole
 [x] dwarves can use ore to create walls
-[x] dwarves try to build fortified spaces around the depot and stockpile (enclosed areas surrounded by walls)
+[x] dwaves try to build fortified spaces around the depot and stockpile (enclosed areas surrounded by walls)
+[x] memories: each hit by a goblin should not create a memory
+[x] memories: building fort walls should not create a memory
+[x] console: make it less noisey (remove each health update, each wall placement, etc)
+[x] have minors favor ore over food when they have enough food
+[x] have dwarves favor finding food over their base goals (i.e. fighter chasing goblins) at certain hunger/health thresholds
+
+
 
 Questions (don't start without clarifying):
-[ ] question: should a leader dwarf only call the llm?
+[ ] question: should only a leader dwarf be able to call the llm?

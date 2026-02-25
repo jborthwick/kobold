@@ -1,10 +1,30 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type Depot, type OreStockpile, type Goblin } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type Depot, type OreStockpile, type Goblin, type ResourceSite } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
 function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// ── Resource site memory ───────────────────────────────────────────────────
+/** Min tile value worth storing in a dwarf's site memory. */
+const SITE_RECORD_THRESHOLD = 3;
+/** Max remembered sites per type per dwarf. */
+const MAX_KNOWN_SITES = 5;
+
+/**
+ * Upsert a resource site into a dwarf's memory list.
+ * Updates value/tick if already known; otherwise adds it, evicting the
+ * weakest (lowest-value) entry when the cap is reached.
+ */
+function recordSite(sites: ResourceSite[], x: number, y: number, value: number, tick: number): void {
+  const idx = sites.findIndex(s => s.x === x && s.y === y);
+  if (idx >= 0) { sites[idx] = { x, y, value, tick }; return; }
+  if (sites.length < MAX_KNOWN_SITES) { sites.push({ x, y, value, tick }); return; }
+  // Evict lowest-value entry so we keep the richest patches
+  const weakIdx = sites.reduce((min, s, i) => s.value < sites[min].value ? i : min, 0);
+  if (value > sites[weakIdx].value) sites[weakIdx] = { x, y, value, tick };
 }
 
 // Tile types dwarves can harvest food from.
@@ -45,10 +65,10 @@ const DWARF_GOALS: string[] = [
   'see the colony reach 10 dwarves',
 ];
 const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
-  forager: { visionMin: 4, visionMax: 6, maxHealth: 100 },
-  miner:   { visionMin: 2, visionMax: 4, maxHealth: 100 },
-  scout:   { visionMin: 5, visionMax: 8, maxHealth: 100 },
-  fighter: { visionMin: 3, visionMax: 5, maxHealth: 130 },
+  forager: { visionMin: 5, visionMax: 8,  maxHealth: 100 },
+  miner:   { visionMin: 4, visionMax: 6,  maxHealth: 100 },
+  scout:   { visionMin: 7, visionMax: 12, maxHealth: 100 },
+  fighter: { visionMin: 4, visionMax: 7,  maxHealth: 130 },
 };
 
 export function spawnDwarves(
@@ -89,6 +109,11 @@ export function spawnDwarves(
       trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
       bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
       goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
+      wanderTarget:    null,
+      wanderExpiry:    0,
+      knownFoodSites:  [],
+      knownOreSites:   [],
+      homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after depot is placed
     });
   }
   return dwarves;
@@ -161,6 +186,11 @@ export function spawnSuccessor(
     trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
     bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
     goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
+    wanderTarget:    null,
+    wanderExpiry:    0,
+    knownFoodSites:  [],
+    knownOreSites:   [],
+    homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after depot is placed
   };
 }
 
@@ -246,7 +276,7 @@ export function pathNextStep(
 //       'forage' and 'avoid' are handled in steps 4/5
 //   3.  Follow player commandTarget  ← player commands override harvesting
 //   4.  Forage + harvest (Sugarscape rule): move toward richest food tile;
-//       radius extends to 10 when llmIntent === 'forage'
+//       radius extends to 15 when llmIntent === 'forage'
 //   5.  Wander (or avoid rival when llmIntent === 'avoid')
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
@@ -297,7 +327,6 @@ export function tickAgent(
     dwarf.inventory.food -= bite;
     dwarf.hunger      = Math.max(0, dwarf.hunger - bite * 20);
     dwarf.task        = 'eating';
-    onLog?.(`ate ${bite} food (hunger ${oldHunger.toFixed(0)} → ${dwarf.hunger.toFixed(0)})`, 'info');
     return;
   }
 
@@ -369,7 +398,6 @@ export function tickAgent(
         depot.food           += stored;
         dwarf.inventory.food -= stored;
         dwarf.task            = `deposited ${stored.toFixed(0)} → depot`;
-        onLog?.(`deposited ${stored.toFixed(0)} food at depot`, 'info');
         return;
       }
     }
@@ -379,7 +407,6 @@ export function tickAgent(
       depot.food          -= amount;
       dwarf.inventory.food = Math.min(MAX_INVENTORY_FOOD, dwarf.inventory.food + amount);
       dwarf.task           = `withdrew ${amount.toFixed(0)} from depot`;
-      onLog?.(`withdrew ${amount.toFixed(0)} food from depot`, 'info');
       return;
     }
   }
@@ -394,7 +421,6 @@ export function tickAgent(
       stockpile.ore             += stored;
       dwarf.inventory.materials -= stored;
       dwarf.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
-      onLog?.(`deposited ${stored.toFixed(0)} ore at stockpile`, 'info');
       return;
     }
   }
@@ -421,8 +447,9 @@ export function tickAgent(
   // Fires only when there are goblins nearby and the LLM hasn't ordered rest.
   // Fighter moves toward the closest goblin; when on the same tile the goblin
   // will deal/receive combat damage in tickGoblins (18 hp per hit vs 8 for others).
+  // Fighters abandon the hunt when too hungry — survival trumps combat.
   if (dwarf.role === 'fighter' && goblins && goblins.length > 0
-      && dwarf.llmIntent !== 'rest') {
+      && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
     const HUNT_RADIUS = dwarf.vision * 2;
     const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
@@ -447,11 +474,26 @@ export function tickAgent(
 
   // ── 4. Forage + harvest (Sugarscape rule) ─────────────────────────────
   // Each tick: move toward the richest food tile, then harvest wherever
-  // you land.  When the LLM sets intent 'forage', scan a 10-tile global
-  // radius instead of normal vision so the dwarf seeks the best food
-  // even if it's outside their sight range.
-  const radius     = dwarf.llmIntent === 'forage' ? 10 : dwarf.vision;
-  const foodTarget = bestFoodTile(dwarf, grid, radius);
+  // you land.  Scan radius scales with desperation so dwarves search wider
+  // even without LLM enabled.  LLM 'forage' intent pins it to the max (15).
+  //   normal            → dwarf.vision
+  //   hungry (> 65)     → min(vision × 2, 15)   ← deterministic, no LLM needed
+  //   LLM intent forage → 15
+  // Miners skip food foraging when not yet hungry — they prefer to mine.
+  // Below hunger 50 they fall straight through to ore-related BT steps.
+  const skipFoodForage = dwarf.role === 'miner' && dwarf.hunger < 50
+    && dwarf.llmIntent !== 'forage';
+  const radius = dwarf.llmIntent === 'forage' ? 15
+    : dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15)
+    : dwarf.vision;
+  const foodTarget = skipFoodForage ? null : bestFoodTile(dwarf, grid, radius);
+  // Sight-memory: record any rich food tile the dwarf can currently see
+  if (foodTarget) {
+    const tv = grid[foodTarget.y][foodTarget.x].foodValue;
+    if (tv >= SITE_RECORD_THRESHOLD) {
+      recordSite(dwarf.knownFoodSites, foodTarget.x, foodTarget.y, tv, currentTick);
+    }
+  }
   if (foodTarget) {
     if (dwarf.x !== foodTarget.x || dwarf.y !== foodTarget.y) {
       const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, foodTarget, grid);
@@ -496,6 +538,22 @@ export function tickAgent(
     return;
   }
 
+  // ── 4.2. Return home to deposit surplus food ──────────────────────────
+  // When carrying a good load and not in a hunger crisis, head to the fort
+  // depot to deposit — closes the natural foraging loop without needing LLM.
+  // Threshold matches step 2.8's deposit condition (≥ 10 food) so dwarves
+  // only make the trip when they'll actually deposit on arrival.
+  // Also requires depot capacity so they don't loop when the depot is full.
+  if (depot && dwarf.inventory.food >= 10 && dwarf.hunger < 55
+      && depot.food < depot.maxFood
+      && !(dwarf.x === depot.x && dwarf.y === depot.y)) {
+    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: depot.x, y: depot.y }, grid);
+    dwarf.x    = next.x;
+    dwarf.y    = next.y;
+    dwarf.task = `→ home (deposit)`;
+    return;
+  }
+
   // ── 4.3. Depot run — pathfind to depot when hungry and empty-handed ────
   // Fires only when: not on the depot, hunger > 65, carrying no food,
   // and the depot has something to give.  Lower priority than foraging so
@@ -507,6 +565,31 @@ export function tickAgent(
     dwarf.y    = next.y;
     dwarf.task = `→ depot (${depot.food.toFixed(0)} food)`;
     return;
+  }
+
+  // ── 4.3c. Remembered food site ────────────────────────────────────────────
+  // When no food is visible, path toward the best-remembered food patch rather
+  // than immediately wandering.  On arrival, forget the site if depleted; the
+  // next tick's scan will harvest it if it has regrown.
+  // Sated miners skip this so they head to ore instead of detour to food patches.
+  if (!skipFoodForage && dwarf.knownFoodSites.length > 0) {
+    const best = dwarf.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (dwarf.x === best.x && dwarf.y === best.y) {
+      // We arrived — update or evict the memory entry
+      const tv = grid[dwarf.y][dwarf.x].foodValue;
+      if (tv < 1) {
+        dwarf.knownFoodSites = dwarf.knownFoodSites.filter(s => !(s.x === best.x && s.y === best.y));
+      } else {
+        recordSite(dwarf.knownFoodSites, best.x, best.y, tv, currentTick);
+      }
+      // Fall through — step 4 will harvest on the next tick if the tile has food
+    } else {
+      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
+      dwarf.x    = next.x;
+      dwarf.y    = next.y;
+      dwarf.task = `→ remembered patch`;
+      return;
+    }
   }
 
   // ── 4.3b. Miner fort-building — place walls enclosing depot + stockpile ──
@@ -538,7 +621,11 @@ export function tickAgent(
         if (t.type === TileType.Wall || t.type === TileType.Water
             || t.type === TileType.Ore) continue; // don't wall over ore or water
         const dist = Math.abs(bx - dwarf.x) + Math.abs(by - dwarf.y);
-        if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = { x: bx, y: by }; }
+        // Never build on a tile occupied by another alive dwarf
+        const occupied = dwarves?.some(
+          d => d.alive && d.id !== dwarf.id && d.x === bx && d.y === by,
+        ) ?? false;
+        if (dist > 0 && !occupied && dist < nearestDist) { nearestDist = dist; nearestSlot = { x: bx, y: by }; }
       }
     }
 
@@ -562,8 +649,6 @@ export function tickAgent(
         };
         stockpile.ore -= 3;
         dwarf.task = 'built fort wall!';
-        dwarf.memory.push({ tick: currentTick, crisis: 'construction', action: 'built a fort wall section' });
-        onLog?.('built a fort wall section!', 'info');
       } else {
         dwarf.x = next.x;
         dwarf.y = next.y;
@@ -587,9 +672,38 @@ export function tickAgent(
     return;
   }
 
+  // ── 4.45. Remembered ore vein (miners) ───────────────────────────────────
+  // When no ore is in vision, path toward the best-remembered ore site before
+  // resorting to wander.  Forget depleted sites on arrival.
+  if (dwarf.role === 'miner' && dwarf.knownOreSites.length > 0) {
+    const best = dwarf.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (dwarf.x === best.x && dwarf.y === best.y) {
+      const mv = grid[dwarf.y][dwarf.x].materialValue;
+      if (mv < 1) {
+        dwarf.knownOreSites = dwarf.knownOreSites.filter(s => !(s.x === best.x && s.y === best.y));
+      } else {
+        recordSite(dwarf.knownOreSites, best.x, best.y, mv, currentTick);
+      }
+      // Fall through — step 4.5 will mine on the next tick if value remains
+    } else {
+      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
+      dwarf.x    = next.x;
+      dwarf.y    = next.y;
+      dwarf.task = `→ remembered ore`;
+      return;
+    }
+  }
+
   // ── 4.5. Miners target ore/material tiles when no food found ──────────
   if (dwarf.role === 'miner') {
     const oreTarget = bestMaterialTile(dwarf, grid, dwarf.vision);
+    // Sight-memory: record any rich ore tile currently visible
+    if (oreTarget) {
+      const mv = grid[oreTarget.y][oreTarget.x].materialValue;
+      if (mv >= SITE_RECORD_THRESHOLD) {
+        recordSite(dwarf.knownOreSites, oreTarget.x, oreTarget.y, mv, currentTick);
+      }
+    }
     if (oreTarget) {
       if (dwarf.x !== oreTarget.x || dwarf.y !== oreTarget.y) {
         const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, oreTarget, grid);
@@ -613,42 +727,95 @@ export function tickAgent(
   }
 
   // ── 5. Wander / Avoid ─────────────────────────────────────────────────
-  // When LLM intent is 'avoid' and we know where other dwarves are,
-  // pick the open tile that maximises Manhattan distance from the nearest
-  // rival within 5 tiles.  Falls back to random wander if no rival nearby.
-  const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
-  const open = dirs
-    .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
-    .filter(p => isWalkable(grid, p.x, p.y));
+  const WANDER_HOLD_TICKS = 25;
+  const WANDER_MIN_DIST   = 10;
+  const WANDER_MAX_DIST   = 20;
 
-  if (open.length > 0) {
-    let next: { x: number; y: number };
+  // 5a. Avoid — maximise distance from nearest rival within 5 tiles
+  if (dwarf.llmIntent === 'avoid' && dwarves) {
+    const rival = dwarves
+      .filter(r => r.alive && r.id !== dwarf.id)
+      .map(r    => ({ r, dist: Math.abs(r.x - dwarf.x) + Math.abs(r.y - dwarf.y) }))
+      .filter(e  => e.dist <= 5)
+      .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
 
-    if (dwarf.llmIntent === 'avoid' && dwarves) {
-      const rival = dwarves
-        .filter(r => r.alive && r.id !== dwarf.id)
-        .map(r    => ({ r, dist: Math.abs(r.x - dwarf.x) + Math.abs(r.y - dwarf.y) }))
-        .filter(e  => e.dist <= 5)
-        .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
-
-      if (rival) {
-        next       = open.reduce((best, p) =>
+    if (rival) {
+      const avoidDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+      const avoidOpen = avoidDirs
+        .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
+        .filter(p => isWalkable(grid, p.x, p.y));
+      if (avoidOpen.length > 0) {
+        const next = avoidOpen.reduce((best, p) =>
           (Math.abs(p.x - rival.x) + Math.abs(p.y - rival.y)) >
           (Math.abs(best.x - rival.x) + Math.abs(best.y - rival.y)) ? p : best,
         );
+        dwarf.x    = next.x;
+        dwarf.y    = next.y;
         dwarf.task = `avoiding ${rival.name}`;
-      } else {
-        next       = open[Math.floor(Math.random() * open.length)];
-        dwarf.task = 'wandering';
       }
-    } else {
-      next       = open[Math.floor(Math.random() * open.length)];
-      dwarf.task = 'wandering';
+      return;
+    }
+  }
+
+  // 5b. Persistent wander — pathfind toward a far-away waypoint held for
+  // WANDER_HOLD_TICKS ticks.  Repick when expired or on arrival.
+  // ~25% of the time, drift toward home so dwarves naturally loop back to
+  // the fort rather than permanently wandering the map's far edge.
+
+  // Invalidate wander target if a wall (or other obstacle) was placed on it
+  // since we last set it — prevents dwarves from pathfinding into walls.
+  if (dwarf.wanderTarget && !isWalkable(grid, dwarf.wanderTarget.x, dwarf.wanderTarget.y)) {
+    dwarf.wanderTarget = null;
+  }
+
+  if (!dwarf.wanderTarget || currentTick >= dwarf.wanderExpiry
+      || (dwarf.x === dwarf.wanderTarget.x && dwarf.y === dwarf.wanderTarget.y)) {
+    let picked = false;
+
+    // Home drift — pull toward home but aim ±10 tiles out so the target lands
+    // well outside the fort perimeter (MARGIN=2 → perimeter ≈ ±4 from depot).
+    if (Math.random() < 0.25 && (dwarf.homeTile.x !== 0 || dwarf.homeTile.y !== 0)) {
+      const hx = dwarf.homeTile.x + Math.round((Math.random() - 0.5) * 20);
+      const hy = dwarf.homeTile.y + Math.round((Math.random() - 0.5) * 20);
+      if (hx >= 0 && hx < GRID_SIZE && hy >= 0 && hy < GRID_SIZE && isWalkable(grid, hx, hy)) {
+        dwarf.wanderTarget = { x: hx, y: hy };
+        dwarf.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+        picked = true;
+      }
     }
 
-    dwarf.x = next.x;
-    dwarf.y = next.y;
-  } else {
-    dwarf.task = 'wandering';
+    if (!picked) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist  = WANDER_MIN_DIST + Math.random() * (WANDER_MAX_DIST - WANDER_MIN_DIST);
+      const wx    = Math.round(dwarf.x + Math.cos(angle) * dist);
+      const wy    = Math.round(dwarf.y + Math.sin(angle) * dist);
+      if (wx >= 0 && wx < GRID_SIZE && wy >= 0 && wy < GRID_SIZE && isWalkable(grid, wx, wy)) {
+        dwarf.wanderTarget = { x: wx, y: wy };
+        dwarf.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+        picked = true;
+        break;
+      }
+    }
+    }
+    if (!picked) {
+      // Heavily constrained (surrounded by walls/water) — fall back to random adjacent step
+      const fallDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+      const fallOpen = fallDirs
+        .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
+        .filter(p => isWalkable(grid, p.x, p.y));
+      if (fallOpen.length > 0) {
+        const fb = fallOpen[Math.floor(Math.random() * fallOpen.length)];
+        dwarf.x  = fb.x;
+        dwarf.y  = fb.y;
+      }
+      dwarf.task = 'wandering';
+      return;
+    }
   }
+
+  const wanderNext = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.wanderTarget, grid);
+  dwarf.x    = wanderNext.x;
+  dwarf.y    = wanderNext.y;
+  dwarf.task = 'exploring';
 }

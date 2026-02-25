@@ -136,10 +136,6 @@ export function tickGoblins(
       // ── Attack ──────────────────────────────────────────────────────
       result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
       g.health -= target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
-      result.logs.push({
-        message: `attacks ${target.name}! (-${GOBLIN_ATTACK_DAMAGE} hp)`,
-        level:   'error',
-      });
       if (g.health <= 0) {
         result.goblinDeaths.push(g.id);
         result.kills.push({ dwarfId: target.id });

@@ -157,10 +157,13 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[],
     ? `\nColony goal: ${colonyGoal.description} (${colonyGoal.progress.toFixed(0)}/${colonyGoal.target})`
     : '';
 
+  const homeDist = Math.round(Math.hypot(dwarf.x - dwarf.homeTile.x, dwarf.y - dwarf.homeTile.y));
+  const homeStr  = `Fort home at (${dwarf.homeTile.x},${dwarf.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
+
   return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
 Personality: ${dwarf.trait}. "${dwarf.bio}". Personal goal: ${dwarf.goal}.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
-Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
+Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}. ${homeStr}
 
 CRISIS: ${situation.description}
 Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}

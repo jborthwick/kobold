@@ -40,6 +40,14 @@ export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
 // Permanent personality trait assigned at spawn
 export type DwarfTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
 
+// A tile location a dwarf has seen or visited — used for resource routing
+export interface ResourceSite {
+  x:     number;
+  y:     number;
+  value: number;  // tile foodValue or materialValue when last seen
+  tick:  number;  // currentTick when last seen/updated
+}
+
 // PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
 export interface MemoryEntry {
   tick:     number;
@@ -70,6 +78,11 @@ export interface Dwarf {
   llmIntent:       LLMIntent | null; // active override intent (expires at llmIntentExpiry)
   llmIntentExpiry: number;           // tick after which intent is discarded
   memory:          MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
+  wanderTarget:    { x: number; y: number } | null;  // persistent explore waypoint
+  wanderExpiry:    number;           // tick at which to repick a new wander waypoint
+  knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
+  knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
+  homeTile:        { x: number; y: number };  // fort/depot center — the colony's home base
   role:            DwarfRole;
   relations:       Record<string, number>;  // keyed by dwarf.id; 0–100 (50 = neutral)
   trait:           DwarfTrait;  // permanent personality trait
