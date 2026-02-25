@@ -49,12 +49,16 @@ TODO:
 [x] Make console history persist through the whole session (so you can scroll back through it)
 [x] Relationship status of the deceased should be told to successors (just like death cause)
 [x] Update zoom to be smoother and/or less sensitive. right now just barely touching zoom throws us to the max or min levels
+[ ] Increase mushroom patch growth rate (separate normal patch growth from world event rolls, but keep an extra big growth as world event)
+[ ] bug: if the game is paused, switching selected dwarves does not update the dwarf info hud
+[ ] add number of goblins slain to each dwarves info panel
+
 
 Dwarf fort upgrades:
 [x] add more space between the food and ore storages
 [x] have dwarves build separate rooms around the food and ore storage. but they should be attached as parts of a multi-room fort
 [x] dwarves should be able to expand their fort as needed
 [x] Investigate fort design. after the first few rooms the builder starts just encircling the already created rooms instead of expanding the fort with more rooms.
-[ ] Let builders add doors as part of the wall building
-[ ] Add a goal of enclosing the whole fort eventually, so there's only a few doors to get in and out
+[x] Let builders add doors as part of the wall building
+[x] Add a goal of enclosing the whole fort eventually, so there's only a few doors to get in and out
 

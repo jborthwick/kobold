@@ -394,7 +394,7 @@ function fortWallSlots(
   for (let y = dMinY; y <= dMaxY; y++) {
     for (let x = dMinX; x <= dMaxX; x++) {
       if (x !== dMinX && x !== dMaxX && y !== dMinY && y !== dMaxY) continue;
-      if (y === dMaxY && Math.abs(x - anchorD.x) <= 1) continue;  // 3-wide south gate
+      if (y === dMaxY && x === anchorD.x) continue;               // 1-tile south door
       if (foodStockpiles.some(d => d.x === x && d.y === y)) continue;  // storage tile itself
       tryAdd(x, y);
     }
@@ -408,7 +408,7 @@ function fortWallSlots(
   for (let y = sMinY; y <= sMaxY; y++) {
     for (let x = sMinX; x <= sMaxX; x++) {
       if (x !== sMinX && x !== sMaxX && y !== sMinY && y !== sMaxY) continue;
-      if (y === sMaxY && Math.abs(x - anchorS.x) <= 1) continue;  // 3-wide south gate
+      if (y === sMaxY && x === anchorS.x) continue;               // 1-tile south door
       if (oreStockpiles.some(s => s.x === x && s.y === y)) continue; // storage tile itself
       tryAdd(x, y);
     }
@@ -422,6 +422,59 @@ function fortWallSlots(
     tryAdd(x, topY);
   }
 
+  return slots;
+}
+
+/**
+ * Returns unbuilt wall slots for the south corridor bar that closes the
+ * compound into a fully-enclosed fort.
+ *
+ * The open corridor between the food-room and ore-room is already bounded on
+ * three sides (north by the H-bar, left/right by the room side-walls).  This
+ * adds the matching south bar, completing a rectangular compound wall:
+ *
+ *   [food room] │ ■ ■ ■ _ ■ ■ ■ │ [ore room]
+ *                      ↑ centre door
+ *
+ * Called by the miner after all inner-room wall slots are exhausted.
+ */
+export function fortEnclosureSlots(
+  foodStockpiles: Array<{ x: number; y: number }>,
+  oreStockpiles:  Array<{ x: number; y: number }>,
+  grid:           Tile[][],
+  dwarves:        Dwarf[] | undefined,
+  selfId:         string,
+  goblins?:       Goblin[],
+): Array<{ x: number; y: number }> {
+  const MARGIN  = 2;
+  const dMaxX   = Math.max(...foodStockpiles.map(d => d.x)) + MARGIN;
+  const dMaxY   = Math.max(...foodStockpiles.map(d => d.y)) + MARGIN;
+  const sMinX   = Math.min(...oreStockpiles.map(s => s.x)) - MARGIN;
+  const sMaxY   = Math.max(...oreStockpiles.map(s => s.y)) + MARGIN;
+  const barXmin = dMaxX + 1;
+  const barXmax = sMinX - 1;
+
+  // No corridor gap between the two rooms — nothing to close
+  if (barXmin > barXmax) return [];
+
+  const southY = Math.max(dMaxY, sMaxY);
+  const doorX  = Math.floor((barXmin + barXmax) / 2);  // centre-corridor door
+
+  const blocked = (x: number, y: number): boolean => {
+    if (dwarves?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y)) return true;
+    if (goblins?.some(g => g.x === x && g.y === y)) return true;
+    return false;
+  };
+
+  const slots: Array<{ x: number; y: number }> = [];
+  for (let x = barXmin; x <= barXmax; x++) {
+    if (x === doorX) continue;                                        // leave centre door open
+    if (x < 0 || x >= GRID_SIZE || southY < 0 || southY >= GRID_SIZE) continue;
+    const t = grid[southY][x];
+    if (t.type === TileType.Wall || t.type === TileType.Water
+        || t.type === TileType.Ore) continue;
+    if (!blocked(x, southY)) slots.push({ x, y: southY });
+  }
   return slots;
 }
 
@@ -839,11 +892,15 @@ export function tickAgent(
   if (dwarf.role === 'miner' && foodStockpiles && foodStockpiles.length > 0
       && oreStockpiles && oreStockpiles.length > 0 && buildStockpile
       && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
-    const slots = fortWallSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
+    // Inner rooms first; once complete, switch to enclosing the compound
+    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
+    if (wallSlots.length === 0) {
+      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
+    }
 
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
-    for (const s of slots) {
+    for (const s of wallSlots) {
       const dist = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
       if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }

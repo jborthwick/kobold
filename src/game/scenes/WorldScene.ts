@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
-import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY } from '../../simulation/agents';
+import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
 import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
@@ -89,6 +89,8 @@ export class WorldScene extends Phaser.Scene {
         return { type, description: `Survive ${Math.round(500 * scale)} ticks together`, progress: 0, target: Math.round(500 * scale), generation };
       case 'defeat_goblins':
         return { type, description: `Defeat ${Math.round(3 * scale)} goblins`, progress: 0, target: Math.round(3 * scale), generation };
+      case 'enclose_fort':
+        return { type, description: 'Enclose the fort — seal the corridor with an outer wall', progress: 0, target: 1, generation };
     }
   }
 
@@ -755,6 +757,13 @@ export class WorldScene extends Phaser.Scene {
       case 'defeat_goblins':
         this.colonyGoal.progress = this.goblinKillCount;
         break;
+      case 'enclose_fort': {
+        const remaining = fortEnclosureSlots(
+          this.foodStockpiles, this.oreStockpiles, this.grid, this.dwarves, '', this.goblins,
+        );
+        this.colonyGoal.progress = remaining.length === 0 ? 1 : 0;
+        break;
+      }
     }
     if (this.colonyGoal.progress >= this.colonyGoal.target) {
       this.completeGoal(alive);
@@ -773,7 +782,7 @@ export class WorldScene extends Phaser.Scene {
       message:   `✓ Goal complete: ${this.colonyGoal.description}! Morale boost for all!`,
       level:     'info',
     });
-    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_goblins'];
+    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_goblins', 'enclose_fort'];
     const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
     // Reset relevant counters so the new goal tracks from zero
