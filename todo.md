@@ -41,13 +41,13 @@ TODO:
 [x] Make stockpiles clickable to see their information, like dwarves.
 [x] Make goblins (enemies in general) clickable to see their information, like dwarves
 [x] Dwarves (and enemies) can still get stuck in walls as they're being built
-[ ] Allow camera panning past the edges of the map (since the conosle/HUD covers a good portion of the scren)
-[ ] bug: i think goblins are no long staggering when hit, fighters are chasing them forever again
+[x] Allow camera panning past the edges of the map (since the conosle/HUD covers a good portion of the scren)
+[x] bug: i think goblins are no long staggering when hit, fighters are chasing them forever again
 [x] Add when goblins are slain to the console
 [x] Add any new dwarf memories to the console
 [x] Remove crisis start/end from console for now as its spamming
 [x] Make console history persist through the whole session (so you can scroll back through it)
-[ ] Relationship status of the deceased should be told to successors (just like death cause)
+[x] Relationship status of the deceased should be told to successors (just like death cause)
 
 
 Dwarf fort upgrades:

@@ -180,7 +180,9 @@ export class WorldScene extends Phaser.Scene {
 
     // ── Camera ──────────────────────────────────────────────────────────
     const worldPx = GRID_SIZE * TILE_SIZE;
-    this.cameras.main.setBounds(0, 0, worldPx, worldPx);
+    // Extend bounds so the player can pan far enough to bring map edges out from
+    // behind the HUD/sidebar (360 px right panel, 50 px top HUD, generous margins elsewhere).
+    this.cameras.main.setBounds(-200, -100, worldPx + 700, worldPx + 300);
     this.cameras.main.setZoom(1.2);
     this.cameras.main.centerOn(
       (this.spawnZone.x + this.spawnZone.w / 2) * TILE_SIZE,

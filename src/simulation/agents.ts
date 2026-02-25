@@ -209,6 +209,21 @@ export function spawnSuccessor(
     });
   }
 
+  // Append predecessor's strongest ally and rival as colony lore
+  const sortedRels = Object.entries(dead.relations).sort(([, a], [, b]) => b - a);
+  const topAlly  = sortedRels.find(([, s]) => s > 60);
+  const topRival = [...sortedRels].reverse().find(([, s]) => s < 40);
+  if (topAlly) {
+    const allyDwarf = allDwarves.find(d => d.id === topAlly[0]);
+    if (allyDwarf) inheritedMemory.push({ tick, crisis: 'inheritance',
+      action: `${dead.name}'s closest companion was ${allyDwarf.name}` });
+  }
+  if (topRival) {
+    const rivalDwarf = allDwarves.find(d => d.id === topRival[0]);
+    if (rivalDwarf) inheritedMemory.push({ tick, crisis: 'inheritance',
+      action: `${dead.name}'s greatest rival was ${rivalDwarf.name}` });
+  }
+
   // Inherit relations muted 40% toward neutral (50)
   const relations: Record<string, number> = {};
   for (const [id2, score] of Object.entries(dead.relations)) {
@@ -598,7 +613,7 @@ export function tickAgent(
   // will deal/receive combat damage in tickGoblins (18 hp per hit vs 8 for others).
   // Fighters abandon the hunt when too hungry — survival trumps combat.
   if (dwarf.role === 'fighter' && goblins && goblins.length > 0
-      && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
+      && dwarf.hunger < 80 && dwarf.llmIntent !== 'rest') {  // 80 not 65 — fighters commit to a fight
     const HUNT_RADIUS = dwarf.vision * 2;
     const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
