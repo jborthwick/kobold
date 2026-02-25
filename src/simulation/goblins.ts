@@ -143,6 +143,12 @@ export function tickGoblins(
       }, null);
       g.targetId = target?.id ?? null;
     }
+    // Proximity override: if a dwarf is standing on the same tile, fight them
+    // immediately — regardless of which dwarf the goblin was originally chasing.
+    // This is the key fix for fighters: a fighter can close on a goblin that is
+    // targeting a different dwarf and still trigger melee combat.
+    const onSameTile = alive.find(d => d.x === g.x && d.y === g.y);
+    if (onSameTile) { target = onSameTile; g.targetId = onSameTile.id; }
     if (!target) continue;
 
     const dist = Math.abs(target.x - g.x) + Math.abs(target.y - g.y);
