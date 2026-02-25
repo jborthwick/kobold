@@ -128,7 +128,7 @@ function roleLabel(dwarf: Dwarf): string {
   return 'Scout — you have wide vision and detect threats early.';
 }
 
-function buildPrompt(dwarf: Dwarf, situation: CrisisSituation): string {
+function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[]): string {
   // PIANO step 2 — inject short-term memory if present (with VERIFY outcomes)
   const memBlock = dwarf.memory.length > 0
     ? `\nRECENT DECISIONS:\n${dwarf.memory.map(m => {
@@ -137,13 +137,28 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation): string {
       }).join('\n')}`
     : '';
 
+  // Relationship context — mention top ally and top rival if they deviate from neutral (50)
+  const others = dwarves.filter(d => d.id !== dwarf.id && d.alive);
+  const ally   = others.length > 0
+    ? others.reduce((a, b) =>
+        (dwarf.relations[a.id] ?? 50) >= (dwarf.relations[b.id] ?? 50) ? a : b)
+    : null;
+  const rival  = others.length > 0
+    ? others.reduce((a, b) =>
+        (dwarf.relations[a.id] ?? 50) <= (dwarf.relations[b.id] ?? 50) ? a : b)
+    : null;
+  const relParts: string[] = [];
+  if (ally  && (dwarf.relations[ally.id]  ?? 50) > 55) relParts.push(`Trusted ally: ${ally.name} (bond ${(dwarf.relations[ally.id]  ?? 50).toFixed(0)}/100)`);
+  if (rival && (dwarf.relations[rival.id] ?? 50) < 45) relParts.push(`Rival: ${rival.name} (tension ${(100 - (dwarf.relations[rival.id] ?? 50)).toFixed(0)}/100)`);
+  const relBlock = relParts.length > 0 ? `\nRelationships: ${relParts.join('. ')}` : '';
+
   return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
 Role affects your priorities and decisions.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
 Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
 
 CRISIS: ${situation.description}
-Colony context: ${situation.colonyContext}${memBlock}
+Colony context: ${situation.colonyContext}${relBlock}${memBlock}
 
 Respond ONLY as valid JSON (no markdown, no extra text):
 {

@@ -2,6 +2,23 @@ import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
 import type { GameState, Dwarf, OverlayMode, DwarfRole, TileInfo } from '../shared/types';
 
+/** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
+function topRelation(
+  dwarf:   Dwarf,
+  all:     Dwarf[],
+  mode:    'ally' | 'rival',
+): { name: string; score: number } | null {
+  const others = all.filter(d => d.id !== dwarf.id);
+  if (others.length === 0) return null;
+  const sorted = others
+    .map(d => ({ name: d.name, score: dwarf.relations[d.id] ?? 50 }))
+    .sort((a, b) => mode === 'ally' ? b.score - a.score : a.score - b.score);
+  const top = sorted[0];
+  if (mode === 'ally'  && top.score <= 55) return null;
+  if (mode === 'rival' && top.score >= 45) return null;
+  return top;
+}
+
 export function HUD() {
   const [state,      setState]      = useState<GameState | null>(null);
   const [llmEnabled, setLlmEnabled] = useState(false);
@@ -19,31 +36,40 @@ export function HUD() {
 
   if (!state) return null;
 
-  const alive    = state.dwarves.filter(d => d.alive);
-  const selected = state.selectedDwarfId
-    ? state.dwarves.find(d => d.id === state.selectedDwarfId)
-    : null;
+  const alive = state.dwarves.filter(d => d.alive);
 
   return (
-    <>
-      <div style={styles.topBar}>
-        <Stat label="dwarves" value={`${alive.length}/${state.dwarves.length}`} />
-        <Stat label="food"    value={state.totalFood.toFixed(1)} />
-        <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
-        <Stat label="tick"    value={String(state.tick)} />
-        <PauseSpeed paused={state.paused} speed={state.speed} />
-        <OverlayIndicator mode={state.overlayMode} />
-        <button
-          onClick={toggleLLM}
-          style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
-        >
-          {llmEnabled ? '🤖 LLM' : '💤 LLM'}
-        </button>
-      </div>
-
-      {selected && <DwarfPanel dwarf={selected} />}
-    </>
+    <div style={styles.topBar}>
+      <Stat label="dwarves" value={`${alive.length}/${state.dwarves.length}`} />
+      <Stat label="food"    value={state.totalFood.toFixed(1)} />
+      <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
+      <Stat label="tick"    value={String(state.tick)} />
+      <PauseSpeed paused={state.paused} speed={state.speed} />
+      <OverlayIndicator mode={state.overlayMode} />
+      <button
+        onClick={toggleLLM}
+        style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
+      >
+        {llmEnabled ? '🤖 LLM' : '💤 LLM'}
+      </button>
+    </div>
   );
+}
+
+/** Standalone panel that sits at the bottom of the right sidebar. */
+export function SelectedDwarfPanel() {
+  const [state, setState] = useState<GameState | null>(null);
+
+  useEffect(() => {
+    bus.on('gameState', setState);
+    return () => bus.off('gameState', setState);
+  }, []);
+
+  if (!state?.selectedDwarfId) return null;
+  const selected = state.dwarves.find(d => d.id === state.selectedDwarfId);
+  if (!selected) return null;
+
+  return <DwarfPanel dwarf={selected} allDwarves={state.dwarves} />;
 }
 
 export function TileTooltip() {
@@ -136,7 +162,10 @@ function roleColor(role: DwarfRole): string {
   return role === 'forager' ? '#56d973' : role === 'miner' ? '#ff8800' : '#7ec8e3';
 }
 
-function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
+function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }) {
+  const ally  = topRelation(dwarf, allDwarves, 'ally');
+  const rival = topRelation(dwarf, allDwarves, 'rival');
+
   return (
     <div style={{ ...styles.panel, ...(!dwarf.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{dwarf.name}</div>
@@ -151,6 +180,12 @@ function DwarfPanel({ dwarf }: { dwarf: Dwarf }) {
       <div style={styles.panelRow}>vision: {dwarf.vision}</div>
       <div style={styles.panelRow}>metabolism: {dwarf.metabolism}/tick</div>
       <div style={styles.task}>{dwarf.task}</div>
+      {(ally || rival) && (
+        <div style={styles.relSection}>
+          {ally  && <div style={styles.relAlly}>♥ {ally.name} ({ally.score})</div>}
+          {rival && <div style={styles.relRival}>⚔ {rival.name} ({100 - rival.score})</div>}
+        </div>
+      )}
       {dwarf.llmReasoning && (
         <div style={styles.llmReasoning}>💭 "{dwarf.llmReasoning}"</div>
       )}
@@ -219,22 +254,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
   },
   panel: {
-    position:   'absolute',
-    bottom:     16,
-    right:      372,
     background: 'rgba(0,0,0,0.75)',
     padding:    '10px 14px',
-    borderRadius: 8,
     fontFamily: 'monospace',
     fontSize:   12,
     color:      '#ccc',
-    minWidth:   170,
-    maxHeight:  'calc(100vh - 80px)',
     overflowY:  'auto',
     scrollbarWidth: 'thin',
     scrollbarColor: '#444 transparent',
     userSelect: 'none',
     pointerEvents: 'auto',
+    flexShrink: 0,
+    maxHeight:  '50vh',
   } as React.CSSProperties,
   panelDead: {
     opacity:     0.7,
@@ -291,6 +322,19 @@ const styles: Record<string, React.CSSProperties> = {
   llmToggleOff: {
     background: 'rgba(120,120,120,0.2)',
     color:      '#777',
+  },
+  relSection: {
+    marginTop:  6,
+    paddingTop: 6,
+    borderTop:  '1px solid #333',
+    fontSize:   9,
+  },
+  relAlly: {
+    color:      '#56d973',
+    marginBottom: 2,
+  },
+  relRival: {
+    color:      '#e74c3c',
   },
   llmReasoning: {
     marginTop:  8,

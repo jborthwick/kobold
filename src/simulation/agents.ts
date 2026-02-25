@@ -286,6 +286,8 @@ export function tickAgent(
         d.hunger > dwarf.hunger,
       );
       if (rival) {
+        // Losing a resource contest breeds mild resentment
+        dwarf.relations[rival.id] = Math.max(0, (dwarf.relations[rival.id] ?? 50) - 5);
         dwarf.task = `yielding to ${rival.name}`;
         return;
       }
@@ -303,9 +305,6 @@ export function tickAgent(
       dwarf.inventory.food += amount;
       const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
       dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
-      if (here.foodValue === 0) {
-        onLog?.(`depleted ${here.type} patch at (${dwarf.x},${dwarf.y})`, 'info');
-      }
     } else if (headroom <= 0) {
       dwarf.task = 'inventory full';
     } else {
@@ -333,9 +332,6 @@ export function tickAgent(
           dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
         );
         dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
-        if (here.materialValue === 0 && hadMat >= 1) {
-          onLog?.(`depleted ore vein at (${dwarf.x},${dwarf.y})`, 'info');
-        }
       } else {
         dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
       }
