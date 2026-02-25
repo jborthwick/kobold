@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf, OverlayMode, DwarfRole, TileInfo } from '../shared/types';
+import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, Depot, OreStockpile } from '../shared/types';
 
 /** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
 function topRelation(
@@ -99,6 +99,63 @@ export function TileTooltip() {
   );
 }
 
+/** Colony-wide goal + communal depot + ore stockpile panel. */
+export function ColonyGoalPanel() {
+  const [goal,      setGoal]      = useState<ColonyGoal | null>(null);
+  const [depot,     setDepot]     = useState<Depot | null>(null);
+  const [stockpile, setStockpile] = useState<OreStockpile | null>(null);
+
+  useEffect(() => {
+    const onState = (s: GameState) => {
+      if (s.colonyGoal) setGoal({ ...s.colonyGoal });
+      if (s.depot)      setDepot({ ...s.depot });
+      if (s.stockpile)  setStockpile({ ...s.stockpile });
+    };
+    bus.on('gameState', onState);
+    return () => bus.off('gameState', onState);
+  }, []);
+
+  if (!goal || !depot || !stockpile) return null;
+
+  const pct         = Math.min(1, goal.progress / goal.target);
+  const depotPct    = Math.min(1, depot.food / depot.maxFood);
+  const stockpilePct = Math.min(1, stockpile.ore / stockpile.maxOre);
+
+  return (
+    <div style={styles.goalPanel}>
+      <div style={styles.goalTitle}>COLONY GOAL · gen {goal.generation + 1}</div>
+      <div style={styles.goalDesc}>{goal.description}</div>
+      <div style={styles.barTrack}>
+        <div style={{
+          ...styles.barFill,
+          width:      `${pct * 100}%`,
+          background: pct >= 1 ? '#56d973' : '#f0c040',
+        }} />
+      </div>
+      <div style={styles.goalProgress}>
+        {goal.progress.toFixed(0)} / {goal.target}
+        {pct >= 1 && <span style={{ color: '#56d973', marginLeft: 6 }}>✓ COMPLETE</span>}
+      </div>
+      {/* Food depot row */}
+      <div style={styles.goalDepot}>
+        <span style={{ color: '#f0c040' }}>🏠</span>
+        <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
+          <div style={{ ...styles.barFill, width: `${depotPct * 100}%`, background: '#f0c040' }} />
+        </div>
+        <span style={{ color: '#f0c040' }}>{depot.food.toFixed(0)}/{depot.maxFood}</span>
+      </div>
+      {/* Ore stockpile row */}
+      <div style={styles.goalDepot}>
+        <span style={{ color: '#ff8800' }}>⛏</span>
+        <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
+          <div style={{ ...styles.barFill, width: `${stockpilePct * 100}%`, background: '#ff8800' }} />
+        </div>
+        <span style={{ color: '#ff8800' }}>{stockpile.ore.toFixed(0)}/{stockpile.maxOre}</span>
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.stat}>
@@ -159,7 +216,24 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
 }
 
 function roleColor(role: DwarfRole): string {
-  return role === 'forager' ? '#56d973' : role === 'miner' ? '#ff8800' : '#7ec8e3';
+  return role === 'forager' ? '#56d973'
+       : role === 'miner'   ? '#ff8800'
+       : role === 'fighter' ? '#e74c3c'
+       : '#7ec8e3';  // scout
+}
+
+const TRAIT_COLORS: Record<DwarfTrait, string> = {
+  lazy:      '#888',
+  forgetful: '#9988cc',
+  helpful:   '#56d973',
+  mean:      '#e74c3c',
+  paranoid:  '#e67e22',
+  brave:     '#3498db',
+  greedy:    '#f0c040',
+  cheerful:  '#ff9fd8',
+};
+function traitColor(trait: DwarfTrait): string {
+  return TRAIT_COLORS[trait] ?? '#aaa';
 }
 
 function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }) {
@@ -170,9 +244,18 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
     <div style={{ ...styles.panel, ...(!dwarf.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{dwarf.name}</div>
       {dwarf.alive
-        ? <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 6 }}>[{dwarf.role.toUpperCase()}]</div>
-        : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 6 }}>[DECEASED]</div>
+        ? <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 4 }}>[{dwarf.role.toUpperCase()}]</div>
+        : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>[DECEASED]</div>
       }
+      <div style={{ fontSize: 9, color: '#a08060', fontStyle: 'italic', marginBottom: 4 }}>
+        {dwarf.bio}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+        <span style={{ color: traitColor(dwarf.trait), fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>
+          {dwarf.trait}
+        </span>
+        <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {dwarf.goal}</span>
+      </div>
       <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
@@ -268,7 +351,6 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight:  '50vh',
   } as React.CSSProperties,
   panelDead: {
-    opacity:     0.7,
     borderLeft:  '2px solid #e74c3c',
   },
   panelName: {
@@ -434,5 +516,40 @@ const styles: Record<string, React.CSSProperties> = {
   ctrlBtnPaused: {
     background: 'rgba(220,60,60,0.25)',
     color:      '#e74c3c',
+  },
+  goalPanel: {
+    background: 'rgba(0,0,0,0.75)',
+    padding:    '8px 12px',
+    fontFamily: 'monospace',
+    fontSize:   11,
+    color:      '#ccc',
+    userSelect: 'none',
+    pointerEvents: 'none',
+    flexShrink: 0,
+    borderBottom: '1px solid #333',
+  } as React.CSSProperties,
+  goalTitle: {
+    fontSize:      8,
+    color:         '#888',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase' as const,
+    marginBottom:  4,
+  },
+  goalDesc: {
+    color:        '#f0c040',
+    fontSize:     11,
+    marginBottom: 5,
+    fontWeight:   'bold',
+  },
+  goalProgress: {
+    fontSize:  9,
+    color:     '#999',
+    marginTop: 3,
+  },
+  goalDepot: {
+    display:    'flex',
+    alignItems: 'center',
+    marginTop:  6,
+    fontSize:   9,
   },
 };

@@ -33,6 +33,10 @@ cam.scrollX += (ptr.x - cam.x - cam.width / 2) * f;
 cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
 ```
 
+## Phaser 3 display-list render order
+
+`this.add.graphics()` and `this.add.text()` are inserted into the scene's display list at call-time. Objects created **before** `map.createBlankLayer()` render underneath the terrain and will be invisible. Always create overlay Graphics/Text objects **after** the tilemap layer.
+
 ---
 
 ## Stack decisions
@@ -101,7 +105,7 @@ If a request times out (5 s) or LLM is disabled, agents fall back silently to th
 ```typescript
 // src/shared/types.ts — plain interfaces, no ECS framework
 
-export type DwarfRole = 'forager' | 'miner' | 'scout';
+export type DwarfRole = 'forager' | 'miner' | 'scout' | 'fighter';
 export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
 
 export interface MemoryEntry {
@@ -134,36 +138,45 @@ export interface Dwarf {
 }
 ```
 
-**Role stats (assigned round-robin at spawn):**
-| Role | Vision | Behavior |
-|---|---|---|
-| forager | 4–6 | harvests 4 food/tile (others: 3); main food collector |
-| miner | 2–4 | targets ore tiles when no food nearby (step 4.5 BT) |
-| scout | 5–8 | wide contest radius (4 tiles); early threat detection |
+**Role stats (assigned round-robin at spawn: forager, miner, scout, forager, fighter):**
+| Role    | Vision | HP  | Behavior |
+|---------|--------|-----|----------|
+| forager | 4–6    | 100 | harvests 4 food/tile (others: 3); main food collector |
+| miner   | 2–4    | 100 | targets ore tiles when no food nearby (step 4.5 BT) |
+| scout   | 5–8    | 100 | wide contest radius (4 tiles); early threat detection |
+| fighter | 3–5    | 130 | hunts goblins within vision×2; deals 18 hp/hit (others: 8) |
+
+**`tickAgent` signature (7 params):** `tickAgent(dwarf, grid, currentTick, dwarves?, onLog?, depot?, goblins?)` — all params after `currentTick` are optional. Adding a new param requires updating the WorldScene call site.
 
 ---
 
 ## Behavior tree (`tickAgent`, priority cascade)
 
 ```
-1.  Starvation: hunger ≥ 100 AND inventory empty → health -= 2, morale -= 2
-2.  Eat: hunger > 70 AND inventory food > 0 → eat 3 units
-2.5 LLM intent:
-      eat   → force-eat below normal threshold (hunger > 30)
-      rest  → stay put this tick
-      forage/avoid → handled in steps 4/5
-2.7 Food sharing: food ≥ 8 AND nearby dwarf (≤2 tiles) hunger > 60 AND food < 3
-      → gift 3 food to hungriest neighbor; donor keeps ≥ 5
-3.  Player command: commandTarget set → pathfind toward it (A*)
-4.  Forage + harvest (Sugarscape rule):
-      scan vision radius (or 10 if llmIntent='forage') for richest food tile
-      move toward it, harvest on arrival
-      Contest yield: if hungrier dwarf on same tile → skip harvest this tick
-4.5 Miner ore targeting: (miners only, when no food in vision)
-      scan for richest material tile, mine 2 units/tick
-5.  Wander / avoid:
-      llmIntent='avoid' → maximize distance from nearest rival within 5 tiles
-      otherwise → random walkable step
+1.   Starvation: hunger ≥ 100 AND inventory empty → health -= 2, morale -= 2
+2.   Eat: hunger > 70 AND inventory food > 0 → eat 3 units
+2.5  LLM intent:
+       eat   → force-eat below normal threshold (hunger > 30)
+       rest  → stay put this tick
+       forage/avoid → handled in steps 4/5
+2.7  Food sharing: food ≥ 8 AND nearby dwarf (≤2 tiles) hunger > 60 AND food < 3
+       → gift 3 food to hungriest neighbor; donor keeps ≥ 5
+2.8  Depot deposit/withdraw: when standing on depot tile
+       food ≥ 10 → deposit (food − 6) to depot
+       hunger > 60 AND food < 2 AND depot.food > 0 → withdraw min(4, depot.food)
+3.   Player command: commandTarget set → pathfind toward it (A*)
+3.5  Fighter hunt: (fighters only) nearest goblin within vision×2 → pathfind toward it;
+       on contact tickGoblins handles combat (18 hp/hit vs 8 for other roles)
+4.   Forage + harvest (Sugarscape rule):
+       scan vision radius (or 10 if llmIntent='forage') for richest food tile
+       move toward it, harvest on arrival
+       Contest yield: if hungrier dwarf on same tile → skip harvest this tick
+4.3  Depot run: hunger > 65 AND food == 0 AND depot.food > 0 → pathfind to depot
+4.5  Miner ore targeting: (miners only, when no food in vision)
+       scan for richest material tile, mine 2 units/tick
+5.   Wander / avoid:
+       llmIntent='avoid' → maximize distance from nearest rival within 5 tiles
+       otherwise → random walkable step
 ```
 
 ---
@@ -348,6 +361,14 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 - **Dead-dwarf ghost sprites:** deceased dwarves persist as red, Y-flipped sprites
 - **`[` / `]` hotkeys:** cycle selected dwarf through all alive dwarves
 
+### Iteration 7 ✅ — Colony goal, depot, fighter role, succession
+- **Colony-wide shared goal** cycling through `stockpile_food → survive_ticks → defeat_goblins`; completion grants +15 morale, scales next target by `1 + generation × 0.5`
+- **Communal food depot** at spawn-zone center: dwarves auto-deposit surplus (food ≥ 10) and withdraw when starving; gold border + `D:N` label renders above the tile
+- **Fighter role**: 130 HP, hunts goblins within vision×2 (BT step 3.5), deals 18 hp/hit vs 8 for others — kills a 30 HP goblin in 2 hits
+- **Death & succession**: `spawnSuccessor()` queues a replacement ~300 ticks after each death with inherited memory fragments, muted relations, and an optional LLM arrival thought (`callSuccessionLLM()`)
+- **`ColonyGoalPanel`** in right sidebar: gold progress bar for current goal + depot food level
+- **Phaser render-order fix**: all overlay Graphics/Text must be created after `createBlankLayer()`
+
 ---
 
 ## Key constraints
@@ -365,11 +386,9 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 ## Upcoming / Phase 3
 
 **Gameplay depth**
+- [ ] Ore gathered to community stockpile; dwarves build fortress walls
 - [ ] Seasons: growback rate changes, winter food scarcity
-- [ ] Threats: goblin raids, cave-ins — new crisis trigger sources
 - [ ] Trade: merchant caravans, negotiation LLM calls
-- [ ] Relationships: dwarf-to-dwarf scores affecting crisis decisions
-- [ ] Death and succession: new dwarf arrives with colony memory fragment
 
 **Intelligence depth**
 - [ ] Long-term goal generation per dwarf (personal goals between crises)

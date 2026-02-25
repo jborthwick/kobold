@@ -16,6 +16,7 @@ import { pathNextStep } from './agents';
 
 const RAID_INTERVAL_MIN = 500;   // ticks between raids (~70 s at 7 tps)
 const RAID_INTERVAL_MAX = 900;
+const WANDER_RANGE      = 15;   // tiles — goblins wander when no dwarf is within range
 
 // Module-level state — reset when a new world is generated
 let nextRaidAt  = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
@@ -92,12 +93,15 @@ export interface GoblinTickResult {
   attacks:      Array<{ dwarfId: string; damage: number }>;
   /** Goblin IDs whose health reached 0 — WorldScene removes them. */
   goblinDeaths: string[];
+  /** Dwarf IDs that scored a kill this tick — WorldScene adds memory. */
+  kills:        Array<{ dwarfId: string }>;
   /** Log entries to emit. */
   logs: Array<{ message: string; level: 'info' | 'warn' | 'error' }>;
 }
 
-const GOBLIN_ATTACK_DAMAGE = 5;  // hp per hit to dwarf
-const DWARF_FIGHT_BACK     = 8;  // hp per hit to goblin (dwarves are tough)
+const GOBLIN_ATTACK_DAMAGE = 5;   // hp per hit to dwarf
+const DWARF_FIGHT_BACK     = 8;   // hp per hit to goblin (normal dwarves)
+const FIGHTER_FIGHT_BACK   = 18;  // fighters deal ~2× damage — kills goblin in 2 hits
 
 /**
  * Move all goblins one step toward their target, or attack on contact.
@@ -108,7 +112,7 @@ export function tickGoblins(
   dwarves: Dwarf[],
   grid:    Tile[][],
 ): GoblinTickResult {
-  const result: GoblinTickResult = { attacks: [], goblinDeaths: [], logs: [] };
+  const result: GoblinTickResult = { attacks: [], goblinDeaths: [], kills: [], logs: [] };
   const alive = dwarves.filter(d => d.alive);
   if (alive.length === 0) return result;
 
@@ -131,17 +135,31 @@ export function tickGoblins(
     if (dist === 0) {
       // ── Attack ──────────────────────────────────────────────────────
       result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
-      g.health -= DWARF_FIGHT_BACK;
+      g.health -= target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
       result.logs.push({
         message: `attacks ${target.name}! (-${GOBLIN_ATTACK_DAMAGE} hp)`,
         level:   'error',
       });
       if (g.health <= 0) {
         result.goblinDeaths.push(g.id);
+        result.kills.push({ dwarfId: target.id });
         result.logs.push({
           message: `${target.name} slew a goblin!`,
           level:   'warn',
         });
+      }
+    } else if (dist > WANDER_RANGE) {
+      // ── Wander — random step when no dwarf is close ──────────────────
+      const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+      // Fisher-Yates-style shuffle for pick order
+      for (let i = dirs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+      }
+      for (const dir of dirs) {
+        const nx = g.x + dir.x;
+        const ny = g.y + dir.y;
+        if (isWalkable(grid, nx, ny)) { g.x = nx; g.y = ny; break; }
       }
     } else {
       // ── Move toward target using A* ──────────────────────────────────
@@ -152,4 +170,31 @@ export function tickGoblins(
   }
 
   return result;
+}
+
+// ── Initial wandering goblins ─────────────────────────────────────────────────
+
+/**
+ * Spawn `count` goblins scattered across the map at game start.
+ * They wander freely (WANDER_RANGE check) until they stumble near dwarves.
+ */
+export function spawnInitialGoblins(grid: Tile[][], count: number): Goblin[] {
+  const goblins: Goblin[] = [];
+  for (let i = 0; i < count; i++) {
+    let x = 0, y = 0, attempts = 0;
+    do {
+      x = Math.floor(Math.random() * GRID_SIZE);
+      y = Math.floor(Math.random() * GRID_SIZE);
+      attempts++;
+    } while (!isWalkable(grid, x, y) && attempts < 50);
+    if (!isWalkable(grid, x, y)) continue;
+    goblins.push({
+      id:        `goblin-${nextGoblinId++}`,
+      x, y,
+      health:    30,
+      maxHealth: 30,
+      targetId:  null,
+    });
+  }
+  return goblins;
 }

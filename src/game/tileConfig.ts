@@ -18,10 +18,12 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Farmland]: [310],
   [TileType.Ore]: [522],
   [TileType.Mushroom]: [554],
+  [TileType.Wall]: [103, 637, 892],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
 export const SPRITE_CONFIG: Record<string, number> = {
   dwarf: 318,
   goblin: 124,
+  tombstone: 686,
 };

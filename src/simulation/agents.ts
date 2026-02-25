@@ -1,5 +1,5 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type Depot, type OreStockpile, type Goblin } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
@@ -14,11 +14,41 @@ const FORAGEABLE_TILES = new Set<TileType>([
 ]);
 
 // Role assignment order and vision ranges
-const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'forager', 'miner'];
-const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number }> = {
-  forager: { visionMin: 4, visionMax: 6 },
-  miner:   { visionMin: 2, visionMax: 4 },
-  scout:   { visionMin: 5, visionMax: 8 },
+const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'forager', 'fighter'];
+
+// ── Trait / bio / goal tables ─────────────────────────────────────────────────
+const DWARF_TRAITS: DwarfTrait[] = [
+  'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
+];
+
+const DWARF_BIOS: string[] = [
+  'is far from home',
+  'loves his dog',
+  'never learned to swim',
+  'has a lucky coin',
+  'dreams of becoming a baker',
+  'lost a bet that brought him here',
+  'is secretly afraid of the dark',
+  'left behind a large debt',
+  'was exiled from the last colony',
+  'heard there is treasure here',
+];
+
+const DWARF_GOALS: string[] = [
+  'accumulate 50 food before winter',
+  'outlive every other dwarf',
+  'make at least one true friend',
+  'find the richest ore vein',
+  'survive the first goblin raid',
+  'never go hungry',
+  'explore every corner of the map',
+  'see the colony reach 10 dwarves',
+];
+const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
+  forager: { visionMin: 4, visionMax: 6, maxHealth: 100 },
+  miner:   { visionMin: 2, visionMax: 4, maxHealth: 100 },
+  scout:   { visionMin: 5, visionMax: 8, maxHealth: 100 },
+  fighter: { visionMin: 3, visionMax: 5, maxHealth: 130 },
 };
 
 export function spawnDwarves(
@@ -40,8 +70,8 @@ export function spawnDwarves(
       id:            `dwarf-${i}`,
       name:          DWARF_NAMES[i % DWARF_NAMES.length],
       x, y,
-      health:        100,
-      maxHealth:     100,
+      health:        stats.maxHealth,
+      maxHealth:     stats.maxHealth,
       hunger:        rand(10, 30),
       metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,  // 0.15–0.35/tick (~3–6 min to starve)
       vision:        rand(stats.visionMin, stats.visionMax),
@@ -56,6 +86,9 @@ export function spawnDwarves(
       llmIntentExpiry: 0,
       memory:          [],
       relations:       {},   // populated lazily as dwarves interact
+      trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
+      bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
+      goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
     });
   }
   return dwarves;
@@ -109,8 +142,8 @@ export function spawnSuccessor(
     id:            `dwarf-${Date.now()}`,
     name,
     x, y,
-    health:        100,
-    maxHealth:     100,
+    health:        stats.maxHealth,
+    maxHealth:     stats.maxHealth,
     hunger:        rand(10, 30),
     metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
     vision:        rand(stats.visionMin, stats.visionMax),
@@ -125,6 +158,9 @@ export function spawnSuccessor(
     llmIntentExpiry: 0,
     memory:          inheritedMemory,
     relations,
+    trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
+    bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
+    goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
   };
 }
 
@@ -221,6 +257,9 @@ export function tickAgent(
   currentTick: number,
   dwarves?:    Dwarf[],
   onLog?:      LogFn,
+  depot?:      Depot,
+  goblins?:    Goblin[],
+  stockpile?:  OreStockpile,
 ): void {
   if (!dwarf.alive) return;
 
@@ -312,6 +351,50 @@ export function tickAgent(
       needy.relations[dwarf.id] = Math.min(100, (needy.relations[dwarf.id] ?? 50) + 15);
       dwarf.task = `sharing food → ${needy.name}`;
       onLog?.(`shared ${gift} food with ${needy.name} (hunger ${needy.hunger.toFixed(0)})`, 'info');
+      dwarf.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `shared ${gift} food with ${needy.name}` });
+      needy.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `received ${gift} food from ${dwarf.name}` });
+      return;
+    }
+  }
+
+  // ── 2.8. Depot deposit / withdraw ─────────────────────────────────────
+  // When the dwarf is standing on the depot tile: deposit surplus food/ore or
+  // withdraw food if hungry and running low.
+  if (depot && dwarf.x === depot.x && dwarf.y === depot.y) {
+    if (dwarf.inventory.food >= 10) {
+      // Deposit excess food — keep 6 in hand
+      const amount = dwarf.inventory.food - 6;
+      const stored = Math.min(amount, depot.maxFood - depot.food);
+      if (stored > 0) {
+        depot.food           += stored;
+        dwarf.inventory.food -= stored;
+        dwarf.task            = `deposited ${stored.toFixed(0)} → depot`;
+        onLog?.(`deposited ${stored.toFixed(0)} food at depot`, 'info');
+        return;
+      }
+    }
+    if (dwarf.hunger > 60 && dwarf.inventory.food < 2 && depot.food > 0) {
+      // Withdraw up to 4 units of food
+      const amount         = Math.min(4, depot.food);
+      depot.food          -= amount;
+      dwarf.inventory.food = Math.min(MAX_INVENTORY_FOOD, dwarf.inventory.food + amount);
+      dwarf.task           = `withdrew ${amount.toFixed(0)} from depot`;
+      onLog?.(`withdrew ${amount.toFixed(0)} food from depot`, 'info');
+      return;
+    }
+  }
+
+  // ── 2.9. Ore stockpile deposit ────────────────────────────────────────
+  // Miners standing on the ore stockpile tile deposit all carried ore.
+  if (stockpile && dwarf.role === 'miner'
+      && dwarf.x === stockpile.x && dwarf.y === stockpile.y
+      && dwarf.inventory.materials > 0) {
+    const stored = Math.min(dwarf.inventory.materials, stockpile.maxOre - stockpile.ore);
+    if (stored > 0) {
+      stockpile.ore             += stored;
+      dwarf.inventory.materials -= stored;
+      dwarf.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
+      onLog?.(`deposited ${stored.toFixed(0)} ore at stockpile`, 'info');
       return;
     }
   }
@@ -332,6 +415,34 @@ export function tickAgent(
       dwarf.task = `→ (${tx},${ty})`;
     }
     return;
+  }
+
+  // ── 3.5. Fighter — hunt nearest goblin within vision×2 ──────────────────
+  // Fires only when there are goblins nearby and the LLM hasn't ordered rest.
+  // Fighter moves toward the closest goblin; when on the same tile the goblin
+  // will deal/receive combat damage in tickGoblins (18 hp per hit vs 8 for others).
+  if (dwarf.role === 'fighter' && goblins && goblins.length > 0
+      && dwarf.llmIntent !== 'rest') {
+    const HUNT_RADIUS = dwarf.vision * 2;
+    const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
+      const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
+      return (!best || dist < best.dist) ? { g, dist } : best;
+    }, null);
+    if (nearest && nearest.dist <= HUNT_RADIUS) {
+      if (nearest.dist > 0) {
+        const next = pathNextStep(
+          { x: dwarf.x, y: dwarf.y },
+          { x: nearest.g.x, y: nearest.g.y },
+          grid,
+        );
+        dwarf.x = next.x;
+        dwarf.y = next.y;
+      }
+      dwarf.task = nearest.dist === 0
+        ? 'fighting goblin!'
+        : `→ goblin (${nearest.dist} tiles)`;
+      return;
+    }
   }
 
   // ── 4. Forage + harvest (Sugarscape rule) ─────────────────────────────
@@ -382,6 +493,97 @@ export function tickAgent(
       const label = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
       dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
     }
+    return;
+  }
+
+  // ── 4.3. Depot run — pathfind to depot when hungry and empty-handed ────
+  // Fires only when: not on the depot, hunger > 65, carrying no food,
+  // and the depot has something to give.  Lower priority than foraging so
+  // dwarves stay self-sufficient; higher than ore mining.
+  if (depot && !(dwarf.x === depot.x && dwarf.y === depot.y)
+      && dwarf.hunger > 65 && dwarf.inventory.food === 0 && depot.food > 0) {
+    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: depot.x, y: depot.y }, grid);
+    dwarf.x    = next.x;
+    dwarf.y    = next.y;
+    dwarf.task = `→ depot (${depot.food.toFixed(0)} food)`;
+    return;
+  }
+
+  // ── 4.3b. Miner fort-building — place walls enclosing depot + stockpile ──
+  // Builds a rectangular perimeter around both buildings with a MARGIN-tile
+  // border. A 3-tile south gate at the bottom-center stays open permanently.
+  // Uses 3 stockpile.ore per wall segment.
+  if (dwarf.role === 'miner' && depot && stockpile && stockpile.ore >= 3
+      && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
+    const MARGIN = 2;
+    const x0 = Math.min(depot.x, stockpile.x) - MARGIN;
+    const x1 = Math.max(depot.x, stockpile.x) + MARGIN;
+    const y0 = Math.min(depot.y, stockpile.y) - MARGIN;
+    const y1 = Math.max(depot.y, stockpile.y) + MARGIN;
+    // Gate: 3-tile opening at south-center of the enclosure
+    const gateCx = Math.floor((depot.x + stockpile.x) / 2);
+
+    let nearestSlot: { x: number; y: number } | null = null;
+    let nearestDist = Infinity;
+    for (let by = y0; by <= y1; by++) {
+      for (let bx = x0; bx <= x1; bx++) {
+        if (bx !== x0 && bx !== x1 && by !== y0 && by !== y1) continue; // perimeter only
+        if (bx < 0 || bx >= GRID_SIZE || by < 0 || by >= GRID_SIZE) continue;
+        // South gate: 3-tile opening at bottom-center of the enclosure
+        if (by === y1 && Math.abs(bx - gateCx) <= 1) continue;
+        // Never build on the depot or stockpile tiles
+        if (bx === depot.x && by === depot.y) continue;
+        if (bx === stockpile.x && by === stockpile.y) continue;
+        const t = grid[by][bx];
+        if (t.type === TileType.Wall || t.type === TileType.Water
+            || t.type === TileType.Ore) continue; // don't wall over ore or water
+        const dist = Math.abs(bx - dwarf.x) + Math.abs(by - dwarf.y);
+        if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = { x: bx, y: by }; }
+      }
+    }
+
+    if (nearestSlot) {
+      const next = pathNextStep(
+        { x: dwarf.x, y: dwarf.y },
+        { x: nearestSlot.x, y: nearestSlot.y },
+        grid,
+      );
+      if (next.x === nearestSlot.x && next.y === nearestSlot.y) {
+        // pathNextStep would step onto the build tile — build it instead
+        const t = grid[nearestSlot.y][nearestSlot.x];
+        grid[nearestSlot.y][nearestSlot.x] = {
+          ...t,
+          type:          TileType.Wall,
+          foodValue:     0,
+          maxFood:       0,
+          materialValue: 0,
+          maxMaterial:   0,
+          growbackRate:  0,
+        };
+        stockpile.ore -= 3;
+        dwarf.task = 'built fort wall!';
+        dwarf.memory.push({ tick: currentTick, crisis: 'construction', action: 'built a fort wall section' });
+        onLog?.('built a fort wall section!', 'info');
+      } else {
+        dwarf.x = next.x;
+        dwarf.y = next.y;
+        dwarf.task = '→ fort wall';
+      }
+      return;
+    }
+  }
+
+  // ── 4.4. Miner ore run — carry mined ore to the ore stockpile ─────────
+  // Fires when miner is carrying ≥ 8 ore, not yet at the stockpile tile,
+  // and the stockpile has capacity. Lower priority than food foraging.
+  if (dwarf.role === 'miner' && stockpile
+      && dwarf.inventory.materials >= 8
+      && !(dwarf.x === stockpile.x && dwarf.y === stockpile.y)
+      && stockpile.ore < stockpile.maxOre) {
+    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: stockpile.x, y: stockpile.y }, grid);
+    dwarf.x    = next.x;
+    dwarf.y    = next.y;
+    dwarf.task = `→ stockpile (${dwarf.inventory.materials.toFixed(0)} ore)`;
     return;
   }
 

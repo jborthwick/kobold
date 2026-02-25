@@ -2,10 +2,10 @@ import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
 import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY } from '../../simulation/agents';
-import { maybeSpawnRaid, tickGoblins, resetGoblins } from '../../simulation/goblins';
+import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type Depot, type OreStockpile } from '../../shared/types';
 import { llmSystem, detectCrisis, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -57,6 +57,16 @@ export class WorldScene extends Phaser.Scene {
   private spawnZone!: { x: number; y: number; w: number; h: number };
   private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
 
+  // Colony goal + depot + ore stockpile
+  private colonyGoal!: ColonyGoal;
+  private goblinKillCount = 0;
+  private depot!: Depot;
+  private depotGfx!: Phaser.GameObjects.Graphics;
+  private depotLabel!: Phaser.GameObjects.Text;
+  private stockpile!: OreStockpile;
+  private stockpileGfx!: Phaser.GameObjects.Graphics;
+  private stockpileLabel!: Phaser.GameObjects.Text;
+
   // WASD keys
   private wasd!: {
     W: Phaser.Input.Keyboard.Key;
@@ -69,13 +79,44 @@ export class WorldScene extends Phaser.Scene {
     super({ key: 'WorldScene' });
   }
 
+  private static makeGoal(type: ColonyGoal['type'], generation: number): ColonyGoal {
+    const scale = 1 + generation * 0.5;
+    switch (type) {
+      case 'stockpile_food':
+        return { type, description: `Fill the depot with ${Math.round(30 * scale)} food`, progress: 0, target: Math.round(30 * scale), generation };
+      case 'survive_ticks':
+        return { type, description: `Survive ${Math.round(500 * scale)} ticks together`, progress: 0, target: Math.round(500 * scale), generation };
+      case 'defeat_goblins':
+        return { type, description: `Defeat ${Math.round(3 * scale)} goblins`, progress: 0, target: Math.round(3 * scale), generation };
+    }
+  }
+
   create() {
     const { grid, spawnZone } = generateWorld();
     this.grid      = grid;
     this.spawnZone = spawnZone;
     this.dwarves   = spawnDwarves(this.grid, spawnZone);
-    this.goblins = [];
     resetGoblins();
+    this.goblins = spawnInitialGoblins(this.grid, 3);
+
+    // ── Depot + Ore Stockpile ───────────────────────────────────────────
+    const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
+    const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
+    this.depot = {
+      x:       depotX,
+      y:       depotY,
+      food:    0,
+      maxFood: 50,
+    };
+    // Stockpile sits 3 tiles east of the depot within the spawn zone
+    this.stockpile = {
+      x:      Math.min(depotX + 3, spawnZone.x + spawnZone.w - 1),
+      y:      depotY,
+      ore:    80,
+      maxOre: 100,
+    };
+    this.goblinKillCount = 0;
+    this.colonyGoal = WorldScene.makeGoal('stockpile_food', 0);
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -88,9 +129,26 @@ export class WorldScene extends Phaser.Scene {
     this.terrainLayer = this.map.createBlankLayer('terrain', tileset)!;
 
     // ── Graphics layers ─────────────────────────────────────────────────
+    // All graphics are created AFTER the terrain layer so they render on top.
     this.overlayGfx   = this.add.graphics();
     this.flagGfx      = this.add.graphics();
     this.selectionGfx = this.add.graphics();
+    // Depot: gold border + label above the tile
+    this.depotGfx   = this.add.graphics();
+    this.depotLabel = this.add.text(
+      this.depot.x * TILE_SIZE + TILE_SIZE / 2,
+      this.depot.y * TILE_SIZE - 4,
+      '',
+      { fontSize: '8px', color: '#f0c040', fontFamily: 'monospace' },
+    ).setOrigin(0.5, 1);
+    // Stockpile: amber border + label above the tile
+    this.stockpileGfx   = this.add.graphics();
+    this.stockpileLabel = this.add.text(
+      this.stockpile.x * TILE_SIZE + TILE_SIZE / 2,
+      this.stockpile.y * TILE_SIZE - 4,
+      '',
+      { fontSize: '8px', color: '#ff8800', fontFamily: 'monospace' },
+    ).setOrigin(0.5, 1);
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
 
@@ -315,7 +373,7 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      });
+      }, this.depot, this.goblins, this.stockpile);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -359,9 +417,8 @@ export class WorldScene extends Phaser.Scene {
             dwarf.llmIntentExpiry = this.tick + 50;
           }
 
-          // Push to rolling short-term memory (cap at 5 entries)
+          // Push to rolling memory (uncapped; last 5 entries used in LLM prompts)
           dwarf.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action });
-          if (dwarf.memory.length > 5) dwarf.memory.shift();
 
           bus.emit('logEntry', {
             tick:      this.tick,
@@ -371,6 +428,7 @@ export class WorldScene extends Phaser.Scene {
             level:     'warn',
           });
         },
+        this.colonyGoal,
       );
     }
 
@@ -398,6 +456,7 @@ export class WorldScene extends Phaser.Scene {
         if (d && d.alive) {
           d.health = Math.max(0, d.health - damage);
           d.morale = Math.max(0, d.morale - 5);
+          d.memory.push({ tick: this.tick, crisis: 'goblin_attack', action: `attacked by a goblin (−${damage} hp, health ${d.health.toFixed(0)})` });
           if (d.health <= 0) {
             d.alive = false;
             d.task  = 'dead';
@@ -428,9 +487,15 @@ export class WorldScene extends Phaser.Scene {
       if (gr.goblinDeaths.length > 0) {
         const deadIds = new Set(gr.goblinDeaths);
         this.goblins  = this.goblins.filter(g => !deadIds.has(g.id));
+        this.goblinKillCount += gr.goblinDeaths.length;
         for (const id of gr.goblinDeaths) {
           const spr = this.goblinSprites.get(id);
           if (spr) { spr.destroy(); this.goblinSprites.delete(id); }
+        }
+        // Add kill memory to the dwarves that scored the kill
+        for (const { dwarfId } of gr.kills) {
+          const killer = this.dwarves.find(dw => dw.id === dwarfId && dw.alive);
+          if (killer) killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
         }
       }
     }
@@ -489,6 +554,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
+    this.updateGoalProgress();
+
     if (this.tick % 5 === 0) this.emitMiniMap();
     this.emitGameState();
   }
@@ -542,7 +609,86 @@ export class WorldScene extends Phaser.Scene {
       overlayMode:     this.overlayMode,
       paused:          this.paused,
       speed:           this.speedMultiplier,
+      colonyGoal:      { ...this.colonyGoal },
+      depot:           { ...this.depot },
+      stockpile:       { ...this.stockpile },
     });
+  }
+
+  // ── Colony goal ────────────────────────────────────────────────────────
+
+  private updateGoalProgress() {
+    const alive = this.dwarves.filter(d => d.alive);
+    switch (this.colonyGoal.type) {
+      case 'stockpile_food':
+        this.colonyGoal.progress = this.depot.food;
+        break;
+      case 'survive_ticks':
+        this.colonyGoal.progress = this.tick;
+        break;
+      case 'defeat_goblins':
+        this.colonyGoal.progress = this.goblinKillCount;
+        break;
+    }
+    if (this.colonyGoal.progress >= this.colonyGoal.target) {
+      this.completeGoal(alive);
+    }
+  }
+
+  private completeGoal(alive: Dwarf[]) {
+    const gen = this.colonyGoal.generation + 1;
+    for (const d of alive) {
+      d.morale = Math.min(100, d.morale + 15);
+    }
+    bus.emit('logEntry', {
+      tick:      this.tick,
+      dwarfId:   'world',
+      dwarfName: 'COLONY',
+      message:   `✓ Goal complete: ${this.colonyGoal.description}! Morale boost for all!`,
+      level:     'info',
+    });
+    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_goblins'];
+    const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
+    const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
+    // Reset relevant counters so the new goal tracks from zero
+    if (next === 'stockpile_food') this.depot.food = 0;
+    if (next === 'defeat_goblins') this.goblinKillCount = 0;
+    this.colonyGoal = WorldScene.makeGoal(next, gen);
+  }
+
+  private drawDepot() {
+    const px = this.depot.x * TILE_SIZE;
+    const py = this.depot.y * TILE_SIZE;
+    this.depotGfx.clear();
+    // Gold border
+    this.depotGfx.lineStyle(2, 0xf0c040, 0.9);
+    this.depotGfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    // Semi-transparent fill — brightens as food accumulates
+    const fillAlpha = this.depot.food > 0
+      ? 0.12 + (this.depot.food / this.depot.maxFood) * 0.25
+      : 0.06;
+    this.depotGfx.fillStyle(0xf0c040, fillAlpha);
+    this.depotGfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    // Food count label above tile (e.g. "D:12")
+    this.depotLabel.setText(this.depot.food > 0 ? `D:${this.depot.food.toFixed(0)}` : 'D');
+  }
+
+  private drawStockpile() {
+    const px = this.stockpile.x * TILE_SIZE;
+    const py = this.stockpile.y * TILE_SIZE;
+    this.stockpileGfx.clear();
+    // Amber border
+    this.stockpileGfx.lineStyle(2, 0xff8800, 0.9);
+    this.stockpileGfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    // Fill brightens as ore accumulates
+    const fillAlpha = this.stockpile.ore > 0
+      ? 0.12 + (this.stockpile.ore / this.stockpile.maxOre) * 0.25
+      : 0.06;
+    this.stockpileGfx.fillStyle(0xff8800, fillAlpha);
+    this.stockpileGfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    // Ore count label (e.g. "S:24")
+    const label = this.stockpile.ore > 0 ? `S:${this.stockpile.ore.toFixed(0)}` : 'S';
+    this.stockpileLabel.setText(label);
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────
@@ -560,12 +706,14 @@ export class WorldScene extends Phaser.Scene {
           : frames[Math.floor(noise * frames.length)];
         const t = this.terrainLayer.putTileAt(frame, x, y)!;
 
-        // Dim food tiles as they deplete (multiplicative brightness mask).
-        // No per-type hue needed — correct frame colors handle visual identity.
+        // Tinting: food tiles dim as they deplete; player-built walls get a blue-gray
+        // tint to distinguish them from natural Stone (both use frame 103).
         if (tile.maxFood > 0) {
           const ratio      = tile.foodValue / tile.maxFood;
           const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
           t.tint = (brightness << 16) | (brightness << 8) | brightness;
+        } else if (tile.type === TileType.Wall) {
+          t.tint = 0x88aacc;  // blue-gray: player-built fort wall
         } else {
           t.tint = 0xffffff;
         }
@@ -658,15 +806,15 @@ export class WorldScene extends Phaser.Scene {
   private drawAgents() {
     this.selectionGfx.clear();
 
-    // Convert newly-dead dwarves to ghost sprites (red + upside-down) and
-    // remove their live sprite. Ghost sprites are created once and stay.
+    // Convert newly-dead dwarves to tombstone sprites and remove their live sprite.
+    // Ghost sprites are created once and stay until a new game.
+    const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? DWARF_FRAME;
     for (const [id, spr] of this.dwarfSprites) {
       const d = this.dwarves.find(dw => dw.id === id);
       if (!d || !d.alive) {
         if (!this.dwarfGhostSprites.has(id)) {
-          const ghost = this.add.sprite(spr.x, spr.y, 'tiles', DWARF_FRAME);
-          ghost.setTint(0xff2222);
-          ghost.setFlipY(true);
+          const ghost = this.add.sprite(spr.x, spr.y, 'tiles', TOMBSTONE_FRAME);
+          ghost.setTint(0xaaaaaa); // gray tombstone
           this.dwarfGhostSprites.set(id, ghost);
         }
         spr.destroy();
@@ -753,6 +901,8 @@ export class WorldScene extends Phaser.Scene {
       this.drawOverlay(); // refresh density whenever food values change
     }
     this.drawAgents();
+    this.drawDepot();
+    this.drawStockpile();
     this.drawOffScreenIndicator();
   }
 }

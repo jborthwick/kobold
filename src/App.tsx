@@ -1,5 +1,5 @@
 import { PhaserGame } from './game/PhaserGame';
-import { HUD, SelectedDwarfPanel } from './ui/HUD';
+import { HUD, SelectedDwarfPanel, ColonyGoalPanel } from './ui/HUD';
 import { EventLog } from './ui/EventLog';
 import { MiniMap } from './ui/MiniMap';
 import { TilePicker } from './ui/TilePicker';
@@ -11,7 +11,7 @@ export default function App() {
       <HUD />
       {/* <TileTooltip /> — disabled; re-add import from './ui/HUD' to re-enable */}
       <MiniMap />
-      {/* Right sidebar: event log on top, selected-dwarf panel below */}
+      {/* Right sidebar: colony goal on top, event log in middle, selected-dwarf panel below */}
       <div style={{
         position:      'absolute',
         top:           8,
@@ -22,6 +22,7 @@ export default function App() {
         flexDirection: 'column',
         pointerEvents: 'none',
       }}>
+        <ColonyGoalPanel />
         <EventLog />
         <SelectedDwarfPanel />
       </div>

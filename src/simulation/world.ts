@@ -359,5 +359,6 @@ export function growback(grid: Tile[][]): void {
 
 export function isWalkable(grid: Tile[][], x: number, y: number): boolean {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
-  return grid[y][x].type !== TileType.Water;
+  const t = grid[y][x].type;
+  return t !== TileType.Water && t !== TileType.Wall;
 }

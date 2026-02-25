@@ -10,7 +10,7 @@
  * In production this will be a Cloudflare Worker at the same path.
  */
 
-import type { Dwarf, Tile, LLMIntent, Goblin } from '../shared/types';
+import type { Dwarf, Tile, LLMIntent, Goblin, ColonyGoal } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -125,13 +125,14 @@ export function detectCrisis(
 function roleLabel(dwarf: Dwarf): string {
   if (dwarf.role === 'forager') return 'Forager — you specialize in harvesting food efficiently.';
   if (dwarf.role === 'miner')   return 'Miner — you prioritize mining ore and stone over foraging.';
+  if (dwarf.role === 'fighter') return 'Fighter — you protect the colony by hunting and killing goblins.';
   return 'Scout — you have wide vision and detect threats early.';
 }
 
-function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[]): string {
-  // PIANO step 2 — inject short-term memory if present (with VERIFY outcomes)
+function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[], colonyGoal?: ColonyGoal): string {
+  // PIANO step 2 — inject short-term memory if present (cap at 5 entries; with VERIFY outcomes)
   const memBlock = dwarf.memory.length > 0
-    ? `\nRECENT DECISIONS:\n${dwarf.memory.map(m => {
+    ? `\nRECENT DECISIONS:\n${dwarf.memory.slice(-5).map(m => {
         const out = m.outcome ? ` → OUTCOME: ${m.outcome}` : '';
         return `  [tick ${m.tick}] ${m.crisis}: "${m.action}"${out}`;
       }).join('\n')}`
@@ -152,13 +153,17 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[])
   if (rival && (dwarf.relations[rival.id] ?? 50) < 45) relParts.push(`Rival: ${rival.name} (tension ${(100 - (dwarf.relations[rival.id] ?? 50)).toFixed(0)}/100)`);
   const relBlock = relParts.length > 0 ? `\nRelationships: ${relParts.join('. ')}` : '';
 
+  const goalLine = colonyGoal
+    ? `\nColony goal: ${colonyGoal.description} (${colonyGoal.progress.toFixed(0)}/${colonyGoal.target})`
+    : '';
+
   return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
-Role affects your priorities and decisions.
+Personality: ${dwarf.trait}. "${dwarf.bio}". Personal goal: ${dwarf.goal}.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
 Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}.
 
 CRISIS: ${situation.description}
-Colony context: ${situation.colonyContext}${relBlock}${memBlock}
+Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}
 
 Respond ONLY as valid JSON (no markdown, no extra text):
 {
@@ -210,6 +215,7 @@ export class LLMDecisionSystem {
     currentTick: number,
     goblins:     Goblin[],
     onDecision:  DecisionCallback,
+    colonyGoal?: ColonyGoal,
   ): void {
     if (!this.enabled)                                         return;
     if (!dwarf.alive)                                          return;
@@ -219,7 +225,7 @@ export class LLMDecisionSystem {
     const situation = detectCrisis(dwarf, dwarves, grid, goblins);
     if (!situation) return;
 
-    const promise = this.callLLM(dwarf, situation, dwarves);
+    const promise = this.callLLM(dwarf, situation, dwarves, colonyGoal);
     this.pendingRequests.set(dwarf.id, promise);
 
     // Detached — resolves on its own; game loop continues
@@ -282,9 +288,10 @@ export class LLMDecisionSystem {
   }
 
   private async callLLM(
-    dwarf:     Dwarf,
-    situation: CrisisSituation,
-    dwarves:   Dwarf[],
+    dwarf:      Dwarf,
+    situation:  CrisisSituation,
+    dwarves:    Dwarf[],
+    colonyGoal?: ColonyGoal,
   ): Promise<LLMDecision | null> {
     try {
       const res = await fetch('/api/llm-proxy', {
@@ -294,7 +301,7 @@ export class LLMDecisionSystem {
         body: JSON.stringify({
           model:      MODEL,
           max_tokens: 256,
-          messages: [{ role: 'user', content: buildPrompt(dwarf, situation, dwarves) }],
+          messages: [{ role: 'user', content: buildPrompt(dwarf, situation, dwarves, colonyGoal) }],
         }),
       });
 
