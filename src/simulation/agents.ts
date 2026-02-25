@@ -299,79 +299,83 @@ export function pathNextStep(
 
 // ── Fort-building helper ───────────────────────────────────────────────────
 /**
- * Returns all wall-slot candidates for the two-room H-shaped fort.
+ * Returns all unbuilt wall-slot candidates for the H-shaped fort.
  *
- * Layout (D = depot, S = stockpile, M = MARGIN, 8 tiles apart):
+ * Each room is fixed 5 tiles wide (anchor ± MARGIN=2) and grows southward
+ * as new depot / stockpile units are added (3 tiles apart per unit).
  *
- *   y-M: ■ ■ ■ ■ ■ ─ ─ ─ ─ ─ ■ ■ ■ ■ ■   ← top wall + H top-bar
- *   y-1: ■   depot room   ■  corridor  ■  stockpile room  ■
- *   y 0: ■      [D]        ■   open    ■      [S]          ■
- *   y+1: ■                 ■   open    ■                   ■
- *   y+M: ■ ■ _ _ ■ ■ ■    ·   open   ·    ■ ■ _ _ ■ ■ ■
- *                dep gate   corridor      stockpile gate
+ * Layout with N depots at (depotX, depotY), (depotX, depotY+3), …:
  *
- * MARGIN = 2 (generation 0) → 3 (generation ≥ 1).
- * Nearest-first selection means MARGIN=2 fills before MARGIN=3 starts.
+ *   y-2:  ■ ■ ■ ■ ■ ─ ─ ─ ─ ─ ■ ■ ■ ■ ■   ← top wall + H top-bar
+ *   y-1:  ■   depot room   ■  corridor  ■  stockpile room  ■
+ *   y 0:  ■      [D₁]       ■   open    ■      [S₁]         ■
+ *   y+1:  ■                 ■   open    ■                    ■
+ *   y+2:  ■                 ■           ■                    ■   ← old south wall (3-wide gate stays open)
+ *   y+3:  ■      [D₂]       ■           ■      [S₂]         ■   ← second unit (if added)
+ *   y+4:  ■                 ■           ■                    ■
+ *   y+5:  ■ ■ _ _ ■ ■ ■    ·           ·    ■ ■ _ _ ■ ■ ■  ← new south wall + 3-wide gate
+ *
+ * Miners fill slots nearest-first, so outer walls build before interior rows.
  */
 function fortWallSlots(
-  depot:      { x: number; y: number },
-  stockpile:  { x: number; y: number },
+  depots:     Array<{ x: number; y: number }>,
+  stockpiles: Array<{ x: number; y: number }>,
   grid:       Tile[][],
   dwarves:    Dwarf[] | undefined,
   selfId:     string,
-  generation: number,
 ): Array<{ x: number; y: number }> {
-  const maxMargin = 2 + (generation >= 1 ? 1 : 0);
+  const MARGIN = 2;
   const slots: Array<{ x: number; y: number }> = [];
 
   const blocked = (x: number, y: number): boolean =>
     dwarves?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y) ?? false;
 
-  for (let margin = 2; margin <= maxMargin; margin++) {
-    // ── Depot room perimeter ────────────────────────────────────────
-    const dx0 = depot.x - margin, dx1 = depot.x + margin;
-    const dy0 = depot.y - margin, dy1 = depot.y + margin;
-    for (let y = dy0; y <= dy1; y++) {
-      for (let x = dx0; x <= dx1; x++) {
-        if (x !== dx0 && x !== dx1 && y !== dy0 && y !== dy1) continue;
-        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
-        if (y === dy1 && Math.abs(x - depot.x) <= 1) continue;           // south gate
-        if (x === depot.x && y === depot.y) continue;                    // depot tile
-        const t = grid[y][x];
-        if (t.type === TileType.Wall || t.type === TileType.Water
-            || t.type === TileType.Ore) continue;
-        if (!blocked(x, y)) slots.push({ x, y });
-      }
-    }
+  const tryAdd = (x: number, y: number): void => {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+    const t = grid[y][x];
+    if (t.type === TileType.Wall || t.type === TileType.Water
+        || t.type === TileType.Ore) return;
+    if (!blocked(x, y)) slots.push({ x, y });
+  };
 
-    // ── Stockpile room perimeter ────────────────────────────────────
-    const sx0 = stockpile.x - margin, sx1 = stockpile.x + margin;
-    const sy0 = stockpile.y - margin, sy1 = stockpile.y + margin;
-    for (let y = sy0; y <= sy1; y++) {
-      for (let x = sx0; x <= sx1; x++) {
-        if (x !== sx0 && x !== sx1 && y !== sy0 && y !== sy1) continue;
-        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
-        if (y === sy1 && Math.abs(x - stockpile.x) <= 1) continue;       // south gate
-        if (x === stockpile.x && y === stockpile.y) continue;            // stockpile tile
-        const t = grid[y][x];
-        if (t.type === TileType.Wall || t.type === TileType.Water
-            || t.type === TileType.Ore) continue;
-        if (!blocked(x, y)) slots.push({ x, y });
-      }
-    }
+  const anchorD = depots[0];
+  const anchorS = stockpiles[0];
 
-    // ── Top corridor bar — connects the two rooms across the top ────
-    // Fills the gap between room1 right-edge and room2 left-edge at y-margin.
-    const topY    = depot.y - margin;
-    const barXmin = depot.x + margin + 1;
-    const barXmax = stockpile.x - margin - 1;
-    for (let x = barXmin; x <= barXmax; x++) {
-      if (x < 0 || x >= GRID_SIZE || topY < 0 || topY >= GRID_SIZE) continue;
-      const t = grid[topY][x];
-      if (t.type === TileType.Wall || t.type === TileType.Water
-          || t.type === TileType.Ore) continue;
-      if (!blocked(x, topY)) slots.push({ x, y: topY });
+  // ── Depot room perimeter — bounding box across all depot positions ────
+  // Rooms grow in any direction as new storage units are placed.
+  const dMinX = Math.min(...depots.map(d => d.x)) - MARGIN;
+  const dMaxX = Math.max(...depots.map(d => d.x)) + MARGIN;
+  const dMinY = Math.min(...depots.map(d => d.y)) - MARGIN;
+  const dMaxY = Math.max(...depots.map(d => d.y)) + MARGIN;
+  for (let y = dMinY; y <= dMaxY; y++) {
+    for (let x = dMinX; x <= dMaxX; x++) {
+      if (x !== dMinX && x !== dMaxX && y !== dMinY && y !== dMaxY) continue;
+      if (y === dMaxY && Math.abs(x - anchorD.x) <= 1) continue;  // 3-wide south gate
+      if (depots.some(d => d.x === x && d.y === y)) continue;     // storage tile itself
+      tryAdd(x, y);
     }
+  }
+
+  // ── Stockpile room perimeter — bounding box across all stockpile positions
+  const sMinX = Math.min(...stockpiles.map(s => s.x)) - MARGIN;
+  const sMaxX = Math.max(...stockpiles.map(s => s.x)) + MARGIN;
+  const sMinY = Math.min(...stockpiles.map(s => s.y)) - MARGIN;
+  const sMaxY = Math.max(...stockpiles.map(s => s.y)) + MARGIN;
+  for (let y = sMinY; y <= sMaxY; y++) {
+    for (let x = sMinX; x <= sMaxX; x++) {
+      if (x !== sMinX && x !== sMaxX && y !== sMinY && y !== sMaxY) continue;
+      if (y === sMaxY && Math.abs(x - anchorS.x) <= 1) continue;  // 3-wide south gate
+      if (stockpiles.some(s => s.x === x && s.y === y)) continue; // storage tile itself
+      tryAdd(x, y);
+    }
+  }
+
+  // ── Top corridor bar — H cross-piece at the shared top edge ──────────
+  const topY    = Math.min(dMinY, sMinY);
+  const barXmin = dMaxX + 1;
+  const barXmax = sMinX - 1;
+  for (let x = barXmin; x <= barXmax; x++) {
+    tryAdd(x, topY);
   }
 
   return slots;
@@ -396,9 +400,9 @@ export function tickAgent(
   currentTick: number,
   dwarves?:    Dwarf[],
   onLog?:      LogFn,
-  depot?:      Depot,
+  depots?:     Depot[],
   goblins?:    Goblin[],
-  stockpile?:  OreStockpile,
+  stockpiles?: OreStockpile[],
   colonyGoal?: ColonyGoal,
 ): void {
   if (!dwarf.alive) return;
@@ -497,24 +501,22 @@ export function tickAgent(
   }
 
   // ── 2.8. Depot deposit / withdraw ─────────────────────────────────────
-  // When the dwarf is standing on the depot tile: deposit surplus food/ore or
-  // withdraw food if hungry and running low.
-  if (depot && dwarf.x === depot.x && dwarf.y === depot.y) {
+  // When standing on any depot tile: deposit surplus food or withdraw if hungry.
+  const standingDepot = depots?.find(d => d.x === dwarf.x && d.y === dwarf.y) ?? null;
+  if (standingDepot) {
     if (dwarf.inventory.food >= 10) {
-      // Deposit excess food — keep 6 in hand
       const amount = dwarf.inventory.food - 6;
-      const stored = Math.min(amount, depot.maxFood - depot.food);
+      const stored = Math.min(amount, standingDepot.maxFood - standingDepot.food);
       if (stored > 0) {
-        depot.food           += stored;
+        standingDepot.food   += stored;
         dwarf.inventory.food -= stored;
         dwarf.task            = `deposited ${stored.toFixed(0)} → depot`;
         return;
       }
     }
-    if (dwarf.hunger > 60 && dwarf.inventory.food < 2 && depot.food > 0) {
-      // Withdraw up to 4 units of food
-      const amount         = Math.min(4, depot.food);
-      depot.food          -= amount;
+    if (dwarf.hunger > 60 && dwarf.inventory.food < 2 && standingDepot.food > 0) {
+      const amount         = Math.min(4, standingDepot.food);
+      standingDepot.food  -= amount;
       dwarf.inventory.food = Math.min(MAX_INVENTORY_FOOD, dwarf.inventory.food + amount);
       dwarf.task           = `withdrew ${amount.toFixed(0)} from depot`;
       return;
@@ -522,13 +524,12 @@ export function tickAgent(
   }
 
   // ── 2.9. Ore stockpile deposit ────────────────────────────────────────
-  // Miners standing on the ore stockpile tile deposit all carried ore.
-  if (stockpile && dwarf.role === 'miner'
-      && dwarf.x === stockpile.x && dwarf.y === stockpile.y
-      && dwarf.inventory.materials > 0) {
-    const stored = Math.min(dwarf.inventory.materials, stockpile.maxOre - stockpile.ore);
+  // Miners standing on any stockpile tile deposit all carried ore.
+  const standingStockpile = stockpiles?.find(s => s.x === dwarf.x && s.y === dwarf.y) ?? null;
+  if (dwarf.role === 'miner' && standingStockpile && dwarf.inventory.materials > 0) {
+    const stored = Math.min(dwarf.inventory.materials, standingStockpile.maxOre - standingStockpile.ore);
     if (stored > 0) {
-      stockpile.ore             += stored;
+      standingStockpile.ore     += stored;
       dwarf.inventory.materials -= stored;
       dwarf.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
       return;
@@ -673,31 +674,50 @@ export function tickAgent(
   }
 
   // ── 4.2. Return home to deposit surplus food ──────────────────────────
-  // When carrying a good load and not in a hunger crisis, head to the fort
-  // depot to deposit — closes the natural foraging loop without needing LLM.
-  // Threshold matches step 2.8's deposit condition (≥ 10 food) so dwarves
-  // only make the trip when they'll actually deposit on arrival.
-  // Also requires depot capacity so they don't loop when the depot is full.
-  if (depot && dwarf.inventory.food >= 10 && dwarf.hunger < 55
-      && depot.food < depot.maxFood
-      && !(dwarf.x === depot.x && dwarf.y === depot.y)) {
-    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: depot.x, y: depot.y }, grid);
+  // Head to the nearest depot that still has capacity to receive a deposit.
+  // Threshold matches step 2.8 (≥ 10 food) so dwarves only make the trip
+  // when they'll actually deposit on arrival.
+  const nearestDepotWithCapacity = depots
+    ?.filter(d => d.food < d.maxFood)
+    .reduce<Depot | null>((best, d) => {
+      const dist     = Math.abs(d.x - dwarf.x) + Math.abs(d.y - dwarf.y);
+      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      return dist < bestDist ? d : best;
+    }, null) ?? null;
+  if (nearestDepotWithCapacity && dwarf.inventory.food >= 10 && dwarf.hunger < 55
+      && !(dwarf.x === nearestDepotWithCapacity.x && dwarf.y === nearestDepotWithCapacity.y)) {
+    const next = pathNextStep(
+      { x: dwarf.x, y: dwarf.y },
+      { x: nearestDepotWithCapacity.x, y: nearestDepotWithCapacity.y },
+      grid,
+    );
     dwarf.x    = next.x;
     dwarf.y    = next.y;
     dwarf.task = `→ home (deposit)`;
     return;
   }
 
-  // ── 4.3. Depot run — pathfind to depot when hungry and empty-handed ────
+  // ── 4.3. Depot run — pathfind to nearest depot with food when hungry ───
   // Fires only when: not on the depot, hunger > 65, carrying no food,
-  // and the depot has something to give.  Lower priority than foraging so
-  // dwarves stay self-sufficient; higher than ore mining.
-  if (depot && !(dwarf.x === depot.x && dwarf.y === depot.y)
-      && dwarf.hunger > 65 && dwarf.inventory.food === 0 && depot.food > 0) {
-    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: depot.x, y: depot.y }, grid);
+  // and some depot has stock to give.  Lower priority than foraging.
+  const nearestDepotWithFood = depots
+    ?.filter(d => d.food > 0)
+    .reduce<Depot | null>((best, d) => {
+      const dist     = Math.abs(d.x - dwarf.x) + Math.abs(d.y - dwarf.y);
+      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      return dist < bestDist ? d : best;
+    }, null) ?? null;
+  if (nearestDepotWithFood
+      && !(dwarf.x === nearestDepotWithFood.x && dwarf.y === nearestDepotWithFood.y)
+      && dwarf.hunger > 65 && dwarf.inventory.food === 0) {
+    const next = pathNextStep(
+      { x: dwarf.x, y: dwarf.y },
+      { x: nearestDepotWithFood.x, y: nearestDepotWithFood.y },
+      grid,
+    );
     dwarf.x    = next.x;
     dwarf.y    = next.y;
-    dwarf.task = `→ depot (${depot.food.toFixed(0)} food)`;
+    dwarf.task = `→ depot (${nearestDepotWithFood.food.toFixed(0)} food)`;
     return;
   }
 
@@ -756,17 +776,15 @@ export function tickAgent(
     }
   }
 
-  // ── 4.3b. Miner fort-building — H-shaped two-room fort ───────────────
-  // Builds two separate enclosed rooms (one around the depot, one around the
-  // stockpile) connected by a shared top bar, forming an H-shape.  Each room
-  // has its own 3-tile south gate; the corridor between rooms stays open.
-  // MARGIN starts at 2 and grows to 3 after the first colony goal completes
-  // (generation ≥ 1), so the fort expands organically.
-  // Uses 3 stockpile.ore per wall segment.
-  if (dwarf.role === 'miner' && depot && stockpile && stockpile.ore >= 3
+  // ── 4.3b. Miner fort-building ─────────────────────────────────────────
+  // Builds two H-shaped rooms (depot room + stockpile room) that grow
+  // southward as new storage units are added.  Uses 3 ore per wall segment.
+  // Find any stockpile with enough ore to pay for a wall.
+  const buildStockpile = stockpiles?.find(s => s.ore >= 3) ?? null;
+  if (dwarf.role === 'miner' && depots && depots.length > 0
+      && stockpiles && stockpiles.length > 0 && buildStockpile
       && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
-    const generation = colonyGoal?.generation ?? 0;
-    const slots = fortWallSlots(depot, stockpile, grid, dwarves, dwarf.id, generation);
+    const slots = fortWallSlots(depots, stockpiles, grid, dwarves, dwarf.id);
 
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
@@ -782,7 +800,6 @@ export function tickAgent(
         grid,
       );
       if (next.x === nearestSlot.x && next.y === nearestSlot.y) {
-        // pathNextStep would step onto the build tile — build it instead
         const t = grid[nearestSlot.y][nearestSlot.x];
         grid[nearestSlot.y][nearestSlot.x] = {
           ...t,
@@ -793,7 +810,7 @@ export function tickAgent(
           maxMaterial:   0,
           growbackRate:  0,
         };
-        stockpile.ore -= 3;
+        buildStockpile.ore -= 3;
         dwarf.task = 'built fort wall!';
       } else {
         dwarf.x = next.x;
@@ -804,14 +821,23 @@ export function tickAgent(
     }
   }
 
-  // ── 4.4. Miner ore run — carry mined ore to the ore stockpile ─────────
-  // Fires when miner is carrying ≥ 8 ore, not yet at the stockpile tile,
-  // and the stockpile has capacity. Lower priority than food foraging.
-  if (dwarf.role === 'miner' && stockpile
+  // ── 4.4. Miner ore run — carry mined ore to nearest stockpile ─────────
+  // Fires when miner is carrying ≥ 8 ore and some stockpile has capacity.
+  const nearestStockpileWithCapacity = stockpiles
+    ?.filter(s => s.ore < s.maxOre)
+    .reduce<OreStockpile | null>((best, s) => {
+      const dist     = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
+      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      return dist < bestDist ? s : best;
+    }, null) ?? null;
+  if (dwarf.role === 'miner' && nearestStockpileWithCapacity
       && dwarf.inventory.materials >= 8
-      && !(dwarf.x === stockpile.x && dwarf.y === stockpile.y)
-      && stockpile.ore < stockpile.maxOre) {
-    const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: stockpile.x, y: stockpile.y }, grid);
+      && !(dwarf.x === nearestStockpileWithCapacity.x && dwarf.y === nearestStockpileWithCapacity.y)) {
+    const next = pathNextStep(
+      { x: dwarf.x, y: dwarf.y },
+      { x: nearestStockpileWithCapacity.x, y: nearestStockpileWithCapacity.y },
+      grid,
+    );
     dwarf.x    = next.x;
     dwarf.y    = next.y;
     dwarf.task = `→ stockpile (${dwarf.inventory.materials.toFixed(0)} ore)`;

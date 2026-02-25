@@ -101,25 +101,31 @@ export function TileTooltip() {
 
 /** Colony-wide goal + communal depot + ore stockpile panel. */
 export function ColonyGoalPanel() {
-  const [goal,      setGoal]      = useState<ColonyGoal | null>(null);
-  const [depot,     setDepot]     = useState<Depot | null>(null);
-  const [stockpile, setStockpile] = useState<OreStockpile | null>(null);
+  const [goal,       setGoal]       = useState<ColonyGoal | null>(null);
+  const [depots,     setDepots]     = useState<Depot[]>([]);
+  const [stockpiles, setStockpiles] = useState<OreStockpile[]>([]);
 
   useEffect(() => {
     const onState = (s: GameState) => {
-      if (s.colonyGoal) setGoal({ ...s.colonyGoal });
-      if (s.depot)      setDepot({ ...s.depot });
-      if (s.stockpile)  setStockpile({ ...s.stockpile });
+      if (s.colonyGoal)  setGoal({ ...s.colonyGoal });
+      if (s.depots)      setDepots(s.depots.map(d => ({ ...d })));
+      if (s.stockpiles)  setStockpiles(s.stockpiles.map(sp => ({ ...sp })));
     };
     bus.on('gameState', onState);
     return () => bus.off('gameState', onState);
   }, []);
 
-  if (!goal || !depot || !stockpile) return null;
+  if (!goal || depots.length === 0 || stockpiles.length === 0) return null;
 
-  const pct         = Math.min(1, goal.progress / goal.target);
-  const depotPct    = Math.min(1, depot.food / depot.maxFood);
-  const stockpilePct = Math.min(1, stockpile.ore / stockpile.maxOre);
+  const pct          = Math.min(1, goal.progress / goal.target);
+  const totalFood    = depots.reduce((s, d) => s + d.food, 0);
+  const maxFood      = depots.reduce((s, d) => s + d.maxFood, 0);
+  const totalOre     = stockpiles.reduce((s, sp) => s + sp.ore, 0);
+  const maxOre       = stockpiles.reduce((s, sp) => s + sp.maxOre, 0);
+  const depotPct     = maxFood > 0 ? Math.min(1, totalFood / maxFood) : 0;
+  const stockpilePct = maxOre  > 0 ? Math.min(1, totalOre  / maxOre)  : 0;
+  const depotLabel   = depots.length     > 1 ? `×${depots.length}`     : '';
+  const stockLabel   = stockpiles.length > 1 ? `×${stockpiles.length}` : '';
 
   return (
     <div style={styles.goalPanel}>
@@ -142,7 +148,7 @@ export function ColonyGoalPanel() {
         <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
           <div style={{ ...styles.barFill, width: `${depotPct * 100}%`, background: '#f0c040' }} />
         </div>
-        <span style={{ color: '#f0c040' }}>{depot.food.toFixed(0)}/{depot.maxFood}</span>
+        <span style={{ color: '#f0c040' }}>{totalFood.toFixed(0)}/{maxFood}{depotLabel}</span>
       </div>
       {/* Ore stockpile row */}
       <div style={styles.goalDepot}>
@@ -150,7 +156,7 @@ export function ColonyGoalPanel() {
         <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
           <div style={{ ...styles.barFill, width: `${stockpilePct * 100}%`, background: '#ff8800' }} />
         </div>
-        <span style={{ color: '#ff8800' }}>{stockpile.ore.toFixed(0)}/{stockpile.maxOre}</span>
+        <span style={{ color: '#ff8800' }}>{totalOre.toFixed(0)}/{maxOre}{stockLabel}</span>
       </div>
     </div>
   );

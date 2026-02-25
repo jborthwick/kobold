@@ -26,6 +26,16 @@ TODO:
 [x] hide vision and metabolism from the dwarf HUD panel
 [x] if dwarf inventory is full, they should probably return home to unload. sometimes the get stuck out in a field with a full inventory.
 [x] The fighter needs an easier way to chase down goblins they find. Goblins should move slightly slower than dwarves, or a fighter should be able to speed up when chasing goblins
+[ ] Successor dwarves should have a roman numeral of their generation appended to the end of their name. So Bomer's succesor would be Bomer II, and then Bomer III, Bomer IV
+[ ] add how a dwarf died to their hud panel for deceased dwarfs. Successors should remember how they predecessors died too.
+[ ] Fighters still struggle to catchup and slay goblins they are chasing (they get stuck chasing for long periods)
+[ ] Use a configurable sprite for Food depots and ore stockpiles
+[ ] bug: LLM crisis calls don't appear to be happening anymore when enabled
+[ ] bug: console doesn't clear on page refresh / game restart
+[ ] bug: it takes too long for a fighter to catch and slay a goblin, they get stuck in really long chases
+
+
+
 
 
 Dwarf fort upgrades:

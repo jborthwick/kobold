@@ -57,15 +57,15 @@ export class WorldScene extends Phaser.Scene {
   private spawnZone!: { x: number; y: number; w: number; h: number };
   private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
 
-  // Colony goal + depot + ore stockpile
+  // Colony goal + depots + ore stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
   private goblinKillCount = 0;
-  private depot!: Depot;
-  private depotGfx!: Phaser.GameObjects.Graphics;
-  private depotLabel!: Phaser.GameObjects.Text;
-  private stockpile!: OreStockpile;
-  private stockpileGfx!: Phaser.GameObjects.Graphics;
-  private stockpileLabel!: Phaser.GameObjects.Text;
+  private depots:         Depot[]         = [];
+  private stockpiles:     OreStockpile[]  = [];
+  private depotGfxList:   Phaser.GameObjects.Graphics[] = [];
+  private depotLblList:   Phaser.GameObjects.Text[]     = [];
+  private stockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  private stockpileLblList: Phaser.GameObjects.Text[]     = [];
 
   // WASD keys
   private wasd!: {
@@ -100,22 +100,18 @@ export class WorldScene extends Phaser.Scene {
     resetGoblins();
     this.goblins = spawnInitialGoblins(this.grid, 3);
 
-    // ── Depot + Ore Stockpile ───────────────────────────────────────────
+    // ── Depots + Ore Stockpiles ─────────────────────────────────────────
+    // Each array starts with one unit; more are appended automatically when
+    // the last unit fills up.  New units spawn 3 tiles south so the fort
+    // rooms grow downward to enclose them.
     const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
     const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
-    this.depot = {
-      x:       depotX,
-      y:       depotY,
-      food:    0,
-      maxFood: 50,
-    };
-    // Stockpile sits 8 tiles east of the depot (separate room in the H-fort)
-    this.stockpile = {
-      x:      depotX + 8,
-      y:      depotY,
-      ore:    80,
-      maxOre: 100,
-    };
+    this.depots     = [{ x: depotX,     y: depotY, food: 0, maxFood: 200 }];
+    this.stockpiles = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
+    this.depotGfxList     = [];
+    this.depotLblList     = [];
+    this.stockpileGfxList = [];
+    this.stockpileLblList = [];
     this.goblinKillCount = 0;
     this.colonyGoal = WorldScene.makeGoal('stockpile_food', 0);
     // Stamp every dwarf with their home fort location now that the depot is placed
@@ -136,22 +132,9 @@ export class WorldScene extends Phaser.Scene {
     this.overlayGfx   = this.add.graphics();
     this.flagGfx      = this.add.graphics();
     this.selectionGfx = this.add.graphics();
-    // Depot: gold border + label above the tile
-    this.depotGfx   = this.add.graphics();
-    this.depotLabel = this.add.text(
-      this.depot.x * TILE_SIZE + TILE_SIZE / 2,
-      this.depot.y * TILE_SIZE - 4,
-      '',
-      { fontSize: '8px', color: '#f0c040', fontFamily: 'monospace' },
-    ).setOrigin(0.5, 1);
-    // Stockpile: amber border + label above the tile
-    this.stockpileGfx   = this.add.graphics();
-    this.stockpileLabel = this.add.text(
-      this.stockpile.x * TILE_SIZE + TILE_SIZE / 2,
-      this.stockpile.y * TILE_SIZE - 4,
-      '',
-      { fontSize: '8px', color: '#ff8800', fontFamily: 'monospace' },
-    ).setOrigin(0.5, 1);
+    // Create initial graphics for the first depot and stockpile
+    this.addDepotGraphics(this.depots[0]);
+    this.addStockpileGraphics(this.stockpiles[0]);
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
 
@@ -376,7 +359,7 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      }, this.depot, this.goblins, this.stockpile, this.colonyGoal ?? undefined);
+      }, this.depots, this.goblins, this.stockpiles, this.colonyGoal ?? undefined);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -524,7 +507,7 @@ export class WorldScene extends Phaser.Scene {
       if (!dead) continue;
 
       const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.dwarves, this.tick);
-      successor.homeTile = { x: this.depot.x, y: this.depot.y };
+      successor.homeTile = { x: this.depots[0].x, y: this.depots[0].y };
       this.dwarves.push(successor);
 
       bus.emit('logEntry', {
@@ -543,6 +526,34 @@ export class WorldScene extends Phaser.Scene {
         });
       } else {
         successor.llmReasoning = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+      }
+    }
+
+    // ── Storage expansion — spawn a new unit when the last one fills ────────
+    // New units spawn on the nearest open adjacent tile (BFS), so they
+    // naturally fill existing room interior before pushing the walls out.
+    const lastDepot = this.depots[this.depots.length - 1];
+    if (lastDepot.food >= lastDepot.maxFood) {
+      const allOccupied = [...this.depots, ...this.stockpiles];
+      const pos = this.findNearestOpenTile(this.depots, allOccupied);
+      if (pos) {
+        const nd: Depot = { ...pos, food: 0, maxFood: 200 };
+        this.depots.push(nd);
+        this.addDepotGraphics(nd);
+        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+          message: `New food depot established (${this.depots.length} total)!`, level: 'info' });
+      }
+    }
+    const lastStockpile = this.stockpiles[this.stockpiles.length - 1];
+    if (lastStockpile.ore >= lastStockpile.maxOre) {
+      const allOccupied = [...this.depots, ...this.stockpiles];
+      const pos = this.findNearestOpenTile(this.stockpiles, allOccupied);
+      if (pos) {
+        const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
+        this.stockpiles.push(ns);
+        this.addStockpileGraphics(ns);
+        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+          message: `New ore stockpile established (${this.stockpiles.length} total)!`, level: 'info' });
       }
     }
 
@@ -613,8 +624,8 @@ export class WorldScene extends Phaser.Scene {
       paused:          this.paused,
       speed:           this.speedMultiplier,
       colonyGoal:      { ...this.colonyGoal },
-      depot:           { ...this.depot },
-      stockpile:       { ...this.stockpile },
+      depots:          this.depots.map(d => ({ ...d })),
+      stockpiles:      this.stockpiles.map(s => ({ ...s })),
     });
   }
 
@@ -624,7 +635,7 @@ export class WorldScene extends Phaser.Scene {
     const alive = this.dwarves.filter(d => d.alive);
     switch (this.colonyGoal.type) {
       case 'stockpile_food':
-        this.colonyGoal.progress = this.depot.food;
+        this.colonyGoal.progress = this.depots.reduce((sum, d) => sum + d.food, 0);
         break;
       case 'survive_ticks':
         this.colonyGoal.progress = this.tick;
@@ -654,44 +665,108 @@ export class WorldScene extends Phaser.Scene {
     const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
     // Reset relevant counters so the new goal tracks from zero
-    if (next === 'stockpile_food') this.depot.food = 0;
+    // Note: depot food and stockpile ore are intentionally NOT cleared on goal completion
     if (next === 'defeat_goblins') this.goblinKillCount = 0;
     this.colonyGoal = WorldScene.makeGoal(next, gen);
   }
 
+  /**
+   * BFS from all `anchors` to find the nearest walkable tile that isn't in
+   * `occupied` or the grid. Traverses through walls and occupied tiles so it
+   * can escape a full room, but never crosses water.
+   * Direction priority: E → W → N → S, giving a natural left-to-right fill
+   * before spilling southward.
+   */
+  private findNearestOpenTile(
+    anchors:  Array<{ x: number; y: number }>,
+    occupied: Array<{ x: number; y: number }>,
+  ): { x: number; y: number } | null {
+    const occupiedSet = new Set(occupied.map(p => `${p.x},${p.y}`));
+    const visited     = new Set<string>();
+    const queue: Array<{ x: number; y: number }> = [];
+    for (const a of anchors) {
+      const key = `${a.x},${a.y}`;
+      if (!visited.has(key)) { visited.add(key); queue.push(a); }
+    }
+    const DIRS = [[1,0],[-1,0],[0,-1],[0,1]] as const;   // E W N S
+    while (queue.length > 0) {
+      const { x, y } = queue.shift()!;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx, ny = y + dy;
+        const key = `${nx},${ny}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+        const t = this.grid[ny][nx];
+        if (t.type === TileType.Water) continue;              // hard impassable
+        if (occupiedSet.has(key) || t.type === TileType.Wall) {
+          queue.push({ x: nx, y: ny });                       // traverse but don't stop
+          continue;
+        }
+        return { x: nx, y: ny };                              // open tile found
+      }
+    }
+    return null;
+  }
+
+  /** Create Phaser graphics + label objects for a newly added depot. */
+  private addDepotGraphics(depot: Depot): void {
+    const gfx = this.add.graphics();
+    const lbl = this.add.text(
+      depot.x * TILE_SIZE + TILE_SIZE / 2,
+      depot.y * TILE_SIZE - 4,
+      '',
+      { fontSize: '8px', color: '#f0c040', fontFamily: 'monospace' },
+    ).setOrigin(0.5, 1);
+    this.depotGfxList.push(gfx);
+    this.depotLblList.push(lbl);
+  }
+
+  /** Create Phaser graphics + label objects for a newly added stockpile. */
+  private addStockpileGraphics(stockpile: OreStockpile): void {
+    const gfx = this.add.graphics();
+    const lbl = this.add.text(
+      stockpile.x * TILE_SIZE + TILE_SIZE / 2,
+      stockpile.y * TILE_SIZE - 4,
+      '',
+      { fontSize: '8px', color: '#ff8800', fontFamily: 'monospace' },
+    ).setOrigin(0.5, 1);
+    this.stockpileGfxList.push(gfx);
+    this.stockpileLblList.push(lbl);
+  }
+
   private drawDepot() {
-    const px = this.depot.x * TILE_SIZE;
-    const py = this.depot.y * TILE_SIZE;
-    this.depotGfx.clear();
-    // Gold border
-    this.depotGfx.lineStyle(2, 0xf0c040, 0.9);
-    this.depotGfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    // Semi-transparent fill — brightens as food accumulates
-    const fillAlpha = this.depot.food > 0
-      ? 0.12 + (this.depot.food / this.depot.maxFood) * 0.25
-      : 0.06;
-    this.depotGfx.fillStyle(0xf0c040, fillAlpha);
-    this.depotGfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-    // Food count label above tile (e.g. "D:12")
-    this.depotLabel.setText(this.depot.food > 0 ? `D:${this.depot.food.toFixed(0)}` : 'D');
+    for (let i = 0; i < this.depots.length; i++) {
+      const d   = this.depots[i];
+      const gfx = this.depotGfxList[i];
+      const lbl = this.depotLblList[i];
+      if (!gfx || !lbl) continue;
+      const px = d.x * TILE_SIZE, py = d.y * TILE_SIZE;
+      gfx.clear();
+      gfx.lineStyle(2, 0xf0c040, 0.9);
+      gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      const alpha = d.food > 0 ? 0.12 + (d.food / d.maxFood) * 0.25 : 0.06;
+      gfx.fillStyle(0xf0c040, alpha);
+      gfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      lbl.setText(d.food > 0 ? `D:${d.food.toFixed(0)}` : 'D');
+    }
   }
 
   private drawStockpile() {
-    const px = this.stockpile.x * TILE_SIZE;
-    const py = this.stockpile.y * TILE_SIZE;
-    this.stockpileGfx.clear();
-    // Amber border
-    this.stockpileGfx.lineStyle(2, 0xff8800, 0.9);
-    this.stockpileGfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    // Fill brightens as ore accumulates
-    const fillAlpha = this.stockpile.ore > 0
-      ? 0.12 + (this.stockpile.ore / this.stockpile.maxOre) * 0.25
-      : 0.06;
-    this.stockpileGfx.fillStyle(0xff8800, fillAlpha);
-    this.stockpileGfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-    // Ore count label (e.g. "S:24")
-    const label = this.stockpile.ore > 0 ? `S:${this.stockpile.ore.toFixed(0)}` : 'S';
-    this.stockpileLabel.setText(label);
+    for (let i = 0; i < this.stockpiles.length; i++) {
+      const s   = this.stockpiles[i];
+      const gfx = this.stockpileGfxList[i];
+      const lbl = this.stockpileLblList[i];
+      if (!gfx || !lbl) continue;
+      const px = s.x * TILE_SIZE, py = s.y * TILE_SIZE;
+      gfx.clear();
+      gfx.lineStyle(2, 0xff8800, 0.9);
+      gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+      const alpha = s.ore > 0 ? 0.12 + (s.ore / s.maxOre) * 0.25 : 0.06;
+      gfx.fillStyle(0xff8800, alpha);
+      gfx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      lbl.setText(s.ore > 0 ? `S:${s.ore.toFixed(0)}` : 'S');
+    }
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────

@@ -159,6 +159,6 @@ export interface GameState {
   paused: boolean;
   speed: number;  // multiplier: 0.25 | 0.5 | 1 | 2 | 4
   colonyGoal: ColonyGoal;
-  depot:     Depot;
-  stockpile: OreStockpile;
+  depots:     Depot[];
+  stockpiles: OreStockpile[];
 }
