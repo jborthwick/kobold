@@ -53,11 +53,8 @@ function levelColor(level: LogEntry['level']): string {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position:      'absolute',
-    top:           8,
-    right:         0,
-    bottom:        0,
-    width:         360,
+    flex:          1,
+    minHeight:     0,
     display:       'flex',
     flexDirection: 'column',
     background:    'rgba(0,0,0,0.70)',
