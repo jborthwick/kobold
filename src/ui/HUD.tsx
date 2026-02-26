@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, Goblin } from '../shared/types';
+import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin } from '../shared/types';
 
 /** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
 function topRelation(
@@ -43,7 +43,7 @@ export function HUD() {
     <div style={styles.topBar}>
       <Stat label="dwarves" value={`${alive.length}/${state.dwarves.length}`} />
       <Stat label="food"    value={state.totalFood.toFixed(1)} />
-      <Stat label="stone"   value={state.totalMaterials.toFixed(1)} />
+      <Stat label="mats"    value={state.totalMaterials.toFixed(1)} />
       <Stat label="tick"    value={String(state.tick)} />
       <PauseSpeed paused={state.paused} speed={state.speed} />
       <OverlayIndicator mode={state.overlayMode} />
@@ -180,9 +180,9 @@ export function TileTooltip() {
   );
 }
 
-/** Panel shown when the player clicks a food or ore stockpile. */
+/** Panel shown when the player clicks a food, ore, or wood stockpile. */
 export function StockpilePanel() {
-  const [sel,   setSel]   = useState<{ kind: 'food' | 'ore'; idx: number } | null>(null);
+  const [sel,   setSel]   = useState<{ kind: 'food' | 'ore' | 'wood'; idx: number } | null>(null);
   const [state, setState] = useState<GameState | null>(null);
 
   useEffect(() => {
@@ -196,23 +196,28 @@ export function StockpilePanel() {
 
   if (!sel || !state) return null;
 
-  const stockpile: FoodStockpile | OreStockpile | undefined =
-    sel.kind === 'food'
-      ? state.foodStockpiles[sel.idx]
-      : state.oreStockpiles[sel.idx];
+  const stockpile: FoodStockpile | OreStockpile | WoodStockpile | undefined =
+    sel.kind === 'food' ? state.foodStockpiles[sel.idx]
+  : sel.kind === 'ore'  ? state.oreStockpiles[sel.idx]
+  :                       state.woodStockpiles[sel.idx];
 
   if (!stockpile) return null;
 
   const isFoodSp = sel.kind === 'food';
-  const amount   = isFoodSp ? (stockpile as FoodStockpile).food : (stockpile as OreStockpile).ore;
-  const max      = isFoodSp ? (stockpile as FoodStockpile).maxFood : (stockpile as OreStockpile).maxOre;
+  const isOreSp  = sel.kind === 'ore';
+  const amount   = isFoodSp ? (stockpile as FoodStockpile).food
+                 : isOreSp  ? (stockpile as OreStockpile).ore
+                 :             (stockpile as WoodStockpile).wood;
+  const max      = isFoodSp ? (stockpile as FoodStockpile).maxFood
+                 : isOreSp  ? (stockpile as OreStockpile).maxOre
+                 :             (stockpile as WoodStockpile).maxWood;
   const pct      = max > 0 ? Math.min(1, amount / max) : 0;
-  const color    = isFoodSp ? '#f0c040' : '#ff8800';
-  const icon     = isFoodSp ? '🏠' : '⛏';
-  const label    = isFoodSp ? 'Food Stockpile' : 'Ore Stockpile';
-  const resource = isFoodSp ? 'food' : 'ore';
+  const color    = isFoodSp ? '#f0c040' : isOreSp ? '#ff8800' : '#8bc34a';
+  const icon     = isFoodSp ? '🏠' : isOreSp ? '⛏' : '🪵';
+  const label    = isFoodSp ? 'Food Stockpile' : isOreSp ? 'Ore Stockpile' : 'Wood Stockpile';
+  const resource = isFoodSp ? 'food' : isOreSp ? 'ore' : 'wood';
 
-  // Count dwarves carrying items of this type and dwarves with this stockpile as their home
+  // Count dwarves carrying items of this type
   const carriers = isFoodSp
     ? state.dwarves.filter(d => d.alive && d.inventory.food > 0).length
     : state.dwarves.filter(d => d.alive && d.inventory.materials > 0).length;
@@ -265,17 +270,19 @@ export function GoblinPanel() {
   );
 }
 
-/** Colony-wide goal + food stockpile + ore stockpile panel. */
+/** Colony-wide goal + food/ore/wood stockpile panel. */
 export function ColonyGoalPanel() {
   const [goal,           setGoal]           = useState<ColonyGoal | null>(null);
   const [foodStockpiles, setFoodStockpiles] = useState<FoodStockpile[]>([]);
   const [oreStockpiles,  setOreStockpiles]  = useState<OreStockpile[]>([]);
+  const [woodStockpiles, setWoodStockpiles] = useState<WoodStockpile[]>([]);
 
   useEffect(() => {
     const onState = (s: GameState) => {
       if (s.colonyGoal)      setGoal({ ...s.colonyGoal });
       if (s.foodStockpiles)  setFoodStockpiles(s.foodStockpiles.map(d => ({ ...d })));
       if (s.oreStockpiles)   setOreStockpiles(s.oreStockpiles.map(sp => ({ ...sp })));
+      if (s.woodStockpiles)  setWoodStockpiles(s.woodStockpiles.map(sp => ({ ...sp })));
     };
     bus.on('gameState', onState);
     return () => bus.off('gameState', onState);
@@ -288,10 +295,14 @@ export function ColonyGoalPanel() {
   const maxFood          = foodStockpiles.reduce((s, d) => s + d.maxFood, 0);
   const totalOre         = oreStockpiles.reduce((s, sp) => s + sp.ore, 0);
   const maxOre           = oreStockpiles.reduce((s, sp) => s + sp.maxOre, 0);
+  const totalWood        = woodStockpiles.reduce((s, sp) => s + sp.wood, 0);
+  const maxWood          = woodStockpiles.reduce((s, sp) => s + sp.maxWood, 0);
   const foodStockpilePct = maxFood > 0 ? Math.min(1, totalFood / maxFood) : 0;
   const oreStockpilePct  = maxOre  > 0 ? Math.min(1, totalOre  / maxOre)  : 0;
+  const woodStockpilePct = maxWood > 0 ? Math.min(1, totalWood / maxWood)  : 0;
   const foodLabel        = foodStockpiles.length > 1 ? `×${foodStockpiles.length}` : '';
   const oreLabel         = oreStockpiles.length  > 1 ? `×${oreStockpiles.length}`  : '';
+  const woodLabel        = woodStockpiles.length > 1 ? `×${woodStockpiles.length}` : '';
 
   return (
     <div style={styles.goalPanel}>
@@ -324,6 +335,16 @@ export function ColonyGoalPanel() {
         </div>
         <span style={{ color: '#ff8800' }}>{totalOre.toFixed(0)}/{maxOre}{oreLabel}</span>
       </div>
+      {/* Wood stockpile row */}
+      {woodStockpiles.length > 0 && (
+        <div style={styles.goalDepot}>
+          <span style={{ color: '#8bc34a' }}>🪵</span>
+          <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
+            <div style={{ ...styles.barFill, width: `${woodStockpilePct * 100}%`, background: '#8bc34a' }} />
+          </div>
+          <span style={{ color: '#8bc34a' }}>{totalWood.toFixed(0)}/{maxWood}{woodLabel}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -388,9 +409,10 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
 }
 
 function roleColor(role: DwarfRole): string {
-  return role === 'forager' ? '#56d973'
-       : role === 'miner'   ? '#ff8800'
-       : role === 'fighter' ? '#e74c3c'
+  return role === 'forager'    ? '#56d973'
+       : role === 'miner'      ? '#ff8800'
+       : role === 'fighter'    ? '#e74c3c'
+       : role === 'lumberjack' ? '#8bc34a'  // olive green — wood
        : '#7ec8e3';  // scout
 }
 
@@ -435,7 +457,10 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {dwarf.inventory.food.toFixed(1)}</span>
-        <span style={{ color: '#ff8800' }}>⛏ {dwarf.inventory.materials.toFixed(1)}</span>
+        {dwarf.role === 'lumberjack'
+          ? <span style={{ color: '#8bc34a' }}>🪵 {dwarf.inventory.materials.toFixed(1)}</span>
+          : <span style={{ color: '#ff8800' }}>⛏ {dwarf.inventory.materials.toFixed(1)}</span>
+        }
         {dwarf.goblinKills > 0 && (
           <span style={{ color: '#e74c3c' }}>⚔ {dwarf.goblinKills} kill{dwarf.goblinKills !== 1 ? 's' : ''}</span>
         )}

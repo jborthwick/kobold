@@ -28,4 +28,5 @@ export const SPRITE_CONFIG: Record<string, number> = {
   tombstone: 686,
   foodStockpile: 439,
   oreStockpile: 241,
+  woodStockpile: 54,  // pine tree icon — press T in-game to reassign
 };

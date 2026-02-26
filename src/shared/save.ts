@@ -1,4 +1,4 @@
-import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, OverlayMode, LogEntry } from './types';
+import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry } from './types';
 
 export interface SaveData {
   version: 1;
@@ -9,6 +9,7 @@ export interface SaveData {
   colonyGoal: ColonyGoal;
   foodStockpiles: FoodStockpile[];
   oreStockpiles: OreStockpile[];
+  woodStockpiles: WoodStockpile[];
   goblinKillCount: number;
   spawnZone: { x: number; y: number; w: number; h: number };
   pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[];

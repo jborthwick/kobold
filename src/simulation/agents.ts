@@ -1,5 +1,5 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type FoodStockpile, type OreStockpile, type Goblin, type ResourceSite, type ColonyGoal } from '../shared/types';
+import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Goblin, type ResourceSite, type ColonyGoal } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 
@@ -63,7 +63,7 @@ const FORAGEABLE_TILES = new Set<TileType>([
 ]);
 
 // Role assignment order and vision ranges
-const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'forager', 'fighter'];
+const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
 
 // ── Trait / bio / goal tables ─────────────────────────────────────────────────
 const DWARF_TRAITS: DwarfTrait[] = [
@@ -94,10 +94,11 @@ const DWARF_GOALS: string[] = [
   'see the colony reach 10 dwarves',
 ];
 const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
-  forager: { visionMin: 5, visionMax: 8,  maxHealth: 100 },
-  miner:   { visionMin: 4, visionMax: 6,  maxHealth: 100 },
-  scout:   { visionMin: 7, visionMax: 12, maxHealth: 100 },
-  fighter: { visionMin: 4, visionMax: 7,  maxHealth: 130 },
+  forager:    { visionMin: 5, visionMax: 8,  maxHealth: 100 },
+  miner:      { visionMin: 4, visionMax: 6,  maxHealth: 100 },
+  scout:      { visionMin: 7, visionMax: 12, maxHealth: 100 },
+  fighter:    { visionMin: 4, visionMax: 7,  maxHealth: 130 },
+  lumberjack: { visionMin: 5, visionMax: 8,  maxHealth: 100 },
 };
 
 /** Convert a positive integer to a roman numeral string (up to 3999). */
@@ -156,6 +157,7 @@ export function spawnDwarves(
       wanderExpiry:    0,
       knownFoodSites:  [],
       knownOreSites:   [],
+      knownWoodSites:  [],
       homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
       goblinKills:     0,
     });
@@ -260,6 +262,7 @@ export function spawnSuccessor(
     wanderExpiry:    0,
     knownFoodSites:  [],
     knownOreSites:   [],
+    knownWoodSites:  [],
     homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
     goblinKills:     0,
   };
@@ -289,7 +292,8 @@ function bestFoodTile(
   return best;
 }
 
-/** Scan a square of `radius` tiles around the dwarf for the richest material tile (miners). */
+/** Scan a square of `radius` tiles around the dwarf for the richest ore/stone material tile (miners).
+ *  Excludes Forest tiles — wood is handled separately by lumberjacks via bestWoodTile(). */
 function bestMaterialTile(
   dwarf:  Dwarf,
   grid:   Tile[][],
@@ -303,6 +307,29 @@ function bestMaterialTile(
       const nx = dwarf.x + dx;
       const ny = dwarf.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      if (grid[ny][nx].type === TileType.Forest) continue;  // forest = wood, not ore
+      const v = grid[ny][nx].materialValue;
+      if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
+    }
+  }
+  return best;
+}
+
+/** Scan a square of `radius` tiles around the dwarf for the richest Forest tile with wood (lumberjacks). */
+function bestWoodTile(
+  dwarf:  Dwarf,
+  grid:   Tile[][],
+  radius: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestValue = 1;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = dwarf.x + dx;
+      const ny = dwarf.y + dy;
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      if (grid[ny][nx].type !== TileType.Forest) continue;
       const v = grid[ny][nx].materialValue;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
@@ -522,6 +549,7 @@ export function tickAgent(
   goblins?:           Goblin[],
   oreStockpiles?:     OreStockpile[],
   colonyGoal?:        ColonyGoal,
+  woodStockpiles?:    WoodStockpile[],
 ): void {
   if (!dwarf.alive) return;
 
@@ -663,6 +691,19 @@ export function tickAgent(
     }
   }
 
+  // ── 2.9b. Wood stockpile deposit ──────────────────────────────────────
+  // Lumberjacks standing on any wood stockpile tile deposit all carried wood.
+  const standingWoodStockpile = woodStockpiles?.find(s => s.x === dwarf.x && s.y === dwarf.y) ?? null;
+  if (dwarf.role === 'lumberjack' && standingWoodStockpile && dwarf.inventory.materials > 0) {
+    const stored = Math.min(dwarf.inventory.materials, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
+    if (stored > 0) {
+      standingWoodStockpile.wood  += stored;
+      dwarf.inventory.materials   -= stored;
+      dwarf.task                   = `deposited ${stored.toFixed(0)} wood → stockpile`;
+      return;
+    }
+  }
+
   // ── 3. Follow player command ───────────────────────────────────────────
   // Player commands take priority over autonomous harvesting so right-click
   // actually moves the dwarf without interruption.
@@ -727,14 +768,14 @@ export function tickAgent(
   //   normal            → dwarf.vision
   //   hungry (> 65)     → min(vision × 2, 15)   ← deterministic, no LLM needed
   //   LLM intent forage → 15
-  // Miners skip food foraging when not yet hungry — they prefer to mine.
-  // Below hunger 50 they fall straight through to ore-related BT steps.
+  // Miners/lumberjacks skip food foraging when not yet hungry — they prefer to mine/log.
+  // Below hunger 50 they fall straight through to resource-gathering BT steps.
   // Dwarves with a full inventory also skip — step 4.2 handles depot routing,
   // and step 5 wander (with its 25% home-drift) handles the depot-full case.
   // This prevents the fill-up → rush-to-food → fill-up loop.
   const inventoryFull  = dwarf.inventory.food >= MAX_INVENTORY_FOOD;
   const skipFoodForage = inventoryFull
-    || (dwarf.role === 'miner' && dwarf.hunger < 50 && dwarf.llmIntent !== 'forage');
+    || ((dwarf.role === 'miner' || dwarf.role === 'lumberjack') && dwarf.hunger < 50 && dwarf.llmIntent !== 'forage');
   const radius = dwarf.llmIntent === 'forage' ? 15
     : dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15)
     : dwarf.vision;
@@ -978,6 +1019,29 @@ export function tickAgent(
     return;
   }
 
+  // ── 4.4b. Lumberjack lumber run — carry chopped wood to nearest wood stockpile ──
+  // Fires when lumberjack is carrying ≥ 8 wood and some stockpile has capacity.
+  const nearestWoodStockpileWithCapacity = woodStockpiles
+    ?.filter(s => s.wood < s.maxWood)
+    .reduce<WoodStockpile | null>((best, s) => {
+      const dist     = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
+      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      return dist < bestDist ? s : best;
+    }, null) ?? null;
+  if (dwarf.role === 'lumberjack' && nearestWoodStockpileWithCapacity
+      && dwarf.inventory.materials >= 8
+      && !(dwarf.x === nearestWoodStockpileWithCapacity.x && dwarf.y === nearestWoodStockpileWithCapacity.y)) {
+    const next = pathNextStep(
+      { x: dwarf.x, y: dwarf.y },
+      { x: nearestWoodStockpileWithCapacity.x, y: nearestWoodStockpileWithCapacity.y },
+      grid,
+    );
+    dwarf.x    = next.x;
+    dwarf.y    = next.y;
+    dwarf.task = `→ wood stockpile (${dwarf.inventory.materials.toFixed(0)} wood)`;
+    return;
+  }
+
   // ── 4.45. Remembered ore vein (miners) ───────────────────────────────────
   // When no ore is in vision, path toward the best-remembered ore site before
   // resorting to wander.  On arrival: refresh if still rich, scan the patch
@@ -985,9 +1049,10 @@ export function tickAgent(
   if (dwarf.role === 'miner' && dwarf.knownOreSites.length > 0) {
     const best = dwarf.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
     if (dwarf.x === best.x && dwarf.y === best.y) {
-      const mv = grid[dwarf.y][dwarf.x].materialValue;
+      const mv = grid[dwarf.y][dwarf.x].type !== TileType.Forest
+        ? grid[dwarf.y][dwarf.x].materialValue : 0;
       if (mv < 1) {
-        // Scan patch radius for any surviving ore tile before evicting
+        // Scan patch radius for any surviving ore tile before evicting (skip Forest = wood)
         let better: ResourceSite | null = null;
         for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
           for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
@@ -995,6 +1060,7 @@ export function tickAgent(
             const ny = best.y + dy;
             if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
             const t = grid[ny][nx];
+            if (t.type === TileType.Forest) continue;  // forest = wood, not ore
             if (t.materialValue < 1) continue;
             if (!better || t.materialValue > better.value) {
               better = { x: nx, y: ny, value: t.materialValue, tick: currentTick };
@@ -1010,7 +1076,7 @@ export function tickAgent(
             s => !(s.x === best.x && s.y === best.y),
           );
         }
-      } else {
+      } else if (grid[dwarf.y][dwarf.x].type !== TileType.Forest) {
         recordSite(dwarf.knownOreSites, best.x, best.y, mv, currentTick);
       }
       // Fall through — step 4.5 will mine on the next tick if value remains
@@ -1019,6 +1085,49 @@ export function tickAgent(
       dwarf.x    = next.x;
       dwarf.y    = next.y;
       dwarf.task = `→ remembered ore`;
+      return;
+    }
+  }
+
+  // ── 4.45b. Remembered forest patch (lumberjacks) ─────────────────────
+  // Mirrors 4.45 logic for ore but targets forest tiles with wood.
+  if (dwarf.role === 'lumberjack' && dwarf.knownWoodSites.length > 0) {
+    const best = dwarf.knownWoodSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (dwarf.x === best.x && dwarf.y === best.y) {
+      const mv = grid[dwarf.y][dwarf.x].materialValue;
+      if (mv < 1 || grid[dwarf.y][dwarf.x].type !== TileType.Forest) {
+        // Scan patch radius for any surviving forest tile
+        let better: ResourceSite | null = null;
+        for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
+          for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
+            const nx = best.x + dx;
+            const ny = best.y + dy;
+            if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+            const t = grid[ny][nx];
+            if (t.type !== TileType.Forest || t.materialValue < 1) continue;
+            if (!better || t.materialValue > better.value) {
+              better = { x: nx, y: ny, value: t.materialValue, tick: currentTick };
+            }
+          }
+        }
+        if (better) {
+          dwarf.knownWoodSites = dwarf.knownWoodSites.map(
+            s => (s.x === best.x && s.y === best.y) ? better! : s,
+          );
+        } else {
+          dwarf.knownWoodSites = dwarf.knownWoodSites.filter(
+            s => !(s.x === best.x && s.y === best.y),
+          );
+        }
+      } else {
+        recordSite(dwarf.knownWoodSites, best.x, best.y, mv, currentTick);
+      }
+      // Fall through — step 4.5b will chop on the next tick if wood remains
+    } else {
+      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
+      dwarf.x    = next.x;
+      dwarf.y    = next.y;
+      dwarf.task = `→ remembered forest`;
       return;
     }
   }
@@ -1052,6 +1161,39 @@ export function tickAgent(
         dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
       } else {
         dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
+      }
+      return;
+    }
+  }
+
+  // ── 4.5b. Lumberjacks target Forest tiles for wood ───────────────────
+  if (dwarf.role === 'lumberjack') {
+    const woodTarget = bestWoodTile(dwarf, grid, dwarf.vision);
+    // Sight-memory: record any rich forest tile currently visible
+    if (woodTarget) {
+      const mv = grid[woodTarget.y][woodTarget.x].materialValue;
+      if (mv >= SITE_RECORD_THRESHOLD) {
+        recordSite(dwarf.knownWoodSites, woodTarget.x, woodTarget.y, mv, currentTick);
+      }
+    }
+    if (woodTarget) {
+      if (dwarf.x !== woodTarget.x || dwarf.y !== woodTarget.y) {
+        const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, woodTarget, grid);
+        dwarf.x    = next.x;
+        dwarf.y    = next.y;
+      }
+      const here = grid[dwarf.y][dwarf.x];
+      if (here.type === TileType.Forest && here.materialValue >= 1) {
+        const hadWood      = here.materialValue;
+        const chopped      = Math.min(hadWood, 2);
+        here.materialValue = Math.max(0, hadWood - chopped);
+        // Forest tile stays as Forest even when wood is depleted — it regrows
+        dwarf.inventory.materials = Math.min(
+          dwarf.inventory.materials + chopped, MAX_INVENTORY_FOOD,
+        );
+        dwarf.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
+      } else {
+        dwarf.task = `→ forest (${woodTarget.x},${woodTarget.y})`;
       }
       return;
     }

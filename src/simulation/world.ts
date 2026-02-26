@@ -8,6 +8,10 @@ const WORLD_CONFIG = {
   forestFoodMax:  12,
   forestGrowback: 0.04,
 
+  // Forest wood yield (material) — lumberjacks harvest this
+  forestWoodMin: 8,
+  forestWoodMax: 12,
+
   // Farmland (fallback food — small patches, very slow regrowth)
   farmFoodMin:    2,
   farmFoodMax:    3,
@@ -97,12 +101,15 @@ function placeForestCluster(
       if (tileNoise(x + 5, y + 7) > 0.35 + falloff * 0.50) continue;
 
       const fMax = lerp(foodMin, foodMax, falloff * (0.6 + tileNoise(x + 3, y + 11) * 0.4));
+      // Wood yield scales with the same falloff as food but uses a separate noise seed
+      const wMax = lerp(WORLD_CONFIG.forestWoodMin, WORLD_CONFIG.forestWoodMax,
+                        falloff * (0.6 + tileNoise(x + 7, y + 17) * 0.4));
       grid[y][x] = {
         type:          TileType.Forest,
         foodValue:     fMax * (0.7 + Math.random() * 0.3),
-        materialValue: 0,
+        materialValue: wMax * (0.7 + Math.random() * 0.3),
         maxFood:       fMax,
-        maxMaterial:   0,
+        maxMaterial:   wMax,
         growbackRate:  growback,
       };
     }
@@ -348,12 +355,20 @@ export function generateWorld(): WorldGenResult {
 
 // ── Growback ───────────────────────────────────────────────────────────────────
 
+/** Wood grows back much more slowly than food — trees take time to regenerate. */
+const WOOD_GROWBACK_RATE = 0.02;
+
 export function growback(grid: Tile[][]): void {
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
+      // Food growback
       if (t.growbackRate > 0 && t.maxFood > 0 && t.foodValue < t.maxFood) {
         t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate);
+      }
+      // Wood growback — Forest tiles only; keeps tile type as Forest even when empty
+      if (t.type === TileType.Forest && t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
+        t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE);
       }
     }
   }

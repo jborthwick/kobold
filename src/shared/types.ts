@@ -59,7 +59,7 @@ export interface MemoryEntry {
 }
 
 // Agent role — assigned at spawn, permanent
-export type DwarfRole = 'forager' | 'miner' | 'scout' | 'fighter';
+export type DwarfRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
 
 export interface Dwarf {
   id: string;
@@ -84,6 +84,7 @@ export interface Dwarf {
   wanderExpiry:    number;           // tick at which to repick a new wander waypoint
   knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
   knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
+  knownWoodSites:  ResourceSite[];   // remembered forest wood sites (cap: 5)
   homeTile:        { x: number; y: number };  // fort/stockpile center — the colony's home base
   role:            DwarfRole;
   relations:       Record<string, number>;  // keyed by dwarf.id; 0–100 (50 = neutral)
@@ -134,6 +135,14 @@ export interface OreStockpile {
   maxOre: number;  // storage cap
 }
 
+// Communal wood stockpile — placed on the other side of the food stockpile; filled by lumberjacks.
+export interface WoodStockpile {
+  x:       number;  // tile coords
+  y:       number;
+  wood:    number;  // current stored wood
+  maxWood: number;  // storage cap
+}
+
 export interface TileInfo {
   x: number;
   y: number;
@@ -167,4 +176,5 @@ export interface GameState {
   colonyGoal: ColonyGoal;
   foodStockpiles: FoodStockpile[];
   oreStockpiles:  OreStockpile[];
+  woodStockpiles: WoodStockpile[];
 }

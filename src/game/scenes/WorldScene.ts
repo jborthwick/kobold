@@ -5,7 +5,7 @@ import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY, fortEnclosur
 import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type LogEntry } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -55,15 +55,18 @@ export class WorldScene extends Phaser.Scene {
   private spawnZone!: { x: number; y: number; w: number; h: number };
   private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
 
-  // Colony goal + food stockpiles + ore stockpiles (expand as each fills up)
+  // Colony goal + food/ore/wood stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
   private goblinKillCount = 0;
   private foodStockpiles:        FoodStockpile[]  = [];
   private oreStockpiles:         OreStockpile[]   = [];
+  private woodStockpiles:        WoodStockpile[]  = [];
   private foodStockpileGfxList:  Phaser.GameObjects.Graphics[] = [];
   private foodStockpileImgList:  Phaser.GameObjects.Image[]    = [];
   private oreStockpileGfxList:   Phaser.GameObjects.Graphics[] = [];
   private oreStockpileImgList:   Phaser.GameObjects.Image[]    = [];
+  private woodStockpileGfxList:  Phaser.GameObjects.Graphics[] = [];
+  private woodStockpileImgList:  Phaser.GameObjects.Image[]    = [];
 
   // Event log history (persisted to save, restored on load)
   private logHistory: LogEntry[] = [];
@@ -110,6 +113,7 @@ export class WorldScene extends Phaser.Scene {
       this.colonyGoal         = save.colonyGoal;
       this.foodStockpiles     = save.foodStockpiles;
       this.oreStockpiles      = save.oreStockpiles;
+      this.woodStockpiles     = save.woodStockpiles ?? [];  // graceful fallback for old saves
       this.goblinKillCount    = save.goblinKillCount;
       this.pendingSuccessions = save.pendingSuccessions;
       this.commandTile        = save.commandTile;
@@ -131,8 +135,9 @@ export class WorldScene extends Phaser.Scene {
 
       const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
       const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
-      this.foodStockpiles  = [{ x: depotX,     y: depotY, food: 0, maxFood: 200 }];
+      this.foodStockpiles  = [{ x: depotX,     y: depotY, food: 0,   maxFood: 200 }];
       this.oreStockpiles   = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
+      this.woodStockpiles  = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
       this.goblinKillCount = 0;
       this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
       for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
@@ -143,6 +148,8 @@ export class WorldScene extends Phaser.Scene {
     this.foodStockpileImgList = [];
     this.oreStockpileGfxList  = [];
     this.oreStockpileImgList  = [];
+    this.woodStockpileGfxList = [];
+    this.woodStockpileImgList = [];
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
@@ -163,6 +170,7 @@ export class WorldScene extends Phaser.Scene {
     // Add graphics for all stockpiles (may be >1 when loading a saved game)
     for (const sp of this.foodStockpiles) this.addFoodStockpileGraphics(sp);
     for (const sp of this.oreStockpiles)  this.addOreStockpileGraphics(sp);
+    for (const sp of this.woodStockpiles) this.addWoodStockpileGraphics(sp);
 
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
@@ -283,6 +291,7 @@ export class WorldScene extends Phaser.Scene {
       colonyGoal:         { ...this.colonyGoal },
       foodStockpiles:     this.foodStockpiles.map(s => ({ ...s })),
       oreStockpiles:      this.oreStockpiles.map(s => ({ ...s })),
+      woodStockpiles:     this.woodStockpiles.map(s => ({ ...s })),
       goblinKillCount:    this.goblinKillCount,
       spawnZone:          { ...this.spawnZone },
       pendingSuccessions: this.pendingSuccessions.map(s => ({ ...s })),
@@ -352,7 +361,7 @@ export class WorldScene extends Phaser.Scene {
       const tx = Math.floor(p.worldX / TILE_SIZE);
       const ty = Math.floor(p.worldY / TILE_SIZE);
 
-      // Check for stockpile click first (food, then ore)
+      // Check for stockpile click first (food, then ore, then wood)
       const foodIdx = this.foodStockpiles.findIndex(s => s.x === tx && s.y === ty);
       if (foodIdx >= 0) {
         this.selectedDwarfId = null;
@@ -365,6 +374,13 @@ export class WorldScene extends Phaser.Scene {
         this.selectedDwarfId = null;
         bus.emit('goblinSelect', null);
         bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
+        return;
+      }
+      const woodIdx = this.woodStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      if (woodIdx >= 0) {
+        this.selectedDwarfId = null;
+        bus.emit('goblinSelect', null);
+        bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
         return;
       }
 
@@ -476,7 +492,7 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined);
+      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -660,7 +676,7 @@ export class WorldScene extends Phaser.Scene {
     // naturally fill existing room interior before pushing the walls out.
     const lastFoodStockpile = this.foodStockpiles[this.foodStockpiles.length - 1];
     if (lastFoodStockpile.food >= lastFoodStockpile.maxFood) {
-      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
+      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
       const pos = this.findNextStockpileSlot(this.foodStockpiles, allOccupied, this.oreStockpiles);
       if (pos) {
         const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
@@ -672,7 +688,7 @@ export class WorldScene extends Phaser.Scene {
     }
     const lastOreStockpile = this.oreStockpiles[this.oreStockpiles.length - 1];
     if (lastOreStockpile.ore >= lastOreStockpile.maxOre) {
-      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles];
+      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
       const pos = this.findNextStockpileSlot(this.oreStockpiles, allOccupied, this.foodStockpiles);
       if (pos) {
         const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
@@ -680,6 +696,18 @@ export class WorldScene extends Phaser.Scene {
         this.addOreStockpileGraphics(ns);
         bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
           message: `New ore stockpile established (${this.oreStockpiles.length} total)!`, level: 'info' });
+      }
+    }
+    const lastWoodStockpile = this.woodStockpiles[this.woodStockpiles.length - 1];
+    if (lastWoodStockpile && lastWoodStockpile.wood >= lastWoodStockpile.maxWood) {
+      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
+      const pos = this.findNextStockpileSlot(this.woodStockpiles, allOccupied);
+      if (pos) {
+        const nw: WoodStockpile = { ...pos, wood: 0, maxWood: 200 };
+        this.woodStockpiles.push(nw);
+        this.addWoodStockpileGraphics(nw);
+        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+          message: `New wood stockpile established (${this.woodStockpiles.length} total)!`, level: 'info' });
       }
     }
 
@@ -755,6 +783,7 @@ export class WorldScene extends Phaser.Scene {
       colonyGoal:      { ...this.colonyGoal },
       foodStockpiles:  this.foodStockpiles.map(d => ({ ...d })),
       oreStockpiles:   this.oreStockpiles.map(s => ({ ...s })),
+      woodStockpiles:  this.woodStockpiles.map(s => ({ ...s })),
     });
   }
 
@@ -943,6 +972,26 @@ export class WorldScene extends Phaser.Scene {
       const px = s.x * TILE_SIZE, py = s.y * TILE_SIZE;
       gfx.clear();
       gfx.lineStyle(2, 0xff8800, 0.9);
+      gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  /** Create Phaser graphics + sprite objects for a newly added wood stockpile. */
+  private addWoodStockpileGraphics(stockpile: WoodStockpile): void {
+    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.woodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.woodStockpile));
+    this.woodStockpileGfxList.push(this.add.graphics());
+  }
+
+  private drawWoodStockpile() {
+    for (let i = 0; i < this.woodStockpiles.length; i++) {
+      const w   = this.woodStockpiles[i];
+      const gfx = this.woodStockpileGfxList[i];
+      if (!gfx) continue;
+      const px = w.x * TILE_SIZE, py = w.y * TILE_SIZE;
+      gfx.clear();
+      gfx.lineStyle(2, 0x56d973, 0.9);  // green border — wood
       gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
     }
   }
@@ -1159,6 +1208,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawAgents();
     this.drawFoodStockpile();
     this.drawOreStockpile();
+    this.drawWoodStockpile();
     this.drawOffScreenIndicator();
   }
 }
