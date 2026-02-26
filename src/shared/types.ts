@@ -105,7 +105,7 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error';
 }
 
-export type OverlayMode = 'off' | 'food' | 'material';
+export type OverlayMode = 'off' | 'food' | 'material' | 'wood';
 
 // Colony-wide shared goal — all dwarves contribute; cycles on completion
 export type ColonyGoalType = 'stockpile_food' | 'survive_ticks' | 'defeat_goblins' | 'enclose_fort';

@@ -214,7 +214,7 @@ export class WorldScene extends Phaser.Scene {
     this.input.keyboard!
       .addKey(Phaser.Input.Keyboard.KeyCodes.O)
       .on('down', () => {
-        const modes: OverlayMode[] = ['off', 'food', 'material'];
+        const modes: OverlayMode[] = ['off', 'food', 'material', 'wood'];
         const next = modes[(modes.indexOf(this.overlayMode) + 1) % modes.length];
         this.overlayMode = next;
         this.drawOverlay();
@@ -1041,9 +1041,12 @@ export class WorldScene extends Phaser.Scene {
         if (this.overlayMode === 'food' && tile.maxFood > 0) {
           alpha = (tile.foodValue / tile.maxFood) * 0.65;
           color = 0x00dd44; // green
-        } else if (this.overlayMode === 'material' && tile.maxMaterial > 0) {
+        } else if (this.overlayMode === 'material' && tile.maxMaterial > 0 && tile.type !== TileType.Forest) {
           alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
           color = 0xff8800; // amber
+        } else if (this.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
+          alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+          color = 0x56d973; // green
         }
 
         if (alpha > 0.02) {

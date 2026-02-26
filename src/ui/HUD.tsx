@@ -391,11 +391,13 @@ const OVERLAY_LABEL: Record<OverlayMode, string> = {
   off:      '[O] overlay',
   food:     '[O] food ▓',
   material: '[O] stone ▓',
+  wood:     '[O] wood ▓',
 };
 const OVERLAY_COLOR: Record<OverlayMode, string> = {
   off:      '#555',
   food:     '#00dd44',
   material: '#ff8800',
+  wood:     '#56d973',
 };
 
 function OverlayIndicator({ mode }: { mode: OverlayMode }) {

@@ -18,7 +18,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Farmland]: [310],
   [TileType.Ore]: [522],
   [TileType.Mushroom]: [554],
-  [TileType.Wall]: [103, 637, 892],
+  [TileType.Wall]: [637, 843, 844, 845, 892, 893],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
@@ -28,5 +28,5 @@ export const SPRITE_CONFIG: Record<string, number> = {
   tombstone: 686,
   foodStockpile: 439,
   oreStockpile: 241,
-  woodStockpile: 54,  // pine tree icon — press T in-game to reassign
+  woodStockpile: 261,
 };
