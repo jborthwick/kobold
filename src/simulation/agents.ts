@@ -391,8 +391,8 @@ function fortWallSlots(
   // Rooms grow AWAY from each other so the corridor-side inner walls never move.
   // This means the room is fully walled from the start and no interior dividers
   // form as subsequent stockpile units fill the room one by one.
-  const COL_STEP  = 3;
-  const ROW_STEP  = 3;
+  const COL_STEP  = 1;   // adjacent stockpiles — 7×7 room for 3×3 grid
+  const ROW_STEP  = 1;
   const ROOM_COLS = 3;   // 3 columns per room
   const ROOM_ROWS = 3;   // pre-build for 3 rows (9 units); grows naturally beyond that
 

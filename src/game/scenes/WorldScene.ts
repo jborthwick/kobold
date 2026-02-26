@@ -876,8 +876,8 @@ export class WorldScene extends Phaser.Scene {
       ? -1  // default: expand left
       : (otherGroup[0].x > anchor.x ? -1 : 1);
 
-    // 3-column offsets: center first, then safe direction
-    const colOffsets = [0, expandDir * 3, expandDir * 6];
+    // 3-column offsets: center first, then safe direction (adjacent, no gaps)
+    const colOffsets = [0, expandDir * 1, expandDir * 2];
 
     const isValid = (x: number, y: number): boolean =>
       x >= 0 && x < GRID_SIZE
@@ -897,8 +897,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // All existing rows are full — open a new row 3 tiles south
-    const nextRow = (rows[rows.length - 1] ?? anchor.y) + 3;
+    // All existing rows are full — open a new row 1 tile south (adjacent)
+    const nextRow = (rows[rows.length - 1] ?? anchor.y) + 1;
     for (const off of colOffsets) {
       const x = anchor.x + off;
       if (isValid(x, nextRow)) return { x, y: nextRow };
