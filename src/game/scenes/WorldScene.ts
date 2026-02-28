@@ -8,6 +8,7 @@ import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
 import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
+import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
 
@@ -54,6 +55,9 @@ export class WorldScene extends Phaser.Scene {
   // Succession state
   private spawnZone!: { x: number; y: number; w: number; h: number };
   private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
+
+  // Weather system — affects growback rates and dwarf metabolism
+  private weather!: Weather;
 
   // Colony goal + food/ore/wood stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
@@ -122,6 +126,8 @@ export class WorldScene extends Phaser.Scene {
       resetGoblins(); // reset raid timer to prevent an immediate raid on resume
       // Restore world-event schedule; fall back to a fresh window if save predates this field
       setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
+      // Restore weather or initialize if save predates weather system
+      this.weather = save.weather ?? createWeather(save.tick);
     } else {
       bus.emit('clearLog', undefined);
       this.logHistory = [];
@@ -140,6 +146,7 @@ export class WorldScene extends Phaser.Scene {
       this.woodStockpiles  = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
       this.goblinKillCount = 0;
       this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
+      this.weather         = createWeather(0);
       for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
     }
 
@@ -300,6 +307,7 @@ export class WorldScene extends Phaser.Scene {
       overlayMode:        this.overlayMode,
       logHistory:         [...this.logHistory],
       nextWorldEventTick: getNextEventTick(),
+      weather:            { ...this.weather },
     };
   }
 
@@ -470,6 +478,18 @@ export class WorldScene extends Phaser.Scene {
   private gameTick() {
     this.tick++;
 
+    // ── Weather tick ─────────────────────────────────────────────────────
+    const weatherMsg = tickWeather(this.weather, this.tick);
+    if (weatherMsg) {
+      bus.emit('logEntry', {
+        tick:      this.tick,
+        dwarfId:   'system',
+        dwarfName: 'WEATHER',
+        message:   weatherMsg,
+        level:     'info',
+      });
+    }
+
     // PIANO step 6 — check pending outcome verifications, log surprises
     const surprises = llmSystem.checkVerifications(this.dwarves, this.tick);
     for (const msg of surprises) {
@@ -492,7 +512,8 @@ export class WorldScene extends Phaser.Scene {
           message,
           level,
         });
-      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles);
+      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
+      metabolismModifier(this.weather));
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -524,7 +545,7 @@ export class WorldScene extends Phaser.Scene {
       );
     }
 
-    growback(this.grid);
+    growback(this.grid, growbackModifier(this.weather));
 
     // ── Goblin raids ───────────────────────────────────────────────────────
     const raid = maybeSpawnRaid(this.grid, this.dwarves, this.tick);
@@ -612,8 +633,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // World events — blight / bounty / ore discovery / large mushroom bloom
-    const ev = tickWorldEvents(this.grid, this.tick);
+    // World events — tension-aware storyteller biases event selection
+    const ev = tickWorldEvents(this.grid, this.tick, this.dwarves, this.goblins);
     if (ev.fired) {
       bus.emit('logEntry', {
         tick:      this.tick,
@@ -784,6 +805,8 @@ export class WorldScene extends Phaser.Scene {
       foodStockpiles:  this.foodStockpiles.map(d => ({ ...d })),
       oreStockpiles:   this.oreStockpiles.map(s => ({ ...s })),
       woodStockpiles:  this.woodStockpiles.map(s => ({ ...s })),
+      weatherSeason:   this.weather.season,
+      weatherType:     this.weather.type,
     });
   }
 

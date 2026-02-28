@@ -164,6 +164,10 @@ export interface MiniMapData {
   viewport: { x: number; y: number; w: number; h: number };
 }
 
+/** Weather state — drives cascading resource scarcity/abundance. */
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold';
+
 export interface GameState {
   tick: number;
   dwarves: Dwarf[];
@@ -177,4 +181,7 @@ export interface GameState {
   foodStockpiles: FoodStockpile[];
   oreStockpiles:  OreStockpile[];
   woodStockpiles: WoodStockpile[];
+  /** Current weather / season (affects growback & metabolism). */
+  weatherSeason?: Season;
+  weatherType?:   WeatherType;
 }

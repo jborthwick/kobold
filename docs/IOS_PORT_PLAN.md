@@ -1235,6 +1235,117 @@ enum Constants {
 
 ---
 
+## Appendix A: Pre-Port Prototyping (Web)
+
+Before porting to Swift, the following emergent behavior systems were prototyped in
+the existing TypeScript/Phaser codebase. These validate the game design cheaply and
+serve as a living spec for the iOS reimplementation.
+
+### What was prototyped and why
+
+The web prototype had four systems (traits, relations, morale, personal goals) that
+were fully wired into the data model, rendered in the UI, and sent to the LLM — but
+gated **zero behavior tree decisions**. Every dwarf acted identically regardless of
+personality. Wiring these existing systems into gameplay was the lowest-lift path to
+emergent behavior.
+
+### Changes made (all in `src/simulation/agents.ts` unless noted)
+
+#### 1. Trait modifiers → BT thresholds
+
+Added `TRAIT_MODS` map and `traitMod()` helper. Traits now modify 6 hardcoded BT
+thresholds:
+
+| Trait | Behavioral effect |
+|-------|-------------------|
+| `helpful` | Shares food at 6 (not 8), keeps only 3; shares even with low-trust neighbors |
+| `greedy` | Won't share until 12 food, keeps 8; won't share with rivals |
+| `brave` | Fights goblins until 95 hunger (not 80) |
+| `paranoid` | Flees combat at 60 hunger; drifts home 50% of the time (not 25%) |
+| `lazy` | Eats at 55 hunger (not 70) — consumes food faster |
+| `cheerful` | Shares at 6 food; shares with more neighbors (low relation gate) |
+| `mean` | Won't share until 14 food; contest penalty doubled (−10 not −5); won't share with non-allies |
+| `forgetful` | No modifier (flavor only — could later affect memory size) |
+
+#### 2. Relations gate sharing and contests
+
+- **Sharing filter:** Dwarves now refuse to share food with neighbors whose relation
+  score is below `shareRelationGate` (default 30; mean dwarves require 55).
+  A mean dwarf who lost contests with a neighbor builds a grudge → refuses to share →
+  neighbor starves → morale crisis → potentially dies.
+- **Contest yield:** Allies (relation ≥ 60) on the same tile yield peacefully with a
+  small cooperation bonus (+2) instead of stepping away with a penalty. Non-allies
+  still contest normally.
+
+#### 3. Morale affects the BT
+
+- **Stress metabolism:** Dwarves with morale < 25 burn 30% extra hunger per tick.
+  Creates a death spiral: hungry → low morale → burns calories faster → hungrier.
+- **Harvest yield scales with morale:** 0.5× at morale 0, 1.0× at morale 100.
+  Demoralized dwarves gather less food, staying hungry longer.
+
+#### 4. Weather system (`src/simulation/weather.ts`, new file)
+
+Global state that modifies growback rates and dwarf metabolism:
+
+| Weather | Growback | Metabolism | When |
+|---------|----------|------------|------|
+| Clear | 1.0× | 1.0× | Default |
+| Rain | 1.8× | 1.0× | Common in spring |
+| Drought | 0.25× | 1.0× | Common in summer |
+| Cold | 0.5× | 1.4× | Dominates winter |
+
+Seasons cycle every 600 ticks (~85 s). Weather shifts at season boundaries and
+randomly mid-season (0.2% per tick). Displayed in HUD top bar.
+
+The weather system touches zero agent code — it modifies `growback()` multiplier
+and `tickAgent()` metabolism multiplier, and the existing hunger/morale/sharing
+mechanics cascade from there.
+
+#### 5. Tension-aware storyteller (`src/simulation/events.ts`)
+
+Replaced flat 25/25/25/25 event distribution with colony-health-aware selection:
+
+| Colony tension | Event bias |
+|----------------|------------|
+| High (>70) | 45% bounty, 40% mushroom, 15% ore (help them) |
+| Low (<30) | 50% blight, 25% ore, 25% mushroom (challenge them) |
+| Medium | Uniform random (unpredictable) |
+
+Tension = f(avg hunger, avg morale, goblin count, recent deaths). Creates dramatic
+pacing: a struggling colony gets relief, a thriving colony gets challenged.
+
+### How these cascade
+
+The beauty is in the interaction, not any single system:
+
+```
+Winter arrives (weather)
+  → Cold: growback ×0.5, metabolism ×1.4
+  → Mushroom patches deplete faster, regrow slower
+  → Dwarves burn calories faster → hunger rises
+  → Morale drops (hunger > 60) → harvest yield drops (morale scale)
+  → Stress metabolism kicks in (morale < 25) → even hungrier
+  → Greedy dwarves hoard food (trait) → mean dwarves won't share (relation gate)
+  → Starving neighbors build grudges (contest penalty) → future sharing blocked
+  → Tension rises → storyteller sends bounty event (relief)
+  → Spring arrives → rain → growback ×1.8 → recovery
+```
+
+No single system "knows" about the others. Each writes to shared state (dwarf stats,
+grid food values) and reads from it next tick. This is the RimWorld pattern.
+
+### What to carry forward to iOS
+
+When porting to Swift, these prototyped systems should be rebuilt as proper Utility AI
+scoring curves (§15 of this doc) rather than threshold modifications. The trait
+modifiers become curve weights, the weather becomes a system that publishes modifiers
+via Combine, and the storyteller becomes a proper event scheduler class. But the
+*game design* validated here — which traits matter, how relations gate behavior,
+what weather multipliers feel right — transfers directly.
+
+---
+
 ## 19. Reference Links
 
 ### Existing codebase
