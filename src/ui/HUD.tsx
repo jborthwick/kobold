@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
 import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin, Season, WeatherType } from '../shared/types';
+import type { LayoutMode } from '../shared/useViewport';
 
 /** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
 function topRelation(
@@ -19,7 +20,7 @@ function topRelation(
   return top;
 }
 
-export function HUD() {
+export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode }) {
   const [state,      setState]      = useState<GameState | null>(null);
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
@@ -38,25 +39,44 @@ export function HUD() {
   if (!state) return null;
 
   const alive = state.dwarves.filter(d => d.alive);
+  const isPhone = layout === 'phone';
+  const isDesktop = layout === 'desktop';
+
+  const topBarStyle: React.CSSProperties = {
+    ...styles.topBar,
+    ...(isPhone ? {
+      top: 'calc(4px + var(--sat, 0px))',
+      left: 4,
+      right: 4,
+      gap: 8,
+      padding: '4px 8px',
+      fontSize: 11,
+    } : {}),
+  };
 
   return (
-    <div style={styles.topBar}>
-      <Stat label="dwarves" value={`${alive.length}/${state.dwarves.length}`} />
-      <Stat label="food"    value={state.totalFood.toFixed(1)} />
-      <Stat label="mats"    value={state.totalMaterials.toFixed(1)} />
-      <Stat label="tick"    value={String(state.tick)} />
+    <div style={topBarStyle}>
+      <Stat label={isPhone ? 'd' : 'dwarves'} value={`${alive.length}/${state.dwarves.length}`} />
+      <Stat label={isPhone ? 'f' : 'food'}    value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'm' : 'mats'}    value={state.totalMaterials.toFixed(isPhone ? 0 : 1)} />
+      {!isPhone && <Stat label="tick" value={String(state.tick)} />}
       {state.weatherSeason && state.weatherType && (
         <WeatherIndicator season={state.weatherSeason} weather={state.weatherType} />
       )}
-      <PauseSpeed paused={state.paused} speed={state.speed} />
-      <OverlayIndicator mode={state.overlayMode} />
-      <button
-        onClick={toggleLLM}
-        style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
-      >
-        {llmEnabled ? '🤖 LLM' : '💤 LLM'}
-      </button>
-      {confirmNew ? (
+      {/* Desktop: inline pause/speed/overlay controls */}
+      {isDesktop && <PauseSpeed paused={state.paused} speed={state.speed} />}
+      {isDesktop && <OverlayIndicator mode={state.overlayMode} />}
+      {/* LLM toggle: desktop only (LLM disabled on mobile) */}
+      {isDesktop && (
+        <button
+          onClick={toggleLLM}
+          style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
+        >
+          {llmEnabled ? '🤖 LLM' : '💤 LLM'}
+        </button>
+      )}
+      {/* New colony: desktop only */}
+      {isDesktop && (confirmNew ? (
         <div style={styles.newColonyConfirm}>
           <span style={{ color: '#f0c040', marginRight: 6 }}>abandon colony?</span>
           <button
@@ -75,7 +95,7 @@ export function HUD() {
         >
           ⚑ new colony
         </button>
-      )}
+      ))}
     </div>
   );
 }

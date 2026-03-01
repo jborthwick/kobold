@@ -5,12 +5,13 @@ import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY, fortEnclosur
 import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type GameState, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
+import { isMobileViewport, isTabletViewport } from '../../shared/platform';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
@@ -75,13 +76,19 @@ export class WorldScene extends Phaser.Scene {
   // Event log history (persisted to save, restored on load)
   private logHistory: LogEntry[] = [];
 
-  // WASD keys
-  private wasd!: {
+  // WASD keys (null when keyboard unavailable on touch devices)
+  private wasd: {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
-  };
+  } | null = null;
+
+  // Touch input state
+  private isTouchDevice = false;
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private longPressFired = false;
+  private minZoom = 0.6;
 
   constructor() {
     super({ key: 'WorldScene' });
@@ -195,67 +202,86 @@ export class WorldScene extends Phaser.Scene {
       this.drawFlag(); // restore yellow flag if one was active
     }
 
+    // ── Touch detection ──────────────────────────────────────────────────
+    this.isTouchDevice = this.sys.game.device.input.touch;
+
     // ── Camera ──────────────────────────────────────────────────────────
     const worldPx = GRID_SIZE * TILE_SIZE;
     // Extend bounds so the player can pan far enough to bring map edges out from
-    // behind the HUD/sidebar (360 px right panel, 50 px top HUD, generous margins elsewhere).
-    this.cameras.main.setBounds(-200, -100, worldPx + 700, worldPx + 300);
-    this.cameras.main.setZoom(1.2);
+    // behind the HUD/sidebar. On phone there's no sidebar so less offset needed.
+    const sidebarOffset = isMobileViewport() ? 100 : isTabletViewport() ? 380 : 700;
+    this.cameras.main.setBounds(-200, -100, worldPx + sidebarOffset, worldPx + 300);
+
+    // Phone starts more zoomed out to show more context on the small screen
+    const initialZoom = isMobileViewport() ? 0.8 : 1.2;
+    this.cameras.main.setZoom(initialZoom);
     this.cameras.main.centerOn(
       (this.spawnZone.x + this.spawnZone.w / 2) * TILE_SIZE,
       (this.spawnZone.y + this.spawnZone.h / 2) * TILE_SIZE,
     );
 
-    // ── Keyboard ────────────────────────────────────────────────────────
-    this.wasd = {
-      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
+    // Dynamic minimum zoom — world fills the screen
+    const screenW = this.cameras.main.width;
+    const screenH = this.cameras.main.height;
+    this.minZoom = Math.max(0.4, Math.min(screenW / worldPx, screenH / worldPx));
+
+    // Recalculate camera bounds and min zoom on viewport resize (device rotation, etc.)
+    this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+      const w = gameSize.width;
+      const h = gameSize.height;
+      this.minZoom = Math.max(0.4, Math.min(w / worldPx, h / worldPx));
+      const offset = w < 768 ? 100 : w < 1200 ? 380 : 700;
+      this.cameras.main.setBounds(-200, -100, worldPx + offset, worldPx + 300);
+      // Clamp current zoom to new min
+      if (this.cameras.main.zoom < this.minZoom) {
+        this.cameras.main.zoom = this.minZoom;
+      }
+      this.emitGameState();
+    });
+
+    // ── Keyboard (only when available) ──────────────────────────────────
+    if (this.input.keyboard) {
+      this.wasd = {
+        W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+        A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+        S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+        D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      };
+
+      // ── O key: cycle resource overlay
+      this.input.keyboard
+        .addKey(Phaser.Input.Keyboard.KeyCodes.O)
+        .on('down', () => {
+          const modes: OverlayMode[] = ['off', 'food', 'material', 'wood'];
+          const next = modes[(modes.indexOf(this.overlayMode) + 1) % modes.length];
+          this.overlayMode = next;
+          this.drawOverlay();
+        });
+
+      // ── [ / ] keys: cycle selected dwarf
+      this.input.keyboard
+        .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
+        .on('down', () => this.cycleSelected(-1));
+      this.input.keyboard
+        .addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET)
+        .on('down', () => this.cycleSelected(1));
+
+      // ── SPACE: pause / unpause
+      this.input.keyboard
+        .addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+        .on('down', () => this.togglePause());
+
+      // ── Speed keys: = (187) and numpad + (107) for faster; - (189) and numpad - (109) for slower
+      for (const code of [187, 107]) {
+        this.input.keyboard.addKey(code).on('down', () => this.adjustSpeed(1));
+      }
+      for (const code of [189, 109]) {
+        this.input.keyboard.addKey(code).on('down', () => this.adjustSpeed(-1));
+      }
+    }
 
     // Suppress browser right-click context menu over the canvas
     this.input.mouse?.disableContextMenu();
-
-    // ── O key: cycle resource overlay ───────────────────────────────────
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.O)
-      .on('down', () => {
-        const modes: OverlayMode[] = ['off', 'food', 'material', 'wood'];
-        const next = modes[(modes.indexOf(this.overlayMode) + 1) % modes.length];
-        this.overlayMode = next;
-        this.drawOverlay();
-      });
-
-    // ── [ / ] keys: cycle selected dwarf ────────────────────────────────
-    const cycleSelected = (direction: 1 | -1) => {
-      const alive = this.dwarves.filter(d => d.alive);
-      if (alive.length === 0) return;
-      const currentIdx = alive.findIndex(d => d.id === this.selectedDwarfId);
-      const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
-      this.selectedDwarfId = alive[nextIdx].id;
-      this.emitGameState(); // update panel immediately even when paused
-    };
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
-      .on('down', () => cycleSelected(-1));
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET)
-      .on('down', () => cycleSelected(1));
-
-    // ── SPACE: pause / unpause ───────────────────────────────────────────
-    this.input.keyboard!
-      .addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
-      .on('down', () => this.togglePause());
-
-    // ── Speed keys: = (187) and numpad + (107) for faster; - (189) and numpad - (109) for slower
-    // Use raw keycodes — KeyCodes.EQUALS is unreliable across Phaser builds
-    for (const code of [187, 107]) {
-      this.input.keyboard!.addKey(code).on('down', () => this.adjustSpeed(1));
-    }
-    for (const code of [189, 109]) {
-      this.input.keyboard!.addKey(code).on('down', () => this.adjustSpeed(-1));
-    }
 
     // ── Settings / control bus ───────────────────────────────────────────
     // Store handler refs so they can be removed on scene shutdown (avoids stale
@@ -273,15 +299,27 @@ export class WorldScene extends Phaser.Scene {
       this.logHistory.push(entry);
       if (this.logHistory.length > 200) this.logHistory.shift();
     };
+    // Mobile bus events: overlay cycle + dwarf cycle (from MobileControls)
+    const overlayHandler = ({ mode }: { mode: OverlayMode }) => {
+      this.overlayMode = mode;
+      this.drawOverlay();
+    };
+    const cycleHandler = ({ direction }: { direction: 1 | -1 }) => {
+      this.cycleSelected(direction);
+    };
     bus.on('controlChange', controlHandler);
     bus.on('settingsChange', settingsHandler);
     bus.on('logEntry', logCaptureHandler);
+    bus.on('overlayChange', overlayHandler);
+    bus.on('cycleSelected', cycleHandler);
 
     // Remove bus listeners when this scene is destroyed (new-colony flow)
     this.events.once('destroy', () => {
       bus.off('controlChange', controlHandler);
       bus.off('settingsChange', settingsHandler);
       bus.off('logEntry', logCaptureHandler);
+      bus.off('overlayChange', overlayHandler);
+      bus.off('cycleSelected', cycleHandler);
     });
 
     this.setupInput();
@@ -319,6 +357,11 @@ export class WorldScene extends Phaser.Scene {
     let scrollAtDragX = 0, scrollAtDragY = 0;
     let didDrag = false;
 
+    // Pinch-to-zoom state (touch devices)
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let isPinching = false;
+
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       // ── Right-click: issue a gather command ──────────────────────────
       if (p.rightButtonDown()) {
@@ -333,15 +376,70 @@ export class WorldScene extends Phaser.Scene {
         return; // don't start drag on right-click
       }
 
+      // ── Pinch start: second finger down ─────────────────────────────
+      if (this.isTouchDevice && this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        isPinching = true;
+        const dx = this.input.pointer1.x - this.input.pointer2.x;
+        const dy = this.input.pointer1.y - this.input.pointer2.y;
+        pinchStartDist = Math.sqrt(dx * dx + dy * dy);
+        pinchStartZoom = cam.zoom;
+        return;
+      }
+
       // ── Left-click drag start ────────────────────────────────────────
       dragStartX    = p.x;
       dragStartY    = p.y;
       scrollAtDragX = cam.scrollX;
       scrollAtDragY = cam.scrollY;
       didDrag       = false;
+
+      // ── Long-press timer (touch: replaces right-click for commands) ──
+      if (this.isTouchDevice) {
+        this.longPressFired = false;
+        const startX = p.x, startY = p.y;
+
+        if (this.longPressTimer) clearTimeout(this.longPressTimer);
+        this.longPressTimer = setTimeout(() => {
+          const ptr = this.input.activePointer;
+          const moved = Math.abs(ptr.x - startX) + Math.abs(ptr.y - startY);
+          if (moved < 8 && ptr.isDown && !isPinching) {
+            this.longPressFired = true;
+            const tx = Phaser.Math.Clamp(Math.floor(ptr.worldX / TILE_SIZE), 0, GRID_SIZE - 1);
+            const ty = Phaser.Math.Clamp(Math.floor(ptr.worldY / TILE_SIZE), 0, GRID_SIZE - 1);
+            if (isWalkable(this.grid, tx, ty)) {
+              this.commandTile = { x: tx, y: ty };
+              this.applyCommand(tx, ty);
+              this.drawFlag();
+            }
+          }
+        }, 500);
+      }
     });
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      // ── Pinch-to-zoom ────────────────────────────────────────────────
+      if (isPinching && this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        const dx = this.input.pointer1.x - this.input.pointer2.x;
+        const dy = this.input.pointer1.y - this.input.pointer2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (pinchStartDist === 0) return;
+
+        const scale = dist / pinchStartDist;
+        const newZoom = Phaser.Math.Clamp(pinchStartZoom * scale, this.minZoom, 5);
+
+        // Anchor zoom to midpoint between fingers
+        const midX = (this.input.pointer1.x + this.input.pointer2.x) / 2;
+        const midY = (this.input.pointer1.y + this.input.pointer2.y) / 2;
+        const oldZoom = cam.zoom;
+        if (newZoom !== oldZoom) {
+          const f = 1 / oldZoom - 1 / newZoom;
+          cam.zoom = newZoom;
+          cam.scrollX += (midX - cam.x - cam.width / 2) * f;
+          cam.scrollY += (midY - cam.y - cam.height / 2) * f;
+        }
+        return; // don't pan while pinching
+      }
+
       // Tile hover — emit info for the tooltip regardless of drag state
       const hx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE), 0, GRID_SIZE - 1);
       const hy = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE), 0, GRID_SIZE - 1);
@@ -357,34 +455,60 @@ export class WorldScene extends Phaser.Scene {
       }
 
       if (!p.isDown || p.rightButtonDown()) return;
-      const dx = (dragStartX - p.x) / cam.zoom;
-      const dy = (dragStartY - p.y) / cam.zoom;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag = true;
-      cam.scrollX = scrollAtDragX + dx;
-      cam.scrollY = scrollAtDragY + dy;
+      const panDx = (dragStartX - p.x) / cam.zoom;
+      const panDy = (dragStartY - p.y) / cam.zoom;
+      if (Math.abs(panDx) > 3 || Math.abs(panDy) > 3) didDrag = true;
+      cam.scrollX = scrollAtDragX + panDx;
+      cam.scrollY = scrollAtDragY + panDy;
     });
 
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (didDrag || p.rightButtonReleased()) return;
+      // Cancel long-press timer
+      if (this.longPressTimer) {
+        clearTimeout(this.longPressTimer);
+        this.longPressTimer = null;
+      }
+
+      // End pinch when either finger lifts
+      if (isPinching) {
+        isPinching = false;
+        pinchStartDist = 0;
+        return;
+      }
+
+      if (didDrag || p.rightButtonReleased() || this.longPressFired) return;
       const tx = Math.floor(p.worldX / TILE_SIZE);
       const ty = Math.floor(p.worldY / TILE_SIZE);
 
-      // Check for stockpile click first (food, then ore, then wood)
-      const foodIdx = this.foodStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      // ── Snap-to-nearest helper for touch (2-tile Manhattan radius) ──
+      const SNAP_RADIUS = this.isTouchDevice ? 2 : 0;
+
+      // Check for stockpile click (with snap on touch)
+      const findStockpile = <T extends { x: number; y: number }>(list: T[]) => {
+        if (SNAP_RADIUS === 0) return list.findIndex(s => s.x === tx && s.y === ty);
+        let bestIdx = -1, bestDist = Infinity;
+        for (let i = 0; i < list.length; i++) {
+          const d = Math.abs(list[i].x - tx) + Math.abs(list[i].y - ty);
+          if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        return bestIdx;
+      };
+
+      const foodIdx = findStockpile(this.foodStockpiles);
       if (foodIdx >= 0) {
         this.selectedDwarfId = null;
         bus.emit('goblinSelect', null);
         bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
         return;
       }
-      const oreIdx = this.oreStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      const oreIdx = findStockpile(this.oreStockpiles);
       if (oreIdx >= 0) {
         this.selectedDwarfId = null;
         bus.emit('goblinSelect', null);
         bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
         return;
       }
-      const woodIdx = this.woodStockpiles.findIndex(s => s.x === tx && s.y === ty);
+      const woodIdx = findStockpile(this.woodStockpiles);
       if (woodIdx >= 0) {
         this.selectedDwarfId = null;
         bus.emit('goblinSelect', null);
@@ -392,8 +516,18 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
 
-      // Check for goblin click
-      const goblin = this.goblins.find(g => g.x === tx && g.y === ty);
+      // Check for goblin click (with snap on touch)
+      const findNearest = <T extends { x: number; y: number }>(list: T[]) => {
+        if (SNAP_RADIUS === 0) return list.find(e => e.x === tx && e.y === ty);
+        let best: T | undefined, bestDist = Infinity;
+        for (const e of list) {
+          const d = Math.abs(e.x - tx) + Math.abs(e.y - ty);
+          if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; best = e; }
+        }
+        return best;
+      };
+
+      const goblin = findNearest(this.goblins);
       if (goblin) {
         this.selectedDwarfId = null;
         bus.emit('stockpileSelect', null);
@@ -401,10 +535,12 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
 
-      // Left tap: select dwarf at tile — prefer alive, fall back to dead ghost
-      const hit = this.dwarves.find(d =>  d.alive && d.x === tx && d.y === ty)
-               ?? this.dwarves.find(d => !d.alive && d.x === tx && d.y === ty);
-      this.selectedDwarfId = hit?.id ?? null;
+      // Left tap: select dwarf — prefer alive, fall back to dead ghost
+      const aliveDwarves = this.dwarves.filter(d => d.alive);
+      const deadDwarves  = this.dwarves.filter(d => !d.alive);
+      const hitAlive = findNearest(aliveDwarves);
+      const hitDead  = !hitAlive ? findNearest(deadDwarves) : undefined;
+      this.selectedDwarfId = (hitAlive ?? hitDead)?.id ?? null;
       bus.emit('stockpileSelect', null);
       bus.emit('goblinSelect', null);
       this.emitGameState(); // update panel immediately even when paused
@@ -412,9 +548,6 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('wheel',
       (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
-        // Minimum zoom: 0.6 = world renders at ~614px, roughly filling the canvas
-        // left of the event log without too much dead space around the map edges
-        const minZoom  = 0.6;
         const oldZoom  = cam.zoom;
 
         // Clamp deltaY to ±100 so a single trackpad flick doesn't jump the full range.
@@ -422,7 +555,7 @@ export class WorldScene extends Phaser.Scene {
         // proportional rather than jumping 10% per tick.
         const clampedDelta = Phaser.Math.Clamp(deltaY, -100, 100);
         const factor = 1 - clampedDelta * 0.0003;   // e.g. deltaY=100 → factor=0.97 (−3%)
-        const newZoom  = Phaser.Math.Clamp(oldZoom * factor, minZoom, 5);
+        const newZoom  = Phaser.Math.Clamp(oldZoom * factor, this.minZoom, 5);
         if (newZoom === oldZoom) return;
 
         // Phaser 3 uses a viewport-centred transform — scrollX is NOT the world position
@@ -764,6 +897,15 @@ export class WorldScene extends Phaser.Scene {
       this.speedMultiplier = this.SPEED_STEPS[next];
       this.emitGameState();
     }
+  }
+
+  private cycleSelected(direction: 1 | -1) {
+    const alive = this.dwarves.filter(d => d.alive);
+    if (alive.length === 0) return;
+    const currentIdx = alive.findIndex(d => d.id === this.selectedDwarfId);
+    const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
+    this.selectedDwarfId = alive[nextIdx].id;
+    this.emitGameState();
   }
 
   private emitMiniMap() {
@@ -1213,13 +1355,15 @@ export class WorldScene extends Phaser.Scene {
   // ── Main loop ──────────────────────────────────────────────────────────
 
   update(time: number, delta: number) {
-    // WASD camera pan
+    // WASD camera pan (only when keyboard is available)
     const cam   = this.cameras.main;
-    const speed = CAM_PAN_SPEED * (delta / 1000) / cam.zoom; // scale with zoom for consistent apparent speed
-    if (this.wasd.W.isDown) cam.scrollY -= speed;
-    if (this.wasd.S.isDown) cam.scrollY += speed;
-    if (this.wasd.A.isDown) cam.scrollX -= speed;
-    if (this.wasd.D.isDown) cam.scrollX += speed;
+    if (this.wasd) {
+      const speed = CAM_PAN_SPEED * (delta / 1000) / cam.zoom;
+      if (this.wasd.W.isDown) cam.scrollY -= speed;
+      if (this.wasd.S.isDown) cam.scrollY += speed;
+      if (this.wasd.A.isDown) cam.scrollX -= speed;
+      if (this.wasd.D.isDown) cam.scrollX += speed;
+    }
 
     // Simulation tick — skipped when paused; interval shrinks at higher speeds
     if (!this.paused && time - this.lastTickTime >= TICK_RATE_MS / this.speedMultiplier) {

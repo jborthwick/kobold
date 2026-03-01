@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { bus } from '../shared/events';
 import type { LogEntry } from '../shared/types';
+import type { LayoutMode } from '../shared/useViewport';
 
 const MAX_ENTRIES = 50;
 
-export function EventLog() {
+export function EventLog({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode }) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -32,8 +33,13 @@ export function EventLog() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [entries]);
 
+  const isPhone = layout === 'phone';
+
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      ...(isPhone ? { fontSize: 10 } : {}),
+    }}>
       <div style={styles.header}>EVENT LOG</div>
       {/* Separate scrollable area so the header stays pinned */}
       <div style={styles.scrollArea}>

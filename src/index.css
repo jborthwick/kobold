@@ -2,6 +2,13 @@
   box-sizing: border-box;
 }
 
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
