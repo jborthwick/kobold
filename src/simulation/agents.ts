@@ -2,6 +2,7 @@ import * as ROT from 'rot-js';
 import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Goblin, type ResourceSite, type ColonyGoal } from '../shared/types';
 import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
+import { xpToLevel } from './skills';
 
 function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -195,6 +196,8 @@ export function spawnDwarves(
       social:          0,
       lastSocialTick:  0,
       lastLoggedTicks: { morale_high: 0 },  // suppress "feeling great" at spawn
+      skillXp:         0,
+      skillLevel:      0,
     });
   }
   return dwarves;
@@ -304,6 +307,8 @@ export function spawnSuccessor(
     social:          0,
     lastSocialTick:  0,
     lastLoggedTicks: { morale_high: 0 },  // suppress "feeling great" at spawn
+    skillXp:         Math.floor(dead.skillXp * 0.25),  // inherit 25% of predecessor's XP
+    skillLevel:      xpToLevel(Math.floor(dead.skillXp * 0.25)),
   };
 }
 

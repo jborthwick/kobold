@@ -505,7 +505,15 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
         {dwarf.goblinKills > 0 && (
           <span style={{ color: '#e74c3c' }}>⚔ {dwarf.goblinKills} kill{dwarf.goblinKills !== 1 ? 's' : ''}</span>
         )}
+        {(dwarf.skillLevel ?? 0) > 0 && (
+          <span style={{ color: '#ffd700' }}>⭐ Lv.{dwarf.skillLevel} {dwarf.role}</span>
+        )}
       </div>
+      {dwarf.wound && (
+        <div style={{ ...styles.panelRow, color: '#ff6b6b', fontSize: 10 }}>
+          🩹 {dwarf.wound.type} wound
+        </div>
+      )}
       <div style={styles.task}>{dwarf.task}</div>
       {(ally || rival) && (
         <div style={styles.relSection}>

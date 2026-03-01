@@ -11,6 +11,8 @@ import type { Goblin, Dwarf, Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 import { isWalkable } from './world';
 import { pathNextStep } from './agents';
+import { skillDamageBonus } from './skills';
+import { woundDamageMultiplier } from './wounds';
 
 // ── Raid scheduler ────────────────────────────────────────────────────────────
 
@@ -156,7 +158,8 @@ export function tickGoblins(
     if (dist === 0) {
       // ── Attack ──────────────────────────────────────────────────────
       result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
-      const dmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
+      const baseDmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
+      const dmg     = Math.round((baseDmg + skillDamageBonus(target)) * woundDamageMultiplier(target));
       g.health -= dmg;
       // Stagger: goblin can't move for 12 ticks after being hit (~1.7 s at 7 tps)
       g.staggeredUntil = tick + 12;

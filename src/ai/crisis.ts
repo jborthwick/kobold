@@ -179,10 +179,23 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[],
   const homeDist = Math.round(Math.hypot(dwarf.x - dwarf.homeTile.x, dwarf.y - dwarf.homeTile.y));
   const homeStr  = `Fort home at (${dwarf.homeTile.x},${dwarf.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
 
+  const WOUND_EFFECTS: Record<string, string> = {
+    bruised: 'tiring faster',
+    leg:     'limping, moving slowly',
+    arm:     'weak arm, reduced harvesting and combat',
+    eye:     'impaired vision, can\'t see far',
+  };
+  const skillLine = (dwarf.skillLevel ?? 0) > 0
+    ? `\nSkill: Level ${dwarf.skillLevel} ${dwarf.role} (${dwarf.skillXp} XP).`
+    : '';
+  const woundLine = dwarf.wound
+    ? `\nWOUNDED: ${dwarf.wound.type} — ${WOUND_EFFECTS[dwarf.wound.type] ?? dwarf.wound.type}.`
+    : '';
+
   return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
 Personality: ${dwarf.trait}. "${dwarf.bio}". Personal goal: ${dwarf.goal}.
 Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100, Fatigue: ${dwarf.fatigue.toFixed(0)}/100, Social need: ${dwarf.social.toFixed(0)}/100
-Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}. ${homeStr}
+Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}. ${homeStr}${skillLine}${woundLine}
 
 CRISIS: ${situation.description}
 Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}

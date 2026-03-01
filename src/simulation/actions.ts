@@ -21,6 +21,8 @@ import {
   recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS,
   traitMod,
 } from './agents';
+import { grantXp, skillYieldBonus, skillOreBonus } from './skills';
+import { effectiveVision, isLegWoundSkip, woundYieldMultiplier, accelerateHealing } from './wounds';
 
 // ── Trait-flavored log text ──────────────────────────────────────────────────
 
@@ -78,6 +80,8 @@ function fatigueRate(dwarf: Dwarf): number {
 }
 
 function moveTo(dwarf: Dwarf, target: { x: number; y: number }, grid: Tile[][]): void {
+  // Leg wound: 40% chance to skip this tick's movement (limp)
+  if (isLegWoundSkip(dwarf)) return;
   const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, target, grid);
   dwarf.x = next.x;
   dwarf.y = next.y;
@@ -175,7 +179,9 @@ const rest: Action = {
   score: ({ dwarf }) => sigmoid(dwarf.fatigue, 60),
   execute: ({ dwarf }) => {
     dwarf.fatigue = Math.max(0, dwarf.fatigue - 1.5);
-    dwarf.task = 'resting';
+    // Resting accelerates wound healing (~3× faster)
+    accelerateHealing(dwarf, 2);
+    dwarf.task = dwarf.wound ? `resting (healing ${dwarf.wound.type})` : 'resting';
     // Rest is routine — no log entry (too noisy)
   },
 };
@@ -253,7 +259,7 @@ const fight: Action = {
   },
   score: ({ dwarf, goblins }) => {
     if (!goblins || goblins.length === 0) return 0;
-    const HUNT_RADIUS = dwarf.vision * 2;
+    const HUNT_RADIUS = effectiveVision(dwarf) * 2;
     const nearest = goblins.reduce<{ dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
       return (!best || dist < best.dist) ? { dist } : best;
@@ -262,24 +268,30 @@ const fight: Action = {
     // Closer goblins score higher; less hungry = more willing to fight
     return inverseSigmoid(nearest.dist, HUNT_RADIUS * 0.5, 0.2) * inverseSigmoid(dwarf.hunger, 60);
   },
-  execute: ({ dwarf, goblins, grid }) => {
+  execute: ({ dwarf, goblins, grid, currentTick, onLog }) => {
     if (!goblins) return;
-    const HUNT_RADIUS = dwarf.vision * 2;
+    const HUNT_RADIUS = effectiveVision(dwarf) * 2;
     const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
       return (!best || dist < best.dist) ? { g, dist } : best;
     }, null);
     if (!nearest || nearest.dist > HUNT_RADIUS) return;
     if (nearest.dist > 0) {
-      // Sprint — two steps toward goblin
-      const step1 = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: nearest.g.x, y: nearest.g.y }, grid);
-      dwarf.x = step1.x; dwarf.y = step1.y;
-      const step2 = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: nearest.g.x, y: nearest.g.y }, grid);
-      dwarf.x = step2.x; dwarf.y = step2.y;
+      // Sprint — two steps toward goblin (leg wound may skip each step)
+      if (!isLegWoundSkip(dwarf)) {
+        const step1 = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: nearest.g.x, y: nearest.g.y }, grid);
+        dwarf.x = step1.x; dwarf.y = step1.y;
+      }
+      if (!isLegWoundSkip(dwarf)) {
+        const step2 = pathNextStep({ x: dwarf.x, y: dwarf.y }, { x: nearest.g.x, y: nearest.g.y }, grid);
+        dwarf.x = step2.x; dwarf.y = step2.y;
+      }
     }
     dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate(dwarf));
     const distAfter = Math.abs(nearest.g.x - dwarf.x) + Math.abs(nearest.g.y - dwarf.y);
     dwarf.task = distAfter === 0 ? 'fighting goblin!' : `→ goblin (${distAfter} tiles)`;
+    // Fighter XP — grant on engaging in combat
+    if (distAfter === 0) grantXp(dwarf, currentTick, onLog);
   },
 };
 
@@ -295,7 +307,8 @@ const forage: Action = {
     return true;
   },
   score: ({ dwarf, grid }) => {
-    const radius = dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15) : dwarf.vision;
+    const vision = effectiveVision(dwarf);
+    const radius = dwarf.hunger > 65 ? Math.min(vision * 2, 15) : vision;
     const target = bestFoodTile(dwarf, grid, radius);
     if (!target) {
       // Check remembered food sites
@@ -306,9 +319,10 @@ const forage: Action = {
   },
   execute: (ctx) => {
     const { dwarf, grid, currentTick, dwarves, onLog } = ctx;
+    const vision = effectiveVision(dwarf);
     const radius = dwarf.llmIntent === 'forage' ? 15
-      : dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15)
-      : dwarf.vision;
+      : dwarf.hunger > 65 ? Math.min(vision * 2, 15)
+      : vision;
     const foodTarget = bestFoodTile(dwarf, grid, radius);
 
     // Record visible food sites in memory
@@ -363,10 +377,11 @@ const forage: Action = {
       const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
         const depletionRate = dwarf.role === 'forager' ? 6 : 5;
-        const baseYield     = dwarf.role === 'forager' ? 2 : 1;
+        const baseYield     = (dwarf.role === 'forager' ? 2 : 1) + skillYieldBonus(dwarf);
         const moraleScale   = 0.5 + (dwarf.morale / 100) * 0.5;
         const fatigueScale  = dwarf.fatigue > 70 ? 0.5 : 1.0;
-        const harvestYield  = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale));
+        const woundScale    = woundYieldMultiplier(dwarf);
+        const harvestYield  = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
         const hadFood       = here.foodValue;
         const depleted      = Math.min(hadFood, depletionRate);
         here.foodValue      = Math.max(0, hadFood - depleted);
@@ -374,6 +389,8 @@ const forage: Action = {
         const amount         = Math.min(harvestYield, depleted, headroom);
         dwarf.inventory.food += amount;
         addWorkFatigue(dwarf);
+        // Forager XP — grant on successful harvest
+        if (dwarf.role === 'forager') grantXp(dwarf, currentTick, onLog);
         dwarf.task = `harvesting (food: ${dwarf.inventory.food.toFixed(0)})`;
       } else {
         dwarf.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
@@ -461,7 +478,7 @@ const mine: Action = {
   name: 'mine',
   eligible: ({ dwarf }) => dwarf.role === 'miner',
   score: ({ dwarf, grid }) => {
-    const target = bestMaterialTile(dwarf, grid, dwarf.vision);
+    const target = bestMaterialTile(dwarf, grid, effectiveVision(dwarf));
     if (!target) {
       // Check remembered ore sites
       if (dwarf.knownOreSites.length > 0) return inverseSigmoid(dwarf.hunger, 60) * 0.35;
@@ -470,8 +487,8 @@ const mine: Action = {
     return inverseSigmoid(dwarf.hunger, 60) * 0.6;
   },
   execute: (ctx) => {
-    const { dwarf, grid, currentTick } = ctx;
-    const oreTarget = bestMaterialTile(dwarf, grid, dwarf.vision);
+    const { dwarf, grid, currentTick, onLog } = ctx;
+    const oreTarget = bestMaterialTile(dwarf, grid, effectiveVision(dwarf));
 
     // Record visible ore sites
     if (oreTarget) {
@@ -488,11 +505,15 @@ const mine: Action = {
       const here = grid[dwarf.y][dwarf.x];
       if (here.materialValue >= 1) {
         const hadMat       = here.materialValue;
-        const mined        = Math.min(hadMat, 2);
+        const baseOre      = 2 + skillOreBonus(dwarf);
+        const oreYield     = Math.max(1, Math.round(baseOre * woundYieldMultiplier(dwarf)));
+        const mined        = Math.min(hadMat, oreYield);
         here.materialValue = Math.max(0, hadMat - mined);
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
         dwarf.inventory.materials = Math.min(dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD);
         addWorkFatigue(dwarf);
+        // Miner XP — grant on successful ore extraction
+        grantXp(dwarf, currentTick, onLog);
         dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
       } else {
         dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
@@ -523,7 +544,7 @@ const chop: Action = {
   name: 'chop',
   eligible: ({ dwarf }) => dwarf.role === 'lumberjack',
   score: ({ dwarf, grid }) => {
-    const target = bestWoodTile(dwarf, grid, dwarf.vision);
+    const target = bestWoodTile(dwarf, grid, effectiveVision(dwarf));
     if (!target) {
       if (dwarf.knownWoodSites.length > 0) return inverseSigmoid(dwarf.hunger, 60) * 0.35;
       return 0;
@@ -531,8 +552,8 @@ const chop: Action = {
     return inverseSigmoid(dwarf.hunger, 60) * 0.6;
   },
   execute: (ctx) => {
-    const { dwarf, grid, currentTick } = ctx;
-    const woodTarget = bestWoodTile(dwarf, grid, dwarf.vision);
+    const { dwarf, grid, currentTick, onLog } = ctx;
+    const woodTarget = bestWoodTile(dwarf, grid, effectiveVision(dwarf));
 
     // Record visible wood sites
     if (woodTarget) {
@@ -549,10 +570,14 @@ const chop: Action = {
       const here = grid[dwarf.y][dwarf.x];
       if (here.type === TileType.Forest && here.materialValue >= 1) {
         const hadWood      = here.materialValue;
-        const chopped      = Math.min(hadWood, 2);
+        const baseChop     = 2 + skillYieldBonus(dwarf);
+        const chopYield    = Math.max(1, Math.round(baseChop * woundYieldMultiplier(dwarf)));
+        const chopped      = Math.min(hadWood, chopYield);
         here.materialValue = Math.max(0, hadWood - chopped);
         dwarf.inventory.materials = Math.min(dwarf.inventory.materials + chopped, MAX_INVENTORY_FOOD);
         addWorkFatigue(dwarf);
+        // Lumberjack XP — grant on successful wood chop
+        grantXp(dwarf, currentTick, onLog);
         dwarf.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
       } else {
         dwarf.task = `→ forest (${woodTarget.x},${woodTarget.y})`;
@@ -728,7 +753,7 @@ const wander: Action = {
   name: 'wander',
   eligible: () => true,
   score: () => 0.05,
-  execute: ({ dwarf, grid, currentTick }) => {
+  execute: ({ dwarf, grid, currentTick, onLog }) => {
     const WANDER_HOLD_TICKS = 25;
     const WANDER_MIN_DIST   = 10;
     const WANDER_MAX_DIST   = 20;
@@ -736,6 +761,11 @@ const wander: Action = {
     // Invalidate wander target if blocked
     if (dwarf.wanderTarget && !isWalkable(grid, dwarf.wanderTarget.x, dwarf.wanderTarget.y)) {
       dwarf.wanderTarget = null;
+    }
+
+    // Scout XP — grant on reaching wander target
+    if (dwarf.wanderTarget && dwarf.x === dwarf.wanderTarget.x && dwarf.y === dwarf.wanderTarget.y) {
+      if (dwarf.role === 'scout') grantXp(dwarf, currentTick, onLog);
     }
 
     if (!dwarf.wanderTarget || currentTick >= dwarf.wanderExpiry

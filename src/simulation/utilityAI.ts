@@ -24,6 +24,7 @@ import {
   traitMod,
 } from './agents';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
+import { tickWoundHealing } from './wounds';
 
 // ── Response curves ────────────────────────────────────────────────────────────
 
@@ -83,12 +84,19 @@ function updateNeeds(
 
   // Fatigue — tiny idle decay; traits via fatigueRate applied at action sites
   dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.05);
+  // Bruised wound: extra fatigue drain (+0.3/tick)
+  if (dwarf.wound?.type === 'bruised') {
+    dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.3);
+  }
   if (dwarf.fatigue > 90) {
     dwarf.morale = Math.max(0, dwarf.morale - 0.2);
   }
   if (dwarf.fatigue > 80 && shouldLog(dwarf, 'exhausted', currentTick, 150)) {
     onLog?.('😩 exhausted', 'warn');
   }
+
+  // Wound healing — check and clear expired wounds
+  tickWoundHealing(dwarf, currentTick, onLog);
 
   // Social — check for friendly dwarf (relation >= 40) within 3 tiles
   if (dwarves) {

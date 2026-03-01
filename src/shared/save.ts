@@ -35,7 +35,14 @@ export function loadGame(): SaveData | null {
   const s = localStorage.getItem(KEY);
   if (!s) return null;
   try {
-    return JSON.parse(s) as SaveData;
+    const data = JSON.parse(s) as SaveData;
+    // Backward compat: add skill/wound fields if missing (pre-Iteration 10 saves)
+    for (const d of data.dwarves) {
+      if (d.skillXp    === undefined) d.skillXp    = 0;
+      if (d.skillLevel === undefined) d.skillLevel = 0;
+      // wound is optional (undefined = healthy) — no migration needed
+    }
+    return data;
   } catch {
     return null;
   }

@@ -10,6 +10,7 @@ import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type Ti
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
+import { rollWound, woundLabel } from '../../simulation/wounds';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
 import { isMobileViewport, isTabletViewport } from '../../shared/platform';
@@ -62,7 +63,6 @@ export class WorldScene extends Phaser.Scene {
   private weather!: Weather;
 
   // Event log noise reduction
-  private mushroomLogCounter = 0;
   private combatHits = new Map<string, number>();  // dwarf id → hit count this encounter
 
   // Colony goal + food/ore/wood stockpiles (expand as each fills up)
@@ -748,6 +748,18 @@ export class WorldScene extends Phaser.Scene {
                 level:     'warn',
               });
             }
+            // Wound roll — 60% chance of injury per hit (if not already wounded)
+            const w = rollWound(d, this.tick);
+            if (w) {
+              d.wound = w;
+              bus.emit('logEntry', {
+                tick:      this.tick,
+                dwarfId:   d.id,
+                dwarfName: d.name,
+                message:   `🩹 suffered a ${woundLabel(w.type)}!`,
+                level:     'warn',
+              });
+            }
           }
         }
       }
@@ -807,19 +819,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     // Small steady mushroom sprouting — every 150 ticks, a fresh 1–4 tile patch
-    const sprout = tickMushroomSprout(this.grid, this.tick);
-    if (sprout) {
-      this.mushroomLogCounter++;
-      if (this.mushroomLogCounter % 3 === 0) {
-        bus.emit('logEntry', {
-          tick:      this.tick,
-          dwarfId:   'world',
-          dwarfName: 'WORLD',
-          message:   `🍄 ${sprout}`,
-          level:     'info',
-        });
-      }
-    }
+    // (no log — too routine, clutters the event feed)
+    tickMushroomSprout(this.grid, this.tick);
 
     // ── Succession — spawn queued replacements ──────────────────────────────
     for (let i = this.pendingSuccessions.length - 1; i >= 0; i--) {

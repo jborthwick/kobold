@@ -61,6 +61,14 @@ export interface MemoryEntry {
 // Agent role — assigned at spawn, permanent
 export type DwarfRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
 
+// Injury system — single wound slot, heals over time
+export type WoundType = 'bruised' | 'leg' | 'arm' | 'eye';
+
+export interface Wound {
+  type:     WoundType;
+  healTick: number;    // tick at which the wound automatically heals
+}
+
 export interface Dwarf {
   id: string;
   name: string;
@@ -99,6 +107,9 @@ export interface Dwarf {
   social:          number;      // 0–100; rises when isolated from friendly dwarves
   lastSocialTick:  number;      // tick when dwarf last had a friend within proximity
   lastLoggedTicks: Record<string, number>;  // cooldown tracking for event log (key = event type, value = tick)
+  skillXp:         number;      // lifetime XP for role skill (0+)
+  skillLevel:      number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
+  wound?:          Wound;       // active wound (undefined = healthy); heals at wound.healTick
 }
 
 export interface LogEntry {
