@@ -358,17 +358,21 @@ export function generateWorld(): WorldGenResult {
 /** Wood grows back much more slowly than food — trees take time to regenerate. */
 const WOOD_GROWBACK_RATE = 0.02;
 
-export function growback(grid: Tile[][]): void {
+/**
+ * Apply per-tick food and wood regrowth.
+ * @param growbackMod — weather multiplier (1.0 = normal, 0.25 = drought, 1.8 = rain)
+ */
+export function growback(grid: Tile[][], growbackMod: number = 1): void {
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
-      // Food growback
+      // Food growback (scaled by weather)
       if (t.growbackRate > 0 && t.maxFood > 0 && t.foodValue < t.maxFood) {
-        t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate);
+        t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate * growbackMod);
       }
       // Wood growback — Forest tiles only; keeps tile type as Forest even when empty
       if (t.type === TileType.Forest && t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
-        t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE);
+        t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE * growbackMod);
       }
     }
   }

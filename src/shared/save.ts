@@ -1,4 +1,5 @@
 import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry } from './types';
+import type { Weather } from '../simulation/weather';
 
 export interface SaveData {
   version: 1;
@@ -18,6 +19,8 @@ export interface SaveData {
   overlayMode: OverlayMode;
   logHistory: LogEntry[];
   nextWorldEventTick: number;
+  /** Weather state — optional for backward compat with old saves. */
+  weather?: Weather;
 }
 
 const KEY = 'kobold_save_v1';

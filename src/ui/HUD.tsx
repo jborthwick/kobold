@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin } from '../shared/types';
+import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin, Season, WeatherType } from '../shared/types';
 
 /** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
 function topRelation(
@@ -45,6 +45,9 @@ export function HUD() {
       <Stat label="food"    value={state.totalFood.toFixed(1)} />
       <Stat label="mats"    value={state.totalMaterials.toFixed(1)} />
       <Stat label="tick"    value={String(state.tick)} />
+      {state.weatherSeason && state.weatherType && (
+        <WeatherIndicator season={state.weatherSeason} weather={state.weatherType} />
+      )}
       <PauseSpeed paused={state.paused} speed={state.speed} />
       <OverlayIndicator mode={state.overlayMode} />
       <button
@@ -399,6 +402,20 @@ const OVERLAY_COLOR: Record<OverlayMode, string> = {
   material: '#ff8800',
   wood:     '#56d973',
 };
+
+const WEATHER_ICONS: Record<WeatherType, string> = { clear: '☀', rain: '🌧', drought: '🏜', cold: '❄' };
+const WEATHER_COLORS: Record<WeatherType, string> = { clear: '#f0c040', rain: '#5b9bd5', drought: '#d4a437', cold: '#9ecae1' };
+const SEASON_LABELS: Record<Season, string> = { spring: 'Spr', summer: 'Sum', autumn: 'Aut', winter: 'Win' };
+
+function WeatherIndicator({ season, weather }: { season: Season; weather: WeatherType }) {
+  return (
+    <div style={{ ...styles.stat, justifyContent: 'center' }}>
+      <span style={{ fontSize: 10, color: WEATHER_COLORS[weather] }}>
+        {SEASON_LABELS[season]} {WEATHER_ICONS[weather]}
+      </span>
+    </div>
+  );
+}
 
 function OverlayIndicator({ mode }: { mode: OverlayMode }) {
   return (

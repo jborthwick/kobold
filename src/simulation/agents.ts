@@ -65,6 +65,35 @@ const FORAGEABLE_TILES = new Set<TileType>([
 // Role assignment order and vision ranges
 const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
 
+// ── Trait modifiers ──────────────────────────────────────────────────────────
+// Traits modify BT thresholds so personality drives behavioral divergence.
+// Missing keys fall back to defaults in traitMod() below.
+interface TraitMods {
+  shareThreshold?: number;    // food >= X to trigger sharing (default 8)
+  shareDonorKeeps?: number;   // keep >= X after sharing (default 5)
+  eatThreshold?: number;      // hunger > X to eat (default 70)
+  fleeThreshold?: number;     // hunger >= X to skip fighting (default 80)
+  wanderHomeDrift?: number;   // probability of drifting home (default 0.25)
+  contestPenalty?: number;    // relation penalty on losing contest (default -5)
+  shareRelationGate?: number; // min relation to share food (default 30)
+}
+
+const TRAIT_MODS: Record<DwarfTrait, TraitMods> = {
+  helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15 },
+  greedy:    { shareThreshold: 12, shareDonorKeeps: 8 },
+  brave:     { fleeThreshold: 95 },
+  paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5 },
+  lazy:      { eatThreshold: 55 },
+  cheerful:  { shareThreshold: 6, shareRelationGate: 20 },
+  mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55 },
+  forgetful: {},  // personality-flavor only for now
+};
+
+/** Look up a trait modifier with a default fallback. */
+function traitMod<K extends keyof TraitMods>(dwarf: Dwarf, key: K, fallback: number): number {
+  return TRAIT_MODS[dwarf.trait]?.[key] ?? fallback;
+}
+
 // ── Trait / bio / goal tables ─────────────────────────────────────────────────
 const DWARF_TRAITS: DwarfTrait[] = [
   'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
@@ -550,6 +579,8 @@ export function tickAgent(
   oreStockpiles?:     OreStockpile[],
   colonyGoal?:        ColonyGoal,
   woodStockpiles?:    WoodStockpile[],
+  /** Weather metabolism multiplier (1.0 = normal, 1.4 = cold). */
+  weatherMetabolismMod?: number,
 ): void {
   if (!dwarf.alive) return;
 
@@ -561,14 +592,18 @@ export function tickAgent(
     if (escape) { dwarf.x += escape.x; dwarf.y += escape.y; }
   }
 
-  // Hunger grows every tick
-  dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism);
+  // Hunger grows every tick (cold weather burns calories faster)
+  dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism * (weatherMetabolismMod ?? 1));
 
   // Morale decays slowly when hungry, recovers when well-fed
   if (dwarf.hunger > 60) {
     dwarf.morale = Math.max(0,   dwarf.morale - 0.4);
   } else if (dwarf.hunger < 30) {
     dwarf.morale = Math.min(100, dwarf.morale + 0.2);
+  }
+  // Stress metabolism — demoralized dwarves burn calories faster (morale death spiral)
+  if (dwarf.morale < 25) {
+    dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism * 0.3);
   }
 
   // ── 1. Starvation ─────────────────────────────────────────────────────
@@ -590,7 +625,8 @@ export function tickAgent(
   // ── 2. Eat from inventory ──────────────────────────────────────────────
   // Threshold at 70 (not 50) so hunger regularly crosses the 65 crisis
   // threshold first — giving the LLM a chance to react before they eat.
-  if (dwarf.hunger > 70 && dwarf.inventory.food > 0) {
+  // Lazy dwarves eat at 55 (sooner); trait-driven via traitMod.
+  if (dwarf.hunger > traitMod(dwarf, 'eatThreshold', 70) && dwarf.inventory.food > 0) {
     const bite        = Math.min(dwarf.inventory.food, 3);
     const oldHunger   = dwarf.hunger;
     dwarf.inventory.food -= bite;
@@ -629,19 +665,25 @@ export function tickAgent(
 
   // ── 2.7. Food sharing ─────────────────────────────────────────────────
   // Well-fed dwarves share 3 food with the hungriest starving neighbor.
-  // Donor keeps ≥ 5 food after sharing (8 − 3 = 5).
-  if (dwarves && dwarf.inventory.food >= 8) {
+  // Trait-driven: helpful shares at 6 food, greedy at 12; mean won't share with rivals.
+  const shareThresh     = traitMod(dwarf, 'shareThreshold', 8);
+  const shareDonorKeeps = traitMod(dwarf, 'shareDonorKeeps', 5);
+  const shareRelGate    = traitMod(dwarf, 'shareRelationGate', 30);
+  if (dwarves && dwarf.inventory.food >= shareThresh) {
     const SHARE_RADIUS = 2;
     const needy = dwarves
       .filter(d =>
         d.alive && d.id !== dwarf.id &&
         Math.abs(d.x - dwarf.x) <= SHARE_RADIUS &&
         Math.abs(d.y - dwarf.y) <= SHARE_RADIUS &&
-        d.hunger > 60 && d.inventory.food < 3,
+        d.hunger > 60 && d.inventory.food < 3 &&
+        (dwarf.relations[d.id] ?? 50) >= shareRelGate,  // won't share with rivals
       )
       .sort((a, b) => b.hunger - a.hunger)[0] ?? null;
     if (needy) {
-      const gift = 3;
+      const gift = Math.min(3, dwarf.inventory.food - shareDonorKeeps);
+      if (gift <= 0) { /* trait keeps too much — skip sharing */ }
+      else {
       dwarf.inventory.food -= gift;
       needy.inventory.food  = Math.min(MAX_INVENTORY_FOOD, needy.inventory.food + gift);
       // Sharing builds positive ties: giver +10, recipient +15
@@ -652,6 +694,7 @@ export function tickAgent(
       dwarf.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `shared ${gift} food with ${needy.name}` });
       needy.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `received ${gift} food from ${dwarf.name}` });
       return;
+      }  // end else (gift > 0)
     }
   }
 
@@ -727,8 +770,10 @@ export function tickAgent(
   // Fighter moves toward the closest goblin; when on the same tile the goblin
   // will deal/receive combat damage in tickGoblins (18 hp per hit vs 8 for others).
   // Fighters abandon the hunt when too hungry — survival trumps combat.
+  // Brave dwarves fight at 95 hunger; paranoid ones bail at 60.
+  const fleeAt = traitMod(dwarf, 'fleeThreshold', 80);
   if (dwarf.role === 'fighter' && goblins && goblins.length > 0
-      && dwarf.hunger < 80 && dwarf.llmIntent !== 'rest') {  // 80 not 65 — fighters commit to a fight
+      && dwarf.hunger < fleeAt && dwarf.llmIntent !== 'rest') {
     const HUNT_RADIUS = dwarf.vision * 2;
     const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
@@ -795,7 +840,8 @@ export function tickAgent(
     }
     const here = grid[dwarf.y][dwarf.x];
 
-    // Contest yield — if a hungrier dwarf is on the same tile, let them harvest first
+    // Contest yield — if a hungrier dwarf is on the same tile, let them harvest first.
+    // Allies (relation ≥ 60) share peacefully — no contest, no penalty.
     if (dwarves) {
       const rival = dwarves.find(d =>
         d.alive && d.id !== dwarf.id &&
@@ -803,8 +849,17 @@ export function tickAgent(
         d.hunger > dwarf.hunger,
       );
       if (rival) {
-        // Losing a resource contest breeds mild resentment
-        dwarf.relations[rival.id] = Math.max(0, (dwarf.relations[rival.id] ?? 50) - 5);
+        const relation = dwarf.relations[rival.id] ?? 50;
+        if (relation >= 60) {
+          // Ally — yield peacefully, small relation boost for cooperation
+          dwarf.relations[rival.id] = Math.min(100, relation + 2);
+          dwarf.task = `sharing tile with ${rival.name}`;
+          // Don't step away — just skip harvest this tick so ally eats
+          return;
+        }
+        // Non-ally: contest breeds resentment (mean dwarves take it harder)
+        const penalty = traitMod(dwarf, 'contestPenalty', -5);
+        dwarf.relations[rival.id] = Math.max(0, relation + penalty);
         // Step away to break the standoff rather than blocking indefinitely
         const escapeDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
         const escapeOpen = escapeDirs
@@ -826,7 +881,10 @@ export function tickAgent(
     if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
       // Deplete tile aggressively, but yield less to inventory — encourages exploration
       const depletionRate   = dwarf.role === 'forager' ? 6 : 5;
-      const harvestYield    = dwarf.role === 'forager' ? 2 : 1;
+      const baseYield       = dwarf.role === 'forager' ? 2 : 1;
+      // Morale scales harvest yield: 0.5× at morale 0, 1.0× at morale 100
+      const moraleScale     = 0.5 + (dwarf.morale / 100) * 0.5;
+      const harvestYield    = Math.max(1, Math.round(baseYield * moraleScale));
       const hadFood         = here.foodValue;
       const depleted        = Math.min(hadFood, depletionRate);
       here.foodValue        = Math.max(0, hadFood - depleted);
@@ -1247,7 +1305,9 @@ export function tickAgent(
 
     // Home drift — pull toward home but aim ±10 tiles out so the target lands
     // well outside the fort perimeter (MARGIN=2 → perimeter ≈ ±4 from depot).
-    if (Math.random() < 0.25 && (dwarf.homeTile.x !== 0 || dwarf.homeTile.y !== 0)) {
+    // Paranoid dwarves drift home 50% of the time; others 25%.
+    const homeDrift = traitMod(dwarf, 'wanderHomeDrift', 0.25);
+    if (Math.random() < homeDrift && (dwarf.homeTile.x !== 0 || dwarf.homeTile.y !== 0)) {
       const hx = dwarf.homeTile.x + Math.round((Math.random() - 0.5) * 20);
       const hy = dwarf.homeTile.y + Math.round((Math.random() - 0.5) * 20);
       if (hx >= 0 && hx < GRID_SIZE && hy >= 0 && hy < GRID_SIZE && isWalkable(grid, hx, hy)) {

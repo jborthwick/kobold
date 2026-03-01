@@ -9,7 +9,7 @@
  * scheduled after each event so they don't cluster).
  */
 
-import { TileType, type Tile } from '../shared/types';
+import { TileType, type Tile, type Dwarf, type Goblin } from '../shared/types';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -217,23 +217,56 @@ export interface WorldEventResult {
   message: string;
 }
 
-export function tickWorldEvents(grid: Tile[][], tick: number): WorldEventResult {
+// ── Tension-aware storyteller ─────────────────────────────────────────────────
+// Monitors colony health and biases event selection for dramatic pacing.
+// High tension → helpful events (bounty, mushrooms).  Low tension → challenges (blight).
+// Medium → unpredictable.  This is the simplest version of RimWorld's AI Storyteller.
+
+type EventType = 'blight' | 'bounty' | 'ore' | 'mushroom';
+
+function colonyTension(dwarves?: Dwarf[], goblins?: Goblin[]): number {
+  if (!dwarves || dwarves.length === 0) return 50; // no data → neutral
+  const alive   = dwarves.filter(d => d.alive);
+  if (alive.length === 0) return 100; // all dead → max tension
+  const avgHunger  = alive.reduce((s, d) => s + d.hunger, 0) / alive.length;
+  const avgMorale  = alive.reduce((s, d) => s + d.morale, 0) / alive.length;
+  const threatMod  = (goblins?.length ?? 0) * 15;
+  const recentDead = dwarves.filter(d => !d.alive).length * 20;
+  // 0 = peaceful, 100 = desperate
+  return Math.min(100, avgHunger + (100 - avgMorale) * 0.5 + threatMod + recentDead);
+}
+
+function chooseEvent(tension: number): EventType {
+  const roll = Math.random();
+  if (tension > 70) {
+    // Colony is suffering → mostly helpful events
+    return roll < 0.45 ? 'bounty' : roll < 0.85 ? 'mushroom' : 'ore';
+  } else if (tension < 30) {
+    // Colony is thriving → challenge them
+    return roll < 0.50 ? 'blight' : roll < 0.75 ? 'ore' : 'mushroom';
+  }
+  // Medium tension → keep it unpredictable (original uniform distribution)
+  return roll < 0.25 ? 'blight' : roll < 0.50 ? 'bounty' : roll < 0.75 ? 'ore' : 'mushroom';
+}
+
+export function tickWorldEvents(
+  grid: Tile[][], tick: number,
+  dwarves?: Dwarf[], goblins?: Goblin[],
+): WorldEventResult {
   if (tick < nextEventTick) return { fired: false, message: '' };
 
   scheduleNext(); // always advance window first (prevents infinite loop on null returns)
 
-  // Pick event type uniformly at random
-  const roll = Math.random();
+  // Tension-aware event selection (storyteller)
+  const tension = colonyTension(dwarves, goblins);
+  const event   = chooseEvent(tension);
   let msg: string | null = null;
 
-  if (roll < 0.25) {
-    msg = applyBlight(grid);
-  } else if (roll < 0.5) {
-    msg = applyBounty(grid);
-  } else if (roll < 0.75) {
-    msg = applyOreDiscovery(grid);
-  } else {
-    msg = applyMushroomSpread(grid);
+  switch (event) {
+    case 'blight':   msg = applyBlight(grid); break;
+    case 'bounty':   msg = applyBounty(grid); break;
+    case 'ore':      msg = applyOreDiscovery(grid); break;
+    case 'mushroom': msg = applyMushroomSpread(grid); break;
   }
 
   if (!msg) return { fired: false, message: '' };
