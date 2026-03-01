@@ -14,13 +14,10 @@
  *   5. execute highest-scoring action
  */
 
-import { TileType, type Dwarf, type Tile, type Goblin, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal } from '../shared/types';
-import { GRID_SIZE, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { type Dwarf, type Tile, type Goblin, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal } from '../shared/types';
+import { MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 import {
-  pathNextStep, bestFoodTile, bestMaterialTile, bestWoodTile,
-  fortWallSlots, fortEnclosureSlots,
-  recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS,
   traitMod,
 } from './agents';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';

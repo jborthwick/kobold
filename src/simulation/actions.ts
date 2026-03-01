@@ -251,7 +251,7 @@ const share: Action = {
 // --- fight: fighters hunt nearby goblins ---
 const fight: Action = {
   name: 'fight',
-  intentMatch: null,
+  intentMatch: undefined,
   eligible: ({ dwarf, goblins }) => {
     if (dwarf.role !== 'fighter' || !goblins || goblins.length === 0) return false;
     const fleeAt = traitMod(dwarf, 'fleeThreshold', 80);
@@ -640,7 +640,7 @@ const depositWood: Action = {
 // --- buildWall: miners build fort walls ---
 const buildWall: Action = {
   name: 'buildWall',
-  eligible: ({ dwarf, foodStockpiles, oreStockpiles, goblins }) => {
+  eligible: ({ dwarf, foodStockpiles, oreStockpiles }) => {
     if (dwarf.role !== 'miner') return false;
     if (dwarf.hunger >= 65) return false;
     if (!foodStockpiles?.length || !oreStockpiles?.length) return false;

@@ -26,7 +26,7 @@ export function xpToLevel(xp: number): number {
  * Grant 1 XP to the dwarf's role skill, recompute level.
  * Returns true if the dwarf leveled up (caller may want to log).
  */
-export function grantXp(dwarf: Dwarf, tick: number, onLog?: LogFn): boolean {
+export function grantXp(dwarf: Dwarf, _tick: number, onLog?: LogFn): boolean {
   dwarf.skillXp += 1;
   const newLevel = xpToLevel(dwarf.skillXp);
   if (newLevel > dwarf.skillLevel) {
@@ -38,14 +38,6 @@ export function grantXp(dwarf: Dwarf, tick: number, onLog?: LogFn): boolean {
 }
 
 // ── Role-specific bonuses ───────────────────────────────────────────────────
-
-const ROLE_SKILL_MAP: Record<string, string> = {
-  forager:    'forager',
-  miner:      'miner',
-  lumberjack: 'lumberjack',
-  fighter:    'fighter',
-  scout:      'scout',
-};
 
 /** Bonus harvest yield for foragers/lumberjacks: +0.3 per skill level. */
 export function skillYieldBonus(dwarf: Dwarf): number {

@@ -592,7 +592,7 @@ export function tickAgent(
   foodStockpiles?:    FoodStockpile[],
   goblins?:           Goblin[],
   oreStockpiles?:     OreStockpile[],
-  colonyGoal?:        ColonyGoal,
+  _colonyGoal?:       ColonyGoal,
   woodStockpiles?:    WoodStockpile[],
   /** Weather metabolism multiplier (1.0 = normal, 1.4 = cold). */
   weatherMetabolismMod?: number,
@@ -687,7 +687,6 @@ export function tickAgent(
   // Lazy dwarves eat at 55 (sooner); trait-driven via traitMod.
   if (dwarf.hunger > traitMod(dwarf, 'eatThreshold', 70) && dwarf.inventory.food > 0) {
     const bite        = Math.min(dwarf.inventory.food, 3);
-    const oldHunger   = dwarf.hunger;
     dwarf.inventory.food -= bite;
     dwarf.hunger      = Math.max(0, dwarf.hunger - bite * 20);
     dwarf.task        = 'eating';
@@ -728,11 +727,9 @@ export function tickAgent(
               if (dist < bestDist) { bestDist = dist; bestFriend = other; }
             }
             if (bestFriend && bestDist > 1) {
-              const step = pathNextStep(dwarf.x, dwarf.y, bestFriend.x, bestFriend.y, grid);
-              if (step) {
-                dwarf.x = step[0]; dwarf.y = step[1];
-                dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
-              }
+              const step = pathNextStep({ x: dwarf.x, y: dwarf.y }, bestFriend, grid);
+              dwarf.x = step.x; dwarf.y = step.y;
+              dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
             }
             dwarf.task = 'socializing';
             return;
@@ -858,7 +855,7 @@ export function tickAgent(
   // Brave dwarves fight at 95 hunger; paranoid ones bail at 60.
   const fleeAt = traitMod(dwarf, 'fleeThreshold', 80);
   if (dwarf.role === 'fighter' && goblins && goblins.length > 0
-      && dwarf.hunger < fleeAt && dwarf.llmIntent !== 'rest') {
+      && dwarf.hunger < fleeAt) {
     const HUNT_RADIUS = dwarf.vision * 2;
     const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
@@ -1103,7 +1100,7 @@ export function tickAgent(
   const buildStockpile = oreStockpiles?.find(s => s.ore >= 3) ?? null;
   if (dwarf.role === 'miner' && foodStockpiles && foodStockpiles.length > 0
       && oreStockpiles && oreStockpiles.length > 0 && buildStockpile
-      && dwarf.hunger < 65 && dwarf.llmIntent !== 'rest') {
+      && dwarf.hunger < 65) {
     // Inner rooms first; once complete, switch to enclosing the compound
     let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
     if (wallSlots.length === 0) {
@@ -1442,6 +1439,7 @@ export function tickAgent(
     }
   }
 
+  if (!dwarf.wanderTarget) { dwarf.task = 'idle'; return; }
   const wanderNext = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.wanderTarget, grid);
   dwarf.x    = wanderNext.x;
   dwarf.y    = wanderNext.y;

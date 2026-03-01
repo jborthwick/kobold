@@ -58,7 +58,7 @@ export async function callStorytellerLLM(
   dwarves:           Dwarf[],
   goblins:           Goblin[],
   significantEvents: string[],
-  tick:              number,
+  _tick:             number,
 ): Promise<string | null> {
   if (!llmSystem.enabled) return null;
   if (!llmSystem.canCallNowPublic()) return null;

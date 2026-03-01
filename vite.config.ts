@@ -108,6 +108,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
+    // GitHub Pages serves at /kobold/ — base path needed for correct asset URLs.
+    // In dev mode this is ignored (Vite defaults to '/').
+    base: mode === 'production' ? '/kobold/' : '/',
     plugins: [react(), tileConfigWriterPlugin()],
     worker: {
       format: 'es',
