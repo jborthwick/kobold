@@ -10,6 +10,7 @@ import { MobileBottomSheet } from './ui/MobileBottomSheet';
 import { useLayoutMode } from './shared/useViewport';
 import { bus } from './shared/events';
 import { deleteSave } from './shared/save';
+import { type FactionId, setActiveFaction } from './shared/factions';
 
 export default function App() {
   const [gameMode,  setGameMode]  = useState<'menu' | 'playing'>('menu');
@@ -30,7 +31,8 @@ export default function App() {
   if (gameMode === 'menu') {
     return (
       <StartMenu
-        onStart={(mode) => {
+        onStart={(mode, faction?: FactionId) => {
+          if (faction) setActiveFaction(faction);
           setStartMode(mode);
           setGameMode('playing');
         }}

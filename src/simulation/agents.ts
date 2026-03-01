@@ -1,6 +1,7 @@
 import * as ROT from 'rot-js';
 import { TileType, type Goblin, type Tile, type GoblinRole, type MemoryEntry, type GoblinTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Adventurer, type ResourceSite, type ColonyGoal } from '../shared/types';
-import { GRID_SIZE, INITIAL_GOBLINS, GOBLIN_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { GRID_SIZE, INITIAL_GOBLINS, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { getActiveFaction } from '../shared/factions';
 import { isWalkable } from './world';
 import { xpToLevel } from './skills';
 
@@ -97,55 +98,33 @@ export function traitMod<K extends keyof TraitMods>(goblin: Goblin, key: K, fall
   return TRAIT_MODS[goblin.trait]?.[key] ?? fallback;
 }
 
-/** Goblin-flavored display names for traits (internal values stay the same for BT logic). */
-export const GOBLIN_TRAIT_DISPLAY: Record<GoblinTrait, string> = {
-  helpful:   'Surprisingly Generous',
-  greedy:    'Shinies Hoarder',
-  brave:     'Too Dumb to Run',
-  paranoid:  'Sensibly Cautious',
-  lazy:      'Professional Napper',
-  cheerful:  'Annoyingly Cheerful',
-  mean:      'Bitey',
-  forgetful: 'What Was I Doing?',
-};
+/** Faction-aware display names for traits. Reads from the active faction config. */
+export function getTraitDisplay(): Record<GoblinTrait, string> {
+  return getActiveFaction().traitDisplay;
+}
+/** Convenience re-export for compatibility — reads from active faction. */
+export const GOBLIN_TRAIT_DISPLAY = new Proxy({} as Record<GoblinTrait, string>, {
+  get: (_target, prop: string) => getActiveFaction().traitDisplay[prop as GoblinTrait],
+});
 
-/** Goblin-flavored display names for roles (internal values stay the same for BT logic). */
-export const GOBLIN_ROLE_DISPLAY: Record<GoblinRole, string> = {
-  forager:    'SCAVENGER',
-  miner:      'ROCK BITER',
-  scout:      'SNEAKY GIT',
-  fighter:    'BASHER',
-  lumberjack: 'TREE PUNCHER',
-};
+/** Faction-aware display names for roles. Reads from the active faction config. */
+export function getRoleDisplay(): Record<GoblinRole, string> {
+  return getActiveFaction().roleDisplay;
+}
+/** Convenience re-export for compatibility — reads from active faction. */
+export const GOBLIN_ROLE_DISPLAY = new Proxy({} as Record<GoblinRole, string>, {
+  get: (_target, prop: string) => getActiveFaction().roleDisplay[prop as GoblinRole],
+});
 
 // ── Trait / bio / goal tables ─────────────────────────────────────────────────
 const GOBLIN_TRAITS: GoblinTrait[] = [
   'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
 ];
 
-const GOBLIN_BIOS: string[] = [
-  'ate a rock once and liked it',
-  'has an imaginary friend named Keith',
-  'claims to have invented fire',
-  'afraid of loud noises and also quiet ones',
-  'once stole a sword bigger than himself',
-  'was kicked out of three different caves',
-  'firmly believes the moon is edible',
-  'has a pet spider named Lord Bitington',
-  'convinced he can talk to mushrooms',
-  'lost a fight to a particularly aggressive squirrel',
-];
-
-const GOBLIN_GOALS: string[] = [
-  'eat something that isn\'t a bug',
-  'find a rock that looks like a face',
-  'go one whole day without being hit',
-  'make a friend (a real one this time)',
-  'find something shiny',
-  'build something that doesn\'t fall down',
-  'survive until lunch',
-  'learn what a "plan" is',
-];
+/** Faction-driven bio pool — reads from active faction at spawn time. */
+function getGoblinBios(): string[] { return getActiveFaction().bios; }
+/** Faction-driven goal pool — reads from active faction at spawn time. */
+function getGoblinGoals(): string[] { return getActiveFaction().goals; }
 const ROLE_STATS: Record<GoblinRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
   forager:    { visionMin: 5, visionMax: 8,  maxHealth: 100 },
   miner:      { visionMin: 4, visionMax: 6,  maxHealth: 100 },
@@ -180,7 +159,8 @@ export function spawnGoblins(
     const role  = ROLE_ORDER[i % ROLE_ORDER.length];
     const stats = ROLE_STATS[role];
 
-    const baseName = GOBLIN_NAMES[i % GOBLIN_NAMES.length];
+    const factionNames = getActiveFaction().names;
+    const baseName = factionNames[i % factionNames.length];
     goblins.push({
       id:            `goblin-${i}`,
       name:          baseName,
@@ -204,8 +184,8 @@ export function spawnGoblins(
       memory:          [],
       relations:       {},   // populated lazily as goblins interact
       trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
-      bio:             GOBLIN_BIOS[Math.floor(Math.random() * GOBLIN_BIOS.length)],
-      goal:            GOBLIN_GOALS[Math.floor(Math.random() * GOBLIN_GOALS.length)],
+      bio:             getGoblinBios()[Math.floor(Math.random() * getGoblinBios().length)],
+      goal:            getGoblinGoals()[Math.floor(Math.random() * getGoblinGoals().length)],
       wanderTarget:    null,
       wanderExpiry:    0,
       knownFoodSites:  [],
@@ -315,8 +295,8 @@ export function spawnSuccessor(
     memory:          inheritedMemory,
     relations,
     trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
-    bio:             GOBLIN_BIOS[Math.floor(Math.random() * GOBLIN_BIOS.length)],
-    goal:            GOBLIN_GOALS[Math.floor(Math.random() * GOBLIN_GOALS.length)],
+    bio:             getGoblinBios()[Math.floor(Math.random() * getGoblinBios().length)],
+    goal:            getGoblinGoals()[Math.floor(Math.random() * getGoblinGoals().length)],
     wanderTarget:    null,
     wanderExpiry:    0,
     knownFoodSites:  [],
@@ -904,9 +884,10 @@ export function tickAgent(
       const distAfterMove = Math.abs(nearest.g.x - goblin.x) + Math.abs(nearest.g.y - goblin.y);
       // Fighting is hard work — double fatigue for combat + sprint
       goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
+      const enemySing = getActiveFaction().enemyNounPlural.replace(/s$/, '');
       goblin.task = distAfterMove === 0
-        ? 'fighting adventurer!'
-        : `→ adventurer (${distAfterMove} tiles)`;
+        ? `fighting ${enemySing}!`
+        : `→ ${enemySing} (${distAfterMove} tiles)`;
       return;
     }
   }

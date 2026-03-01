@@ -12,6 +12,7 @@
  */
 
 import { TileType, type Goblin, type Tile, type LLMIntent, type GoblinTrait, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type ResourceSite } from '../shared/types';
+import { getActiveFaction } from '../shared/factions';
 import { GRID_SIZE, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 import { sigmoid, inverseSigmoid, ramp } from './utilityAI';
@@ -289,7 +290,8 @@ const fight: Action = {
     }
     goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate(goblin));
     const distAfter = Math.abs(nearest.g.x - goblin.x) + Math.abs(nearest.g.y - goblin.y);
-    goblin.task = distAfter === 0 ? 'fighting adventurer!' : `→ adventurer (${distAfter} tiles)`;
+    const enemySing = getActiveFaction().enemyNounPlural.replace(/s$/, '');
+    goblin.task = distAfter === 0 ? `fighting ${enemySing}!` : `→ ${enemySing} (${distAfter} tiles)`;
     // Fighter XP — grant on engaging in combat
     if (distAfter === 0) grantXp(goblin, currentTick, onLog);
   },

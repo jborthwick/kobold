@@ -9,6 +9,7 @@
 import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
 import { llmSystem, PROVIDERS } from './crisis';
+import { getActiveFaction } from '../shared/factions';
 
 // ── Event filtering ──────────────────────────────────────────────────────────
 
@@ -32,8 +33,8 @@ export function filterSignificantEvents(
     if (e.level === 'error') { significant.push(e); continue; }
     // Weather shifts, world events, colony milestones
     if (SIG_NAMES.has(e.goblinName)) { significant.push(e); continue; }
-    // Adventurer kills
-    if (e.message.includes('clobbered')) { significant.push(e); continue; }
+    // Adventurer kills (killVerb varies by faction)
+    if (e.message.includes(getActiveFaction().killVerb)) { significant.push(e); continue; }
     // LLM crisis decisions (cap at 3 to avoid prompt bloat)
     if (e.level === 'warn' && e.goblinId !== 'verify' && llmDecisionCount < 3) {
       significant.push(e);
@@ -85,14 +86,15 @@ export async function callStorytellerLLM(
     ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
     : '\nA quiet chapter with no major events.';
 
+  const faction    = getActiveFaction();
   const chapterNum = completedGoal.generation + 1;
   const prompt =
-    `You are the narrator of a goblin colony survival story — darkly humorous, chaotic, told with affection for the hapless goblins. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
+    `You are the narrator of a ${faction.unitNoun} colony survival story — ${faction.narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
     `The colony just completed: ${completedGoal.description}\n` +
-    `Colony: ${alive.length} goblins alive, ${dead.length} fallen. Roster: ${roster}\n` +
+    `Colony: ${alive.length} ${faction.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
     `Tone: ${tone} (tension ${tension.toFixed(0)}/100)\n` +
     `${eventBlock}\n\n` +
-    `Write in past tense, third person. Be specific — name goblins, reference actual events. No dialogue. Keep the dark humor subtle — the comedy comes from goblins taking themselves seriously.`;
+    `Write in past tense, third person. Be specific — name ${faction.unitNounPlural}, reference actual events. No dialogue.`;
 
   try {
     llmSystem.recordCallPublic();
@@ -150,9 +152,10 @@ export function buildFallbackChapter(
   const raidCount  = events.filter(e => e.includes('storm') || e.includes('RAID')).length;
   const names      = alive.slice(0, 3).map(d => d.name).join(', ');
 
+  const faction = getActiveFaction();
   let text = `The colony completed "${goal.description}" after ${goal.generation + 1} cycle${goal.generation > 0 ? 's' : ''}.`;
-  if (deathCount > 0) text += ` ${deathCount} goblin${deathCount > 1 ? 's' : ''} fell along the way.`;
-  if (raidCount > 0)  text += ` The colony endured ${raidCount} adventurer raid${raidCount > 1 ? 's' : ''}.`;
+  if (deathCount > 0) text += ` ${deathCount} ${faction.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
+  if (raidCount > 0)  text += ` The colony endured ${raidCount} ${faction.enemyNounPlural.slice(0, 1).toUpperCase() + faction.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
   if (names) text += ` ${names} and the others press on.`;
   return text;
 }

@@ -15,6 +15,7 @@ import { rollWound, woundLabel } from '../../simulation/wounds';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import { saveGame, loadGame, type SaveData } from '../../shared/save';
 import { isMobileViewport, isTabletViewport } from '../../shared/platform';
+import { getActiveFaction, setActiveFaction } from '../../shared/factions';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
@@ -108,15 +109,16 @@ export class WorldScene extends Phaser.Scene {
 
   private static makeGoal(type: ColonyGoal['type'], generation: number): ColonyGoal {
     const scale = 1 + generation * 0.6;
+    const desc  = getActiveFaction().goalDescriptions;
     switch (type) {
       case 'stockpile_food':
-        return { type, description: `Hoard ${Math.round(80 * scale)} food (without eating it all)`, progress: 0, target: Math.round(80 * scale), generation };
+        return { type, description: desc.stockpile_food(Math.round(80 * scale)), progress: 0, target: Math.round(80 * scale), generation };
       case 'survive_ticks':
-        return { type, description: `Don't all die for ${Math.round(800 * scale)} ticks`, progress: 0, target: Math.round(800 * scale), generation };
+        return { type, description: desc.survive_ticks(Math.round(800 * scale)), progress: 0, target: Math.round(800 * scale), generation };
       case 'defeat_adventurers':
-        return { type, description: `Clobber ${Math.round(5 * scale)} adventurers`, progress: 0, target: Math.round(5 * scale), generation };
+        return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
       case 'enclose_fort':
-        return { type, description: 'Build walls (that hopefully stay up)', progress: 0, target: 1, generation };
+        return { type, description: desc.enclose_fort(), progress: 0, target: 1, generation };
     }
   }
 
@@ -126,6 +128,8 @@ export class WorldScene extends Phaser.Scene {
     const save = mode === 'load' ? loadGame() : null;
 
     if (save) {
+      // Restore faction selection from save (backward compat: default to goblins)
+      setActiveFaction(save.faction ?? 'goblins');
       bus.emit('restoreLog', save.logHistory ?? []);
       // Restore all simulation state from the save file
       this.grid               = save.grid;
@@ -381,6 +385,7 @@ export class WorldScene extends Phaser.Scene {
       worldSeed:          this.worldSeed,
       chapters:           [...this.chapters],
       goalStartTick:      this.goalStartTick,
+      faction:            getActiveFaction().id,
     };
   }
 
@@ -723,7 +728,7 @@ export class WorldScene extends Phaser.Scene {
         tick:      this.tick,
         goblinId:   'adventurer',
         goblinName: 'RAID',
-        message:   `⚔ ${raid.count} adventurers storm from the ${raid.edge}! Run!`,
+        message:   `⚔ ${raid.count} ${getActiveFaction().enemyNounPlural} storm from the ${raid.edge}! ${getActiveFaction().raidSuffix}`,
         level:     'error',
       });
     }
@@ -737,21 +742,23 @@ export class WorldScene extends Phaser.Scene {
         if (d && d.alive) {
           d.health = Math.max(0, d.health - damage);
           d.morale = Math.max(0, d.morale - 5);
+          const enemyNoun = getActiveFaction().enemyNounPlural;
           if (d.health <= 0) {
             d.alive        = false;
             d.task         = 'dead';
-            d.causeOfDeath = 'killed by adventurers';
+            d.causeOfDeath = `killed by ${enemyNoun}`;
             bus.emit('logEntry', {
               tick:      this.tick,
               goblinId:   d.id,
               goblinName: d.name,
-              message:   'killed by adventurers!',
+              message:   `killed by ${enemyNoun}!`,
               level:     'error',
             });
             this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
           } else {
+            const enemySing = enemyNoun.replace(/s$/, '');
             // Survived — batch hits to reduce log noise (log every 3rd hit)
-            d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by adventurer, ${d.health.toFixed(0)} hp remaining` });
+            d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by ${enemySing}, ${d.health.toFixed(0)} hp remaining` });
             const hits = (this.combatHits.get(d.id) ?? 0) + 1;
             this.combatHits.set(d.id, hits);
             if (hits % 3 === 1) {  // log 1st hit, then every 3rd
@@ -760,8 +767,8 @@ export class WorldScene extends Phaser.Scene {
                 goblinId:   d.id,
                 goblinName: d.name,
                 message:   hits === 1
-                  ? `⚔ hit by adventurer! (${d.health.toFixed(0)} hp)`
-                  : `⚔ fighting adventurer (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
+                  ? `⚔ hit by ${enemySing}! (${d.health.toFixed(0)} hp)`
+                  : `⚔ fighting ${enemySing} (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
                 level:     'warn',
               });
             }
@@ -806,7 +813,11 @@ export class WorldScene extends Phaser.Scene {
           const killer = this.goblins.find(dw => dw.id === goblinId && dw.alive);
           if (killer) {
             killer.adventurerKills += 1;
-            killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'clobbered an adventurer in battle' });
+            const factionCfg = getActiveFaction();
+            const killVerb   = factionCfg.killVerb;
+            const enemySing  = factionCfg.enemyNounPlural.replace(/s$/, '');
+            const article    = /^[aeiou]/i.test(enemySing) ? 'an' : 'a';
+            killer.memory.push({ tick: this.tick, crisis: 'combat', action: `${killVerb} ${article} ${enemySing} in battle` });
             const hitsTaken = this.combatHits.get(killer.id) ?? 0;
             this.combatHits.delete(killer.id);
             bus.emit('logEntry', {
@@ -814,8 +825,8 @@ export class WorldScene extends Phaser.Scene {
               goblinId:   killer.id,
               goblinName: killer.name,
               message:   hitsTaken > 0
-                ? `⚔ clobbered an adventurer! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
-                : '⚔ clobbered an adventurer!',
+                ? `⚔ ${killVerb} ${article} ${enemySing}! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
+                : `⚔ ${killVerb} ${article} ${enemySing}!`,
               level:     'warn',
             });
           }

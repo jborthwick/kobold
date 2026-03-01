@@ -110,7 +110,7 @@ Each goblin has `vision` (tiles), `metabolism` (hunger/tick), and `inventory`. T
 Short-term memory: last 5 decisions per goblin fed into each LLM prompt (~200 tokens). When a crisis triggers, goblin state + situation + memory compress into a single ~400-token context, and a single LLM call produces one coherent decision covering action, reasoning, intent, and expected outcome.
 
 **3. LLM is a crisis decision-maker, not a tick-by-tick driver.**
-~95% of agent behavior runs deterministically (behavior tree). LLM calls fire only at genuine decision points. Cooldown: 280 ticks (~40 s) between calls per goblin. LLM is off by default — toggle with 🤖 button.
+~95% of agent behavior runs deterministically (Utility AI scored actions). LLM calls fire only at genuine decision points. Cooldown: 280 ticks (~40 s) between calls per goblin. LLM is off by default — toggle with 🤖 button.
 
 **4. Action awareness prevents hallucination cascades (VERIFY step).**
 After each LLM-directed action, the simulation snapshots state. 40 ticks later it checks whether the outcome matched the expectation. Discrepancies are backfilled into the memory entry so the next prompt sees what actually happened.
@@ -125,8 +125,8 @@ If a request times out (5 s) or LLM is disabled, agents fall back silently to th
 ```typescript
 // src/shared/types.ts — plain interfaces, no ECS framework
 
-export type GoblinRole = 'forager' | 'miner' | 'scout' | 'fighter';
-export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
+export type GoblinRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
+export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'socialize' | 'none';
 
 export interface MemoryEntry {
   tick:     number;
@@ -154,59 +154,74 @@ export interface Goblin {
   llmReasoning:    string | null;
   llmIntent:       LLMIntent | null;  // active BT override; clears at llmIntentExpiry
   llmIntentExpiry: number;            // tick at which intent expires
-  memory:          MemoryEntry[];     // rolling last-5 decisions
+  memory:          MemoryEntry[];     // rolling decisions; last 5 used in LLM prompts
+  fatigue:         number;       // 0–100; rises with movement/work, decays when resting
+  social:          number;       // 0–100; rises when isolated from friendly goblins
+  lastSocialTick:  number;       // tick when goblin last had a friend within proximity
+  trait:           GoblinTrait;  // permanent personality trait
+  relations:       Record<string, number>;  // keyed by goblin.id; 0–100 (50 = neutral)
+  knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
+  knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
+  knownWoodSites:  ResourceSite[];   // remembered forest wood sites (cap: 5)
+  homeTile:        { x: number; y: number };  // colony center (stockpile location)
+  skillXp:         number;       // lifetime XP for role skill
+  skillLevel:      number;       // floor(sqrt(xp / 10)) — cached, recomputed on XP grant
+  wound?:          Wound;        // active wound (undefined = healthy); heals at wound.healTick
 }
 ```
 
-**Role stats (assigned round-robin at spawn: forager, miner, scout, forager, fighter):**
-| Role    | Vision | HP  | Behavior |
-|---------|--------|-----|----------|
-| forager | 4–6    | 100 | harvests 4 food/tile (others: 3); main food collector |
-| miner   | 2–4    | 100 | targets ore tiles when no food nearby (step 4.5 BT) |
-| scout   | 5–8    | 100 | wide contest radius (4 tiles); early threat detection |
-| fighter | 3–5    | 130 | hunts adventurers within vision×2; deals 18 hp/hit (others: 8) |
-
-**`tickAgent` signature (7 params):** `tickAgent(goblin, grid, currentTick, goblins?, onLog?, depot?, adventurers?)` — all params after `currentTick` are optional. Adding a new param requires updating the WorldScene call site.
+**Role stats (assigned round-robin at spawn: forager, miner, scout, lumberjack, fighter):**
+| Role       | Vision | HP  | Behavior |
+|------------|--------|-----|----------|
+| forager    | 4–6    | 100 | harvests 2 food/tile (others: 1); main food collector |
+| miner      | 2–4    | 100 | targets ore tiles; builds fort walls from ore stockpile |
+| scout      | 5–8    | 100 | wide vision; early threat detection; XP on exploration |
+| lumberjack | 5–8    | 100 | chops forest tiles for wood; deposits to wood stockpile |
+| fighter    | 3–5    | 130 | hunts adventurers within vision×2; deals 18 hp/hit (others: 8) |
 
 ---
 
-## Behavior tree (`tickAgent`, priority cascade)
+## Utility AI (`tickAgentUtility`, scored action selection)
+
+Replaced the fixed-priority behavior tree (Iteration 10). Every tick each eligible
+action scores 0–1 via sigmoid/ramp response curves. Highest-scoring action wins.
+Traits shift sigmoid midpoints (not thresholds), creating organic personality-driven
+divergence. LLM intents add +0.5 to matching action scores (capped at 1.0).
 
 ```
-1.   Starvation: hunger ≥ 100 AND inventory empty → health -= 2, morale -= 2
-1.5  Stress metabolism: morale < 25 → hunger += metabolism × 1.3 (death spiral)
-2.   Eat: hunger > eatThreshold AND inventory food > 0 → eat 3 units
-       Trait-modified: lazy eats at 55 (not 70)
-2.5  LLM intent:
-       eat   → force-eat below normal threshold (hunger > 30)
-       rest  → stay put this tick
-       forage/avoid → handled in steps 4/5
-2.7  Food sharing: food ≥ shareThreshold AND nearby goblin (≤2 tiles) hunger > 60 AND food < 3
-       → gift 3 food to hungriest neighbor; donor keeps ≥ keepMin
-       Trait-modified: helpful shares at 6/keeps 3; greedy at 12/keeps 8; mean at 14
-       Relation-gated: won't share if neighbor relation < shareRelationGate (default 30; mean: 55)
-       Allies (relation ≥ 60) get cooperative yield bonus (+2) instead of contest penalty
-2.8  Depot deposit/withdraw: when standing on depot tile
-       food ≥ 10 → deposit (food − 6) to depot
-       hunger > 60 AND food < 2 AND depot.food > 0 → withdraw min(4, depot.food)
-3.   Player command: commandTarget set → pathfind toward it (A*)
-3.5  Fighter hunt: (fighters only) nearest adventurer within vision×2 → pathfind toward it;
-       on contact tickAdventurers handles combat (18 hp/hit vs 8 for other roles)
-       Trait-modified: brave fights until hunger 95; paranoid flees at hunger 60
-4.   Forage + harvest (Sugarscape rule):
-       scan vision radius (or 10 if llmIntent='forage') for richest food tile
-       move toward it, harvest on arrival
-       Harvest yield scales with morale: 0.5× at morale 0, 1.0× at morale 100
-       Contest yield: if hungrier goblin on same tile → skip harvest this tick
-         Allies (relation ≥ 60) yield peacefully with cooperation bonus (+2)
-         Mean trait doubles contest penalty (−10 not −5)
-4.3  Depot run: hunger > 65 AND food == 0 AND depot.food > 0 → pathfind to depot
-4.5  Miner ore targeting: (miners only, when no food in vision)
-       scan for richest material tile, mine 2 units/tick
-5.   Wander / avoid:
-       llmIntent='avoid' → maximize distance from nearest rival within 5 tiles
-       otherwise → random walkable step
+Flow:
+  1. updateNeeds()           — hunger, morale, fatigue, social, wound healing
+  2. starvation damage       — unconditional, not an action
+  3. expire stale LLM intent
+  4. stockpile deposit/withdraw (instant reactions when standing on stockpile)
+  5. score all eligible actions (+ LLM boost)
+  6. execute highest-scoring action
+
+Actions (scored, highest wins):
+  commandMove   — player override (always score 1.0)
+  eat           — sigmoid(hunger, eatThreshold=70); trait-shifted
+  rest          — sigmoid(fatigue, 60); resting accelerates wound healing ×3
+  share         — sigmoid(target.hunger, 70) × ramp(food, 6, 15); relation-gated
+  fight         — fighters only; inverseSigmoid(distance) × inverseSigmoid(hunger)
+  forage        — sigmoid(hunger, 40); scan vision for richest food; contest yield
+  depositFood   — ramp(food, 8, 20) × inverseSigmoid(hunger, 50)
+  withdrawFood  — sigmoid(hunger, 65); pathfind to stockpile
+  mine          — miners only; inverseSigmoid(hunger, 60); + remembered ore sites
+  chop          — lumberjacks only; inverseSigmoid(hunger, 60); + remembered wood sites
+  depositOre    — miners; ramp(materials, 6, 20)
+  depositWood   — lumberjacks; ramp(materials, 6, 20)
+  buildWall     — miners; ramp(totalOre, 3, 30); requires ore in stockpile
+  socialize     — sigmoid(social, 50); seeks nearby friendly goblin
+  avoidRival    — flee from low-relation neighbors (score 0.3)
+  wander        — fallback exploration (score 0.05); persistent waypoints
 ```
+
+**Close-call logging:** When top two actions score within 0.03 and both > 0.45,
+the event log shows "⚖ agonizing over X vs Y" — creates emergent drama.
+
+**Fatigue system:** Movement/work generates fatigue (0.2–0.4/tick × trait modifier).
+Fatigue > 70 → 30% chance to skip action (exhaustion stumble). Fatigue > 90 → morale decay.
+Rest action recovers 1.5/tick and accelerates wound healing.
 
 ---
 
@@ -261,6 +276,59 @@ multiplier; existing hunger/morale/sharing mechanics cascade from there.
 
 ---
 
+## Skills & XP system (`src/simulation/skills.ts`)
+
+One skill per role, XP accrues on primary actions:
+
+| Role       | XP trigger          | Bonus per level |
+|------------|---------------------|-----------------|
+| forager    | successful harvest  | +0.3 food yield |
+| miner      | ore extraction      | +0.3 ore yield  |
+| fighter    | combat engagement   | +3 damage       |
+| scout      | reaching wander target | +1 vision    |
+| lumberjack | wood chop           | +0.3 wood yield |
+
+Level formula: `floor(sqrt(xp / 10))` — Level 0 → 1 at 10 XP, 1 → 2 at 40 XP, 2 → 3 at 90 XP.
+Level-up logged in event log with ⭐ icon.
+
+---
+
+## Wound system (`src/simulation/wounds.ts`)
+
+Single wound slot per goblin. 60% chance to roll a wound on adventurer hit:
+
+| Wound   | Chance | Duration | Effect |
+|---------|--------|----------|--------|
+| bruised | 30%    | 80 ticks | fatigue +0.3/tick extra |
+| leg     | 15%    | 150 ticks | 40% chance to skip movement each tick |
+| arm     | 10%    | 120 ticks | harvest/mine yield ×0.5, combat damage ×0.6 |
+| eye     | 5%     | 200 ticks | vision −3 tiles (min 1) |
+
+`effectiveVision(goblin)` replaces raw `goblin.vision` everywhere — combines base +
+skill bonus − wound penalty. Rest action accelerates healing ×3.
+
+---
+
+## Faction system (`src/shared/factions.ts`)
+
+Cosmetic framework — game mechanics identical for both factions. All display-layer
+content reads from `getActiveFaction()` at runtime:
+
+| Field             | Goblins (default)          | Dwarves                    |
+|-------------------|----------------------------|----------------------------|
+| Title             | KOBOLD                     | IRONHOLD                   |
+| Unit noun         | goblin / goblins           | dwarf / dwarves            |
+| Enemy noun        | adventurers                | goblins                    |
+| Kill verb         | clobbered                  | slew                       |
+| Narrator tone     | darkly humorous, chaotic   | solemn, saga-like          |
+| Accent color      | #f0c040 (gold)             | #c0a060 (amber)            |
+
+`FactionConfig` interface has ~20 fields covering names, bios, goals, trait/role display
+labels, LLM prompt templates, goal descriptions, and event message flavor text.
+Faction persists in `SaveData.faction?` (defaults to 'goblins' for old saves).
+
+---
+
 ## Tension-aware storyteller (`src/simulation/events.ts`)
 
 Replaced flat 25/25/25/25 event distribution with colony-health-aware selection:
@@ -279,7 +347,7 @@ pacing: a struggling colony gets relief, a thriving colony gets challenged.
 ## LLM prompt format (actual, `buildPrompt`)
 
 ```
-You are {name}, a goblin {roleLabel}
+You are {name}, a {faction.llmSpecies} {faction.llmRoleLabels[role]}
 Role affects your priorities and decisions.
 Status — Health: {h}/{max}, Hunger: {hunger}/100, Morale: {morale}/100
 Food carried: {food} units. Current task: {task}.
@@ -302,12 +370,16 @@ Respond ONLY as valid JSON (no markdown, no extra text):
 
 Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/goblin.
 
+**Storyteller LLM** (`storyteller.ts`): fires once per goal completion. ~300 token prompt
+with colony roster, tension score, and 15 significant events. Returns 2-4 sentence chapter
+summary. Timeout: 8 s. Max tokens: 200. Falls back to deterministic text on failure.
+
 ---
 
 ## World design
 
 - **Grid:** 64×64 tiles, 16×16 px (Kenney 1-bit `colored_packed.png`)
-- **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom
+- **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall
 - **Layout:** Dual-noise biome classification (Red Blob Games pattern).
   `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`:
   - **Noise fields:** Two independent Simplex noise fields (elevation + moisture) via
@@ -366,7 +438,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 ```
 src/
 ├── main.tsx                     # Vite entry — mounts React + Phaser
-├── App.tsx                      # React root: HUD + EventLog + TilePicker
+├── App.tsx                      # React root: HUD + EventLog + TilePicker + ChroniclePanel
 ├── game/
 │   ├── PhaserGame.tsx           # React component hosting Phaser canvas
 │   ├── scenes/
@@ -375,21 +447,34 @@ src/
 │   └── tileConfig.ts            # Frame arrays per TileType; auto-saved by tile picker
 ├── simulation/
 │   ├── world.ts                 # generateWorld(), growback(), isWalkable()
-│   ├── agents.ts                # spawnGoblins(), tickAgent() behavior tree, TRAIT_MODS
+│   ├── agents.ts                # spawnGoblins(), pathfinding helpers, TRAIT_MODS, FORAGEABLE_TILES
+│   ├── actions.ts               # Utility AI action definitions (16 scored actions)
+│   ├── utilityAI.ts             # tickAgentUtility() selector loop, response curves, needs update
+│   ├── skills.ts                # XP/level system — grantXp(), role-specific bonuses
+│   ├── wounds.ts                # Injury system — rollWound(), effectiveVision(), wound effects
 │   ├── adventurers.ts           # Adventurer (enemy) raid spawning, AI, combat
 │   ├── events.ts                # tickWorldEvents() — tension-aware storyteller
 │   └── weather.ts               # Weather state, season cycling, growback/metabolism multipliers
 ├── ai/
-│   ├── crisis.ts                # detectCrisis(), LLMDecisionSystem, buildPrompt()
+│   ├── crisis.ts                # detectCrisis(), LLMDecisionSystem, buildPrompt(), PROVIDERS
+│   ├── storyteller.ts           # Chronicle chapter generation — filterSignificantEvents(), callStorytellerLLM()
 │   └── types.ts                 # LLMDecision, CrisisSituation interfaces
 ├── ui/
-│   ├── HUD.tsx                  # Top bar + GoblinPanel (role badge, bars, LLM toggle)
+│   ├── HUD.tsx                  # Top bar + GoblinPanel + ChroniclePanel + ColonyGoalPanel
+│   ├── StartMenu.tsx            # Faction picker + continue/new colony UI
 │   ├── EventLog.tsx             # Scrollable colored event feed
+│   ├── MiniMap.tsx              # Canvas-based minimap with goblin/adventurer dots
+│   ├── MobileControls.tsx       # Touch controls for mobile (overlay buttons)
+│   ├── MobileBottomSheet.tsx    # Mobile-friendly bottom sheet for goblin detail
 │   └── TilePicker.tsx           # In-game tile frame editor (T key)
 └── shared/
-    ├── types.ts                 # Goblin, Tile, GameState, GoblinRole, LLMIntent, …
-    ├── events.ts                # mitt bus type definitions
-    └── constants.ts             # GRID_SIZE, TILE_SIZE, TICK_RATE_MS, MAX_INVENTORY_FOOD
+    ├── types.ts                 # Goblin, Tile, GameState, Chapter, Wound, ResourceSite, …
+    ├── events.ts                # mitt bus type definitions (24 event types)
+    ├── factions.ts              # FactionConfig, GOBLIN_FACTION, DWARF_FACTION, getActiveFaction()
+    ├── save.ts                  # SaveData, saveGame(), loadGame(), peekSave()
+    ├── constants.ts             # GRID_SIZE, TILE_SIZE, TICK_RATE_MS, MAX_INVENTORY_FOOD
+    ├── platform.ts              # Device detection (isMobile, isTablet)
+    └── useViewport.ts           # React hook for responsive viewport dimensions
 public/
 └── assets/kenney-1-bit/Tilesheet/colored_packed.png
 vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-proxy
@@ -448,7 +533,7 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 - **`[` / `]` hotkeys:** cycle selected goblin through all alive goblins
 
 ### Iteration 7 ✅ — Colony goal, depot, fighter role, succession
-- **Colony-wide shared goal** cycling through `stockpile_food → survive_ticks → defeat_adventurers`; completion grants +15 morale, scales next target by `1 + generation × 0.5`
+- **Colony-wide shared goal** cycling through `stockpile_food → survive_ticks → defeat_adventurers → enclose_fort`; completion grants +15 morale, scales next target by `1 + generation × 0.5`
 - **Communal food depot** at spawn-zone center: goblins auto-deposit surplus (food ≥ 10) and withdraw when starving; gold border + `D:N` label renders above the tile
 - **Fighter role**: 130 HP, hunts adventurers within vision×2 (BT step 3.5), deals 18 hp/hit vs 8 for others — kills a 30 HP adventurer in 2 hits
 - **Death & succession**: `spawnSuccessor()` queues a replacement ~300 ticks after each death with inherited memory fragments, muted relations, and an optional LLM arrival thought (`callSuccessionLLM()`)
@@ -492,6 +577,46 @@ Every goblin acted identically regardless of personality.
 - **Coherent biome regions**: forests cluster in moist midlands, mushroom bogs in wet lowlands,
   ore/stone on dry peaks — 2-3 distinct biome regions on 64×64 map
 
+### Iteration 10 ✅ — Utility AI, skills & XP, wounds
+- **Utility AI replaces fixed-priority BT:** `tickAgentUtility()` in `utilityAI.ts` + 16 scored
+  actions in `actions.ts`. Every tick each eligible action scores 0–1 via sigmoid/ramp response
+  curves; highest score wins. Traits shift sigmoid midpoints (not thresholds). LLM intents add
+  +0.5 to matching action scores (capped at 1.0) instead of hard-overriding the BT
+- **Response curves:** `sigmoid(value, midpoint, steepness)`, `inverseSigmoid()`, `ramp(value, min, max)`
+  — smooth 0–1 scoring replaces hardcoded threshold checks
+- **Fatigue system:** 0–100; rises with movement/work (trait-modified rate), decays when resting.
+  Fatigue > 70 → 30% chance to skip action. Fatigue > 90 → morale decay. Bruised wound adds
+  extra +0.3 fatigue/tick
+- **Social need:** 0–100; rises when isolated from friendly goblins (> 3 tiles from relation ≥ 40
+  neighbor for > 30 ticks). High social need → morale decay + socialize action scores higher
+- **Skills & XP** (`skills.ts`): one skill per role. Level = floor(sqrt(xp / 10)). XP granted
+  on primary action (forager: harvest, miner: ore extraction, fighter: combat, scout: exploration,
+  lumberjack: wood chop). Bonuses: forager/lumberjack +0.3 yield/level, miner +0.3 ore/level,
+  fighter +3 damage/level, scout +1 vision/level
+- **Wound system** (`wounds.ts`): single wound slot per goblin. 60% chance on adventurer hit:
+  bruised (30%, 80 ticks, +fatigue), leg (15%, 150 ticks, 40% skip movement), arm (10%, 120 ticks,
+  yield ×0.5, damage ×0.6), eye (5%, 200 ticks, vision −3). Rest action accelerates healing ×3
+- **Close-call logging:** "⚖ agonizing over X vs Y" when top two actions score within 0.03
+- **Trait-flavored action logs:** each trait has unique flavor text for eat/rest/share actions
+- **Spatial memory:** goblins remember up to 5 food/ore/wood sites; pathfind to remembered
+  patches when nothing is visible — reduces wander time, creates emergent resource routes
+
+### Iteration 11 ✅ — Fort building, lumberjack role, ore/wood stockpiles
+- **Lumberjack role:** chops forest tiles for wood (materialValue), deposits to wood stockpile.
+  Same vision/HP as scout. Role order: forager, miner, scout, lumberjack, fighter
+- **Ore stockpile:** miners deposit materials; drawn from by miners building fort walls (3 ore
+  per wall). Placed adjacent to food stockpile
+- **Wood stockpile:** lumberjacks deposit materials. Placed adjacent to food stockpile on
+  opposite side from ore stockpile
+- **Wall building action:** miners pathfind to `fortWallSlots()` or `fortEnclosureSlots()`,
+  consume 3 ore from stockpile, place `TileType.Wall` — blocks movement
+- **`enclose_fort` colony goal:** 4th goal in the cycle. Progress = 1 when all fort enclosure
+  slots are filled with walls. Creates a walled perimeter around the stockpile area
+- **Colony goal cycle expanded:** `stockpile_food → survive_ticks → defeat_adventurers → enclose_fort`
+- **MiniMap** (`MiniMap.tsx`): canvas-based minimap showing tile types, goblin/adventurer dots,
+  and camera viewport rectangle
+- **Resource overlay expanded:** O key cycles through `off → food → material → wood` modes
+
 ### Iteration 12 ✅ — Goblin migration & comedic tone shift
 - **Full rename: Dwarf → Goblin (player), Goblin → Adventurer (enemy)**
   Two-phase automated rename across 20+ files, ~600 references
@@ -506,6 +631,27 @@ Every goblin acted identically regardless of personality.
 - **Storyteller tone**: "darkly humorous, chaotic, told with affection for the hapless goblins"
 - **Save format v2**: Clean break from v1 (old saves ignored)
 - **File rename**: `goblins.ts` → `adventurers.ts`
+
+### Iteration 13 ✅ — Faction system + Chronicle chapters
+- **Cosmetic faction system** (`factions.ts`): `FactionConfig` interface with ~20 fields covering
+  all display-layer content. Two factions: Goblins (chaos, dark humor) and Dwarves (order, saga tone).
+  Game mechanics identical — only names, bios, goals, trait/role labels, LLM prompt tone, event
+  messages, and enemy nouns differ
+- **Faction picker in StartMenu:** two styled buttons (👺 Goblins / ⛏ Dwarves) with dynamic
+  title/subtitle/hint. Reads saved faction for "Continue Colony" display. Faction persists in
+  `SaveData.faction` (backward compatible, defaults to 'goblins')
+- **Module-level singleton:** `getActiveFaction()` / `setActiveFaction()` — all display code
+  reads from active faction config at runtime
+- **Proxy-based backward compat:** `GOBLIN_TRAIT_DISPLAY` and `GOBLIN_ROLE_DISPLAY` use ES6 Proxy
+  objects to dynamically delegate to active faction config, preserving existing import signatures
+- **LLM prompt flavor:** crisis prompts, succession prompts, and storyteller narrator all use
+  faction-specific species name, role labels, tone, and enemy nouns
+- **Chronicle chapters** (`storyteller.ts`): `filterSignificantEvents()` selects ~15 narratively
+  important log entries since last chapter. `callStorytellerLLM()` generates 2-4 sentence narrator
+  prose on goal completion. Deterministic fallback if LLM disabled/fails. Chapters persist in save
+  data and display in `ChroniclePanel` (parchment-themed, expandable)
+- **Dwarf faction content:** names (Brom, Durin, Thrain...), stoic bios, saga narrator tone,
+  kill verb "slew", enemies are "goblins", title "IRONHOLD", accent color amber
 
 ---
 
@@ -524,16 +670,25 @@ Every goblin acted identically regardless of personality.
 ## Upcoming / Phase 3
 
 **Gameplay depth**
-- [ ] Ore gathered to community stockpile; goblins build fortress walls
+- [x] Ore/wood stockpiles; goblins build fortress walls from ore (Iteration 11)
 - [x] Seasons & weather: growback rate changes, winter food scarcity (Iteration 8)
+- [x] Faction system: goblins vs dwarves with full cosmetic switching (Iteration 13)
+- [ ] Mechanical faction differences: different starting stats, trait distributions, sigmoid shifts
 - [ ] Trade: merchant caravans, negotiation LLM calls
 
 **Intelligence depth**
+- [x] Utility AI: sigmoid-scored action selection replaces fixed-priority BT (Iteration 10)
+- [x] Skills & XP: role-specific leveling with gameplay bonuses (Iteration 10)
+- [x] Wounds: injury system with 4 wound types affecting gameplay (Iteration 10)
+- [x] Spatial memory: goblins remember food/ore/wood patch locations (Iteration 10)
 - [ ] Long-term goal generation per goblin (personal goals between crises)
 - [ ] Memory compression: summarize old entries via cheap LLM call
 - [x] Trait-driven behavior: personality traits modify BT thresholds (Iteration 8)
 - [x] Relation-gated social behavior: sharing/contests depend on relation scores (Iteration 8)
 - [ ] Factional behavior: relationship clusters → informal coordinated factions
+
+**Narrative**
+- [x] Chronicle chapters: LLM-generated narrator summaries on goal completion (Iteration 13)
 
 **Infrastructure**
 - [ ] Cloudflare Worker `/api/llm-proxy` (replaces Vite proxy for production)

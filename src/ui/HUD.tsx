@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
 import type { LLMProvider } from '../ai/crisis';
-import { GOBLIN_TRAIT_DISPLAY, GOBLIN_ROLE_DISPLAY } from '../simulation/agents';
+import { getTraitDisplay, getRoleDisplay } from '../simulation/agents';
+import { getActiveFaction } from '../shared/factions';
 import type { GameState, Goblin, OverlayMode, GoblinRole, GoblinTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Adventurer, Season, WeatherType, Chapter } from '../shared/types';
 import type { LayoutMode } from '../shared/useViewport';
 
@@ -65,7 +66,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   return (
     <div style={topBarStyle}>
-      <Stat label={isPhone ? 'g' : 'goblins'} value={`${alive.length}/${state.goblins.length}`} />
+      <Stat label={isPhone ? 'g' : getActiveFaction().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
       <Stat label={isPhone ? 'f' : 'food'}    value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'm' : 'mats'}    value={state.totalMaterials.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
@@ -275,7 +276,7 @@ export function StockpilePanel() {
         <div style={{ fontSize: 9, color: '#999', marginTop: 2 }}>{amount.toFixed(0)} / {max}</div>
       </div>
       <div style={{ fontSize: 9, color: '#888' }}>
-        goblins carrying {resource}: <span style={{ color }}>{carriers}</span>
+        {getActiveFaction().unitNounPlural} carrying {resource}: <span style={{ color }}>{carriers}</span>
       </div>
     </div>
   );
@@ -537,7 +538,7 @@ function GoblinPanel({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Gobli
     <div style={{ ...styles.panel, ...(!goblin.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{goblin.name}</div>
       {goblin.alive
-        ? <div style={{ color: roleColor(goblin.role), fontSize: 10, marginBottom: 4 }}>[{GOBLIN_ROLE_DISPLAY[goblin.role]}]</div>
+        ? <div style={{ color: roleColor(goblin.role), fontSize: 10, marginBottom: 4 }}>[{getRoleDisplay()[goblin.role]}]</div>
         : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>
             [DECEASED{goblin.causeOfDeath ? ` — ${goblin.causeOfDeath}` : ''}]
           </div>
@@ -547,7 +548,7 @@ function GoblinPanel({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Gobli
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
         <span style={{ color: traitColor(goblin.trait), fontSize: 9, fontWeight: 'bold' }}>
-          {GOBLIN_TRAIT_DISPLAY[goblin.trait]}
+          {getTraitDisplay()[goblin.trait]}
         </span>
         <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {goblin.goal}</span>
       </div>

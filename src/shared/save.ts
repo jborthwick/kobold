@@ -1,5 +1,6 @@
 import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter } from './types';
 import type { Weather } from '../simulation/weather';
+import type { FactionId } from './factions';
 
 export interface SaveData {
   version: 2;
@@ -27,6 +28,8 @@ export interface SaveData {
   chapters?: Chapter[];
   /** Tick at which the current goal started — optional for backward compat. */
   goalStartTick?: number;
+  /** Selected faction — optional for backward compat (defaults to 'goblins'). */
+  faction?: FactionId;
 }
 
 const KEY = 'kobold_save_v2';
@@ -61,11 +64,12 @@ export function hasSave(): boolean {
 }
 
 /** Read save metadata without fully deserialising — used for the start menu display. */
-export function peekSave(): { tick: number; aliveGoblins: number } | null {
+export function peekSave(): { tick: number; aliveGoblins: number; faction?: FactionId } | null {
   const save = loadGame();
   if (!save) return null;
   return {
     tick:         save.tick,
     aliveGoblins: save.goblins.filter(d => d.alive).length,
+    faction:      save.faction,
   };
 }

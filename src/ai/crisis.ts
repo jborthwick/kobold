@@ -13,6 +13,7 @@
 import type { Goblin, Tile, LLMIntent, Adventurer, ColonyGoal } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
+import { getActiveFaction } from '../shared/factions';
 
 // ── LLM provider abstraction ─────────────────────────────────────────────────
 
@@ -109,10 +110,12 @@ export function detectCrisis(
       return (!best || d < best.dist) ? { adventurer: g, dist: d } : best;
     }, null);
     if (nearest && nearest.dist <= ADVENTURER_RAID_AWARENESS) {
+      const enemyPlural = getActiveFaction().enemyNounPlural;
+      const enemyCap    = enemyPlural.charAt(0).toUpperCase() + enemyPlural.slice(1);
       return {
         type:          'adventurer_raid',
-        description:   `Goblins are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
-        colonyContext: `${adventurers.length} adventurer${adventurers.length !== 1 ? 's' : ''} in the area. ${ctx}`,
+        description:   `${enemyCap} are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
+        colonyContext: `${adventurers.length} ${enemyPlural} in the area. ${ctx}`,
       };
     }
   }
@@ -205,11 +208,7 @@ export function detectCrisis(
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
 function roleLabel(goblin: Goblin): string {
-  if (goblin.role === 'forager')    return 'Scavenger — you find food that hasn\'t gone completely bad yet.';
-  if (goblin.role === 'miner')      return 'Rock Biter — you chew through stone and sometimes find shiny things.';
-  if (goblin.role === 'fighter')    return 'Basher — you clobber adventurers who dare enter the colony.';
-  if (goblin.role === 'lumberjack') return 'Tree Puncher — you punch trees until they fall down (usually).';
-  return 'Sneaky Git — you have wide vision and detect threats early (mostly by being paranoid).';
+  return getActiveFaction().llmRoleLabels[goblin.role];
 }
 
 function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin[], colonyGoal?: ColonyGoal): string {
@@ -254,7 +253,8 @@ function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin
     ? `\nWOUNDED: ${goblin.wound.type} — ${WOUND_EFFECTS[goblin.wound.type] ?? goblin.wound.type}.`
     : '';
 
-  return `You are ${goblin.name}, a goblin ${roleLabel(goblin)}
+  const faction = getActiveFaction();
+  return `You are ${goblin.name}, a ${faction.llmSpecies} ${roleLabel(goblin)}
 Personality: ${goblin.trait}. "${goblin.bio}". Personal goal: ${goblin.goal}.
 Status — Health: ${goblin.health}/${goblin.maxHealth}, Hunger: ${goblin.hunger.toFixed(0)}/100, Morale: ${goblin.morale.toFixed(0)}/100, Fatigue: ${goblin.fatigue.toFixed(0)}/100, Social need: ${goblin.social.toFixed(0)}/100
 Food carried: ${goblin.inventory.food.toFixed(0)} units. Current task: ${goblin.task}. ${homeStr}${skillLine}${woundLine}
@@ -551,11 +551,12 @@ export async function callSuccessionLLM(dead: Goblin, successor: Goblin): Promis
   const memSnippet = dead.memory.length > 0
     ? ` Their last known acts: ${dead.memory.slice(-2).map(m => `"${m.action}"`).join(', ')}.`
     : '';
-  const prompt =
-    `You are ${successor.name}, a new goblin stumbling into a chaotic colony. ` +
-    `${dead.name} (${dead.role}) recently died here.${memSnippet} ` +
-    `In one sentence (max 15 words), what is your first thought? Be funny and goblin-like. ` +
-    `Reply with just the sentence, no quotes.`;
+  const factionCfg = getActiveFaction();
+  const prompt = factionCfg.successionPrompt
+    .replace('{name}', successor.name)
+    .replace('{deadName}', dead.name)
+    .replace('{deadRole}', dead.role)
+    .replace('{memSnippet}', memSnippet);
   try {
     llmSystem.recordCallPublic();
     const res = await fetch(cfg.url, {
