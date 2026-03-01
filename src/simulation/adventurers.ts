@@ -1,13 +1,13 @@
 /**
- * Goblin raid simulation.
+ * Adventurer raid simulation.
  *
- * Raids spawn from map edges every 500–900 ticks in groups of 2–4 goblins.
- * Each goblin moves one tile per tick toward the nearest alive dwarf.
- * When a goblin reaches a dwarf's tile it attacks; the dwarf fights back.
- * Dead goblins are reported in GoblinTickResult.goblinDeaths and removed by WorldScene.
+ * Raids spawn from map edges every 500–900 ticks in groups of 2–4 adventurers.
+ * Each adventurer moves one tile per tick toward the nearest alive goblin.
+ * When an adventurer reaches a goblin's tile it attacks; the goblin fights back.
+ * Dead adventurers are reported in AdventurerTickResult.adventurerDeaths and removed by WorldScene.
  */
 
-import type { Goblin, Dwarf, Tile } from '../shared/types';
+import type { Adventurer, Goblin, Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 import { isWalkable } from './world';
 import { pathNextStep } from './agents';
@@ -18,22 +18,22 @@ import { woundDamageMultiplier } from './wounds';
 
 const RAID_INTERVAL_MIN = 500;   // ticks between raids (~70 s at 7 tps)
 const RAID_INTERVAL_MAX = 900;
-const WANDER_RANGE      = 15;   // tiles — goblins wander when no dwarf is within range
+const WANDER_RANGE      = 15;   // tiles — adventurers wander when no goblin is within range
 
 // Module-level state — reset when a new world is generated
 let nextRaidAt  = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
-let nextGoblinId = 0;
+let nextAdventurerId = 0;
 
 /** Reset scheduler — call this in WorldScene.create() so new games get fresh timers. */
-export function resetGoblins(): void {
+export function resetAdventurers(): void {
   nextRaidAt   = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
-  nextGoblinId = 0;
+  nextAdventurerId = 0;
 }
 
 const EDGE_NAMES = ['north', 'east', 'south', 'west'] as const;
 
 export interface RaidSpawnResult {
-  goblins: Goblin[];
+  adventurers: Adventurer[];
   edge:    string;
   count:   number;
 }
@@ -44,21 +44,21 @@ export interface RaidSpawnResult {
  */
 export function maybeSpawnRaid(
   grid:    Tile[][],
-  dwarves: Dwarf[],
+  goblins: Goblin[],
   tick:    number,
 ): RaidSpawnResult | null {
   if (tick < nextRaidAt) return null;
 
-  const alive = dwarves.filter(d => d.alive);
+  const alive = goblins.filter(d => d.alive);
   if (alive.length === 0) return null;
 
   // Schedule the next raid
   nextRaidAt = tick + RAID_INTERVAL_MIN +
     Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
 
-  const count = 2 + Math.floor(Math.random() * 3); // 2–4 goblins
+  const count = 2 + Math.floor(Math.random() * 3); // 2–4 adventurers
   const edge  = Math.floor(Math.random() * 4);      // 0=N, 1=E, 2=S, 3=W
-  const newGoblins: Goblin[] = [];
+  const newGoblins: Adventurer[] = [];
 
   for (let i = 0; i < count; i++) {
     let x = 0, y = 0, attempts = 0;
@@ -72,10 +72,10 @@ export function maybeSpawnRaid(
       attempts++;
     } while (!isWalkable(grid, x, y) && attempts < 30);
 
-    if (!isWalkable(grid, x, y)) continue; // edge is all water/stone — skip this goblin
+    if (!isWalkable(grid, x, y)) continue; // edge is all water/stone — skip this adventurer
 
     newGoblins.push({
-      id:        `goblin-${nextGoblinId++}`,
+      id:        `adventurer-${nextAdventurerId++}`,
       x, y,
       health:    20,
       maxHealth: 20,
@@ -84,46 +84,46 @@ export function maybeSpawnRaid(
   }
 
   return newGoblins.length > 0
-    ? { goblins: newGoblins, edge: EDGE_NAMES[edge], count: newGoblins.length }
+    ? { adventurers: newGoblins, edge: EDGE_NAMES[edge], count: newGoblins.length }
     : null;
 }
 
 // ── Per-tick simulation ───────────────────────────────────────────────────────
 
-export interface GoblinTickResult {
-  /** Attacks dealt this tick — WorldScene applies damage to dwarves. */
-  attacks:      Array<{ dwarfId: string; damage: number }>;
-  /** Goblin IDs whose health reached 0 — WorldScene removes them. */
-  goblinDeaths: string[];
-  /** Dwarf IDs that scored a kill this tick — WorldScene adds memory. */
-  kills:        Array<{ dwarfId: string }>;
+export interface AdventurerTickResult {
+  /** Attacks dealt this tick — WorldScene applies damage to goblins. */
+  attacks:      Array<{ goblinId: string; damage: number }>;
+  /** Adventurer IDs whose health reached 0 — WorldScene removes them. */
+  adventurerDeaths: string[];
+  /** Goblin IDs that scored a kill this tick — WorldScene adds memory. */
+  kills:        Array<{ goblinId: string }>;
   /** Log entries to emit. */
   logs: Array<{ message: string; level: 'info' | 'warn' | 'error' }>;
 }
 
-const GOBLIN_ATTACK_DAMAGE = 5;   // hp per hit to dwarf
-const DWARF_FIGHT_BACK     = 8;   // hp per hit to goblin (normal dwarves)
-const FIGHTER_FIGHT_BACK   = 18;  // fighters deal ~2× damage — kills goblin in 2 hits
+const ADVENTURER_ATTACK_DAMAGE = 5;   // hp per hit to goblin
+const GOBLIN_FIGHT_BACK     = 8;   // hp per hit to adventurer (normal goblins)
+const FIGHTER_FIGHT_BACK   = 18;  // fighters deal ~2× damage — kills adventurer in 2 hits
 
 /**
- * Move all goblins one step toward their target, or attack on contact.
- * Goblins move at ~75% speed (staggered skip every 4th tick per goblin)
+ * Move all adventurers one step toward their target, or attack on contact.
+ * Goblins move at ~75% speed (staggered skip every 4th tick per adventurer)
  * so fighters can reliably close on them.
- * Mutates goblin positions/health in place.
+ * Mutates adventurer positions/health in place.
  */
-export function tickGoblins(
+export function tickAdventurers(
+  adventurers: Adventurer[],
   goblins: Goblin[],
-  dwarves: Dwarf[],
   grid:    Tile[][],
   tick:    number,
-): GoblinTickResult {
-  const result: GoblinTickResult = { attacks: [], goblinDeaths: [], kills: [], logs: [] };
-  const alive = dwarves.filter(d => d.alive);
+): AdventurerTickResult {
+  const result: AdventurerTickResult = { attacks: [], adventurerDeaths: [], kills: [], logs: [] };
+  const alive = goblins.filter(d => d.alive);
   if (alive.length === 0) return result;
 
-  for (let gi = 0; gi < goblins.length; gi++) {
-    const g = goblins[gi];
-    // Safety escape: if goblin is on a non-walkable tile (wall placed under it), nudge out
+  for (let gi = 0; gi < adventurers.length; gi++) {
+    const g = adventurers[gi];
+    // Safety escape: if adventurer is on a non-walkable tile (wall placed under it), nudge out
     if (!isWalkable(grid, g.x, g.y)) {
       const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
       const escape = dirs.find(d => isWalkable(grid, g.x + d.x, g.y + d.y));
@@ -131,24 +131,24 @@ export function tickGoblins(
     }
     // Skip movement if staggered from a recent hit
     if (g.staggeredUntil !== undefined && tick < g.staggeredUntil) continue;
-    // Staggered 75%-speed: each goblin skips its move on a different tick
+    // Staggered 75%-speed: each adventurer skips its move on a different tick
     // so they don't all pause simultaneously (gi offsets the skip cycle).
     if ((tick + gi) % 4 === 0) continue;
     // Re-target if current target is dead or unset
     let target = g.targetId ? alive.find(d => d.id === g.targetId) ?? null : null;
     if (!target) {
-      // Pick nearest alive dwarf
-      target = alive.reduce<Dwarf | null>((best, d) => {
+      // Pick nearest alive goblin
+      target = alive.reduce<Goblin | null>((best, d) => {
         const dist  = Math.abs(d.x - g.x) + Math.abs(d.y - g.y);
         const bDist = best ? Math.abs(best.x - g.x) + Math.abs(best.y - g.y) : Infinity;
         return dist < bDist ? d : best;
       }, null);
       g.targetId = target?.id ?? null;
     }
-    // Proximity override: if a dwarf is standing on the same tile, fight them
-    // immediately — regardless of which dwarf the goblin was originally chasing.
-    // This is the key fix for fighters: a fighter can close on a goblin that is
-    // targeting a different dwarf and still trigger melee combat.
+    // Proximity override: if a goblin is standing on the same tile, fight them
+    // immediately — regardless of which goblin the adventurer was originally chasing.
+    // This is the key fix for fighters: a fighter can close on an adventurer that is
+    // targeting a different goblin and still trigger melee combat.
     const onSameTile = alive.find(d => d.x === g.x && d.y === g.y);
     if (onSameTile) { target = onSameTile; g.targetId = onSameTile.id; }
     if (!target) continue;
@@ -157,18 +157,18 @@ export function tickGoblins(
 
     if (dist === 0) {
       // ── Attack ──────────────────────────────────────────────────────
-      result.attacks.push({ dwarfId: target.id, damage: GOBLIN_ATTACK_DAMAGE });
-      const baseDmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : DWARF_FIGHT_BACK;
+      result.attacks.push({ goblinId: target.id, damage: ADVENTURER_ATTACK_DAMAGE });
+      const baseDmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : GOBLIN_FIGHT_BACK;
       const dmg     = Math.round((baseDmg + skillDamageBonus(target)) * woundDamageMultiplier(target));
       g.health -= dmg;
-      // Stagger: goblin can't move for 12 ticks after being hit (~1.7 s at 7 tps)
+      // Stagger: adventurer can't move for 12 ticks after being hit (~1.7 s at 7 tps)
       g.staggeredUntil = tick + 12;
       if (g.health <= 0) {
-        result.goblinDeaths.push(g.id);
-        result.kills.push({ dwarfId: target.id });
+        result.adventurerDeaths.push(g.id);
+        result.kills.push({ goblinId: target.id });
       }
     } else if (dist > WANDER_RANGE) {
-      // ── Wander — random step when no dwarf is close ──────────────────
+      // ── Wander — random step when no goblin is close ──────────────────
       const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
       // Fisher-Yates-style shuffle for pick order
       for (let i = dirs.length - 1; i > 0; i--) {
@@ -191,14 +191,14 @@ export function tickGoblins(
   return result;
 }
 
-// ── Initial wandering goblins ─────────────────────────────────────────────────
+// ── Initial wandering adventurers ─────────────────────────────────────────────────
 
 /**
- * Spawn `count` goblins scattered across the map at game start.
- * They wander freely (WANDER_RANGE check) until they stumble near dwarves.
+ * Spawn `count` adventurers scattered across the map at game start.
+ * They wander freely (WANDER_RANGE check) until they stumble near goblins.
  */
-export function spawnInitialGoblins(grid: Tile[][], count: number): Goblin[] {
-  const goblins: Goblin[] = [];
+export function spawnInitialAdventurers(grid: Tile[][], count: number): Adventurer[] {
+  const adventurers: Adventurer[] = [];
   for (let i = 0; i < count; i++) {
     let x = 0, y = 0, attempts = 0;
     do {
@@ -207,13 +207,13 @@ export function spawnInitialGoblins(grid: Tile[][], count: number): Goblin[] {
       attempts++;
     } while (!isWalkable(grid, x, y) && attempts < 50);
     if (!isWalkable(grid, x, y)) continue;
-    goblins.push({
-      id:        `goblin-${nextGoblinId++}`,
+    adventurers.push({
+      id:        `adventurer-${nextAdventurerId++}`,
       x, y,
       health:    20,
       maxHealth: 20,
       targetId:  null,
     });
   }
-  return goblins;
+  return adventurers;
 }

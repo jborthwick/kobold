@@ -1,7 +1,7 @@
 /**
- * Injury / Wound system — single wound slot per dwarf.
+ * Injury / Wound system — single wound slot per goblin.
  *
- * Wounds are rolled on goblin hit (60% chance total).
+ * Wounds are rolled on adventurer hit (60% chance total).
  * Each wound type has a specific gameplay effect and heal duration.
  * Effects feed into existing shared state (fatigue, vision, yield, damage)
  * so the Utility AI adapts automatically.
@@ -13,7 +13,7 @@
  *   eye      (5%) — 200 ticks — vision −3 tiles (min 1)
  */
 
-import type { Dwarf, Wound, WoundType } from '../shared/types';
+import type { Goblin, Wound, WoundType } from '../shared/types';
 import { skillVisionBonus } from './skills';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
@@ -35,11 +35,11 @@ const WOUND_TABLE: WoundDef[] = [
 ];
 
 /**
- * Roll for a wound on goblin hit. Returns a Wound or undefined.
- * Only rolls if the dwarf has no existing wound.
+ * Roll for a wound on adventurer hit. Returns a Wound or undefined.
+ * Only rolls if the goblin has no existing wound.
  */
-export function rollWound(dwarf: Dwarf, tick: number): Wound | undefined {
-  if (dwarf.wound) return undefined;  // already wounded
+export function rollWound(goblin: Goblin, tick: number): Wound | undefined {
+  if (goblin.wound) return undefined;  // already wounded
 
   const roll = Math.random();
   for (const def of WOUND_TABLE) {
@@ -59,44 +59,44 @@ export function woundLabel(type: WoundType): string {
 
 /**
  * Effective vision radius combining base vision, eye wound penalty, and scout skill bonus.
- * Use this everywhere instead of raw `dwarf.vision`.
+ * Use this everywhere instead of raw `goblin.vision`.
  */
-export function effectiveVision(dwarf: Dwarf): number {
-  let v = dwarf.vision + skillVisionBonus(dwarf);
-  if (dwarf.wound?.type === 'eye') v -= 3;
+export function effectiveVision(goblin: Goblin): number {
+  let v = goblin.vision + skillVisionBonus(goblin);
+  if (goblin.wound?.type === 'eye') v -= 3;
   return Math.max(1, v);
 }
 
 /** Movement skip for leg wound: 40% chance to skip this tick's movement. */
-export function isLegWoundSkip(dwarf: Dwarf): boolean {
-  return dwarf.wound?.type === 'leg' && Math.random() < 0.4;
+export function isLegWoundSkip(goblin: Goblin): boolean {
+  return goblin.wound?.type === 'leg' && Math.random() < 0.4;
 }
 
 /** Harvest / mine yield multiplier: 0.5× with arm wound, 1× otherwise. */
-export function woundYieldMultiplier(dwarf: Dwarf): number {
-  return dwarf.wound?.type === 'arm' ? 0.5 : 1.0;
+export function woundYieldMultiplier(goblin: Goblin): number {
+  return goblin.wound?.type === 'arm' ? 0.5 : 1.0;
 }
 
 /** Combat damage multiplier: 0.6× with arm wound, 1× otherwise. */
-export function woundDamageMultiplier(dwarf: Dwarf): number {
-  return dwarf.wound?.type === 'arm' ? 0.6 : 1.0;
+export function woundDamageMultiplier(goblin: Goblin): number {
+  return goblin.wound?.type === 'arm' ? 0.6 : 1.0;
 }
 
 // ── Healing ─────────────────────────────────────────────────────────────────
 
 /** Check and heal expired wounds. Called in updateNeeds() every tick. */
-export function tickWoundHealing(dwarf: Dwarf, tick: number, onLog?: LogFn): void {
-  if (!dwarf.wound) return;
-  if (tick >= dwarf.wound.healTick) {
-    const label = woundLabel(dwarf.wound.type);
-    dwarf.wound = undefined;
+export function tickWoundHealing(goblin: Goblin, tick: number, onLog?: LogFn): void {
+  if (!goblin.wound) return;
+  if (tick >= goblin.wound.healTick) {
+    const label = woundLabel(goblin.wound.type);
+    goblin.wound = undefined;
     onLog?.(`💚 ${label} has healed`, 'info');
   }
 }
 
 /** Accelerate wound healing (used by rest action). Reduces healTick by amount. */
-export function accelerateHealing(dwarf: Dwarf, ticks: number): void {
-  if (dwarf.wound) {
-    dwarf.wound.healTick -= ticks;
+export function accelerateHealing(goblin: Goblin, ticks: number): void {
+  if (goblin.wound) {
+    goblin.wound.healTick -= ticks;
   }
 }

@@ -71,8 +71,8 @@ export function MiniMap() {
       vp.h * SCALE,
     );
 
-    // ── Dwarf dots ───────────────────────────────────────────────────────
-    for (const d of data.dwarves) {
+    // ── Goblin dots ───────────────────────────────────────────────────────
+    for (const d of data.goblins) {
       const hr = d.hunger / 100;
       const dr = Math.floor(60  + hr * 195);
       const dg = Math.floor(200 - hr * 150);
@@ -80,10 +80,10 @@ export function MiniMap() {
       ctx.fillRect(d.x * SCALE, d.y * SCALE, SCALE + 1, SCALE + 1);
     }
 
-    // ── Goblin dots (red) ─────────────────────────────────────────────────
-    if (data.goblins) {
+    // ── Adventurer dots (red) ─────────────────────────────────────────────────
+    if (data.adventurers) {
       ctx.fillStyle = 'rgb(255,80,0)';
-      for (const g of data.goblins) {
+      for (const g of data.adventurers) {
         ctx.fillRect(g.x * SCALE, g.y * SCALE, SCALE + 1, SCALE + 1);
       }
     }

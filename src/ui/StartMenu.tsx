@@ -28,7 +28,7 @@ export function StartMenu({ onStart }: Props) {
     <div style={styles.backdrop}>
       <div style={styles.panel}>
         <div style={styles.title}>KOBOLD</div>
-        <div style={styles.subtitle}>dwarf colony sim</div>
+        <div style={styles.subtitle}>goblin colony sim</div>
 
         <div style={styles.divider} />
 
@@ -40,7 +40,7 @@ export function StartMenu({ onStart }: Props) {
             <div style={styles.saveInfo}>
               <span style={styles.saveInfoItem}>tick {save.tick.toLocaleString()}</span>
               <span style={styles.dot}>·</span>
-              <span style={styles.saveInfoItem}>{save.aliveDwarves} dwarf{save.aliveDwarves !== 1 ? 's' : ''} alive</span>
+              <span style={styles.saveInfoItem}>{save.aliveGoblins} goblin{save.aliveGoblins !== 1 ? 's' : ''} alive</span>
             </div>
           </>
         ) : null}
@@ -71,7 +71,7 @@ export function StartMenu({ onStart }: Props) {
         <div style={styles.hint}>
           {save
             ? 'auto-saves every ~45 seconds'
-            : 'a procedural colony awaits'}
+            : 'chaos awaits'}
         </div>
       </div>
     </div>

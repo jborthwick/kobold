@@ -1,19 +1,19 @@
-import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter } from './types';
+import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter } from './types';
 import type { Weather } from '../simulation/weather';
 
 export interface SaveData {
-  version: 1;
+  version: 2;
   tick: number;
   grid: Tile[][];
-  dwarves: Dwarf[];
   goblins: Goblin[];
+  adventurers: Adventurer[];
   colonyGoal: ColonyGoal;
   foodStockpiles: FoodStockpile[];
   oreStockpiles: OreStockpile[];
   woodStockpiles: WoodStockpile[];
-  goblinKillCount: number;
+  adventurerKillCount: number;
   spawnZone: { x: number; y: number; w: number; h: number };
-  pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[];
+  pendingSuccessions: { deadGoblinId: string; spawnAtTick: number }[];
   commandTile: { x: number; y: number } | null;
   speed: number;
   overlayMode: OverlayMode;
@@ -29,7 +29,7 @@ export interface SaveData {
   goalStartTick?: number;
 }
 
-const KEY = 'kobold_save_v1';
+const KEY = 'kobold_save_v2';
 
 export function saveGame(data: SaveData): void {
   localStorage.setItem(KEY, JSON.stringify(data));
@@ -41,7 +41,7 @@ export function loadGame(): SaveData | null {
   try {
     const data = JSON.parse(s) as SaveData;
     // Backward compat: add skill/wound fields if missing (pre-Iteration 10 saves)
-    for (const d of data.dwarves) {
+    for (const d of data.goblins) {
       if (d.skillXp    === undefined) d.skillXp    = 0;
       if (d.skillLevel === undefined) d.skillLevel = 0;
       // wound is optional (undefined = healthy) — no migration needed
@@ -61,11 +61,11 @@ export function hasSave(): boolean {
 }
 
 /** Read save metadata without fully deserialising — used for the start menu display. */
-export function peekSave(): { tick: number; aliveDwarves: number } | null {
+export function peekSave(): { tick: number; aliveGoblins: number } | null {
   const save = loadGame();
   if (!save) return null;
   return {
     tick:         save.tick,
-    aliveDwarves: save.dwarves.filter(d => d.alive).length,
+    aliveGoblins: save.goblins.filter(d => d.alive).length,
   };
 }

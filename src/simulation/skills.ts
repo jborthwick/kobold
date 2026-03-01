@@ -12,7 +12,7 @@
  * automatically because they read the same stat fields.
  */
 
-import type { Dwarf } from '../shared/types';
+import type { Goblin } from '../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -23,15 +23,15 @@ export function xpToLevel(xp: number): number {
 }
 
 /**
- * Grant 1 XP to the dwarf's role skill, recompute level.
- * Returns true if the dwarf leveled up (caller may want to log).
+ * Grant 1 XP to the goblin's role skill, recompute level.
+ * Returns true if the goblin leveled up (caller may want to log).
  */
-export function grantXp(dwarf: Dwarf, _tick: number, onLog?: LogFn): boolean {
-  dwarf.skillXp += 1;
-  const newLevel = xpToLevel(dwarf.skillXp);
-  if (newLevel > dwarf.skillLevel) {
-    dwarf.skillLevel = newLevel;
-    onLog?.(`⭐ leveled up to ${dwarf.role} Lv.${newLevel}!`, 'info');
+export function grantXp(goblin: Goblin, _tick: number, onLog?: LogFn): boolean {
+  goblin.skillXp += 1;
+  const newLevel = xpToLevel(goblin.skillXp);
+  if (newLevel > goblin.skillLevel) {
+    goblin.skillLevel = newLevel;
+    onLog?.(`⭐ leveled up to ${goblin.role} Lv.${newLevel}!`, 'info');
     return true;
   }
   return false;
@@ -40,25 +40,25 @@ export function grantXp(dwarf: Dwarf, _tick: number, onLog?: LogFn): boolean {
 // ── Role-specific bonuses ───────────────────────────────────────────────────
 
 /** Bonus harvest yield for foragers/lumberjacks: +0.3 per skill level. */
-export function skillYieldBonus(dwarf: Dwarf): number {
-  if (dwarf.role !== 'forager' && dwarf.role !== 'lumberjack') return 0;
-  return dwarf.skillLevel * 0.3;
+export function skillYieldBonus(goblin: Goblin): number {
+  if (goblin.role !== 'forager' && goblin.role !== 'lumberjack') return 0;
+  return goblin.skillLevel * 0.3;
 }
 
 /** Bonus ore yield for miners: +0.3 per skill level. */
-export function skillOreBonus(dwarf: Dwarf): number {
-  if (dwarf.role !== 'miner') return 0;
-  return dwarf.skillLevel * 0.3;
+export function skillOreBonus(goblin: Goblin): number {
+  if (goblin.role !== 'miner') return 0;
+  return goblin.skillLevel * 0.3;
 }
 
 /** Bonus combat damage for fighters: +3 per skill level. */
-export function skillDamageBonus(dwarf: Dwarf): number {
-  if (dwarf.role !== 'fighter') return 0;
-  return dwarf.skillLevel * 3;
+export function skillDamageBonus(goblin: Goblin): number {
+  if (goblin.role !== 'fighter') return 0;
+  return goblin.skillLevel * 3;
 }
 
 /** Bonus vision radius for scouts: +1 per skill level (integer). */
-export function skillVisionBonus(dwarf: Dwarf): number {
-  if (dwarf.role !== 'scout') return 0;
-  return dwarf.skillLevel;
+export function skillVisionBonus(goblin: Goblin): number {
+  if (goblin.role !== 'scout') return 0;
+  return goblin.skillLevel;
 }

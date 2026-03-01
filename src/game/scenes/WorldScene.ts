@@ -1,12 +1,12 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
-import { spawnDwarves, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
+import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
 import { tickAgentUtility } from '../../simulation/utilityAI';
-import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
+import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../../simulation/adventurers';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Dwarf, type Goblin, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Goblin, type Adventurer, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
@@ -18,15 +18,15 @@ import { isMobileViewport, isTabletViewport } from '../../shared/platform';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
-const DWARF_FRAME   = SPRITE_CONFIG.dwarf;
-const GOBLIN_FRAME  = SPRITE_CONFIG.goblin;    // editable via T-key tile picker
+const GOBLIN_FRAME   = SPRITE_CONFIG.goblin;
+const ADVENTURER_FRAME  = SPRITE_CONFIG.adventurer;    // editable via T-key tile picker
 const CAM_PAN_SPEED  = 200; // world pixels per second for WASD pan
 
 export class WorldScene extends Phaser.Scene {
   private grid: Tile[][] = [];
-  private dwarves: Dwarf[] = [];
+  private goblins: Goblin[] = [];
   private tick = 0;
-  private selectedDwarfId: string | null = null;
+  private selectedGoblinId: string | null = null;
   private terrainDirty = true;
   private lastTickTime = 0;
   private paused = false;
@@ -46,30 +46,30 @@ export class WorldScene extends Phaser.Scene {
   private overlayGfx!: Phaser.GameObjects.Graphics;
   private overlayMode: OverlayMode = 'off';
 
-  // One sprite per living dwarf
-  private dwarfSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  // Persistent grave sprites for dead dwarves (red, flipped upside-down)
-  private dwarfGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
-  // Off-screen arrow indicator for selected dwarf
-  private offScreenGfx!: Phaser.GameObjects.Graphics;
-  // Goblin raid state
-  private goblins: Goblin[] = [];
+  // One sprite per living goblin
   private goblinSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  // Persistent grave sprites for dead goblins (red, flipped upside-down)
+  private goblinGhostSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  // Off-screen arrow indicator for selected goblin
+  private offScreenGfx!: Phaser.GameObjects.Graphics;
+  // Adventurer raid state
+  private adventurers: Adventurer[] = [];
+  private adventurerSprites = new Map<string, Phaser.GameObjects.Sprite>();
 
   // Succession state
   private spawnZone!: { x: number; y: number; w: number; h: number };
-  private pendingSuccessions: { deadDwarfId: string; spawnAtTick: number }[] = [];
+  private pendingSuccessions: { deadGoblinId: string; spawnAtTick: number }[] = [];
 
-  // Weather system — affects growback rates and dwarf metabolism
+  // Weather system — affects growback rates and goblin metabolism
   private weather!: Weather;
 
   // Event log noise reduction
-  private combatHits = new Map<string, number>();  // dwarf id → hit count this encounter
+  private combatHits = new Map<string, number>();  // goblin id → hit count this encounter
 
   // Colony goal + food/ore/wood stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
   private goalStartTick = 0;
-  private goblinKillCount = 0;
+  private adventurerKillCount = 0;
   private foodStockpiles:        FoodStockpile[]  = [];
   private oreStockpiles:         OreStockpile[]   = [];
   private woodStockpiles:        WoodStockpile[]  = [];
@@ -110,13 +110,13 @@ export class WorldScene extends Phaser.Scene {
     const scale = 1 + generation * 0.6;
     switch (type) {
       case 'stockpile_food':
-        return { type, description: `Stockpile ${Math.round(80 * scale)} food`, progress: 0, target: Math.round(80 * scale), generation };
+        return { type, description: `Hoard ${Math.round(80 * scale)} food (without eating it all)`, progress: 0, target: Math.round(80 * scale), generation };
       case 'survive_ticks':
-        return { type, description: `Survive ${Math.round(800 * scale)} more ticks`, progress: 0, target: Math.round(800 * scale), generation };
-      case 'defeat_goblins':
-        return { type, description: `Defeat ${Math.round(5 * scale)} goblins`, progress: 0, target: Math.round(5 * scale), generation };
+        return { type, description: `Don't all die for ${Math.round(800 * scale)} ticks`, progress: 0, target: Math.round(800 * scale), generation };
+      case 'defeat_adventurers':
+        return { type, description: `Clobber ${Math.round(5 * scale)} adventurers`, progress: 0, target: Math.round(5 * scale), generation };
       case 'enclose_fort':
-        return { type, description: 'Enclose the fort — seal the corridor with an outer wall', progress: 0, target: 1, generation };
+        return { type, description: 'Build walls (that hopefully stay up)', progress: 0, target: 1, generation };
     }
   }
 
@@ -130,27 +130,27 @@ export class WorldScene extends Phaser.Scene {
       // Restore all simulation state from the save file
       this.grid               = save.grid;
       this.spawnZone          = save.spawnZone;
-      this.dwarves            = save.dwarves;
+      this.goblins            = save.goblins;
       // Backward compat — default new needs fields for saves that predate them
-      for (const d of this.dwarves) {
+      for (const d of this.goblins) {
         d.fatigue        ??= 0;
         d.social         ??= 0;
         d.lastSocialTick  ??= save.tick;
         d.lastLoggedTicks ??= {};
       }
-      this.goblins            = save.goblins;
+      this.adventurers            = save.adventurers;
       this.tick               = save.tick;
       this.colonyGoal         = save.colonyGoal;
       this.goalStartTick      = save.goalStartTick ?? 0;
       this.foodStockpiles     = save.foodStockpiles;
       this.oreStockpiles      = save.oreStockpiles;
       this.woodStockpiles     = save.woodStockpiles ?? [];  // graceful fallback for old saves
-      this.goblinKillCount    = save.goblinKillCount;
+      this.adventurerKillCount    = save.adventurerKillCount;
       this.pendingSuccessions = save.pendingSuccessions;
       this.commandTile        = save.commandTile;
       this.speedMultiplier    = save.speed;
       this.overlayMode        = save.overlayMode;
-      resetGoblins(); // reset raid timer to prevent an immediate raid on resume
+      resetAdventurers(); // reset raid timer to prevent an immediate raid on resume
       // Restore world-event schedule; fall back to a fresh window if save predates this field
       setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
       // Restore weather or initialize if save predates weather system
@@ -166,26 +166,26 @@ export class WorldScene extends Phaser.Scene {
       this.logHistory = [];
       this.chapters = [];
       this.lastChapterTick = 0;
-      // New game — procedural world + fresh dwarves
+      // New game — procedural world + fresh goblins
       const { grid, spawnZone, seed } = generateWorld();
       this.grid      = grid;
       this.spawnZone = spawnZone;
       this.worldSeed = seed;
       console.log('World seed:', seed);
-      this.dwarves   = spawnDwarves(this.grid, spawnZone);
-      resetGoblins();
-      this.goblins = spawnInitialGoblins(this.grid, 3);
+      this.goblins   = spawnGoblins(this.grid, spawnZone);
+      resetAdventurers();
+      this.adventurers = spawnInitialAdventurers(this.grid, 3);
 
       const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
       const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
       this.foodStockpiles  = [{ x: depotX,     y: depotY, food: 0,   maxFood: 200 }];
       this.oreStockpiles   = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
       this.woodStockpiles  = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
-      this.goblinKillCount = 0;
+      this.adventurerKillCount = 0;
       this.goalStartTick   = 0;
       this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
       this.weather         = createWeather(0);
-      for (const d of this.dwarves) d.homeTile = { x: depotX, y: depotY };
+      for (const d of this.goblins) d.homeTile = { x: depotX, y: depotY };
     }
 
     // ── Reset graphics tracking arrays (always fresh per scene) ─────────
@@ -220,15 +220,15 @@ export class WorldScene extends Phaser.Scene {
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
 
-    // Pre-create tombstone sprites for dwarves that were already dead when saved
+    // Pre-create tombstone sprites for goblins that were already dead when saved
     if (save) {
-      const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? DWARF_FRAME;
-      for (const d of this.dwarves.filter(dw => !dw.alive)) {
+      const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? GOBLIN_FRAME;
+      for (const d of this.goblins.filter(dw => !dw.alive)) {
         const px = d.x * TILE_SIZE + TILE_SIZE / 2;
         const py = d.y * TILE_SIZE + TILE_SIZE / 2;
         const ghost = this.add.sprite(px, py, 'tiles', TOMBSTONE_FRAME);
         ghost.setTint(0xaaaaaa);
-        this.dwarfGhostSprites.set(d.id, ghost);
+        this.goblinGhostSprites.set(d.id, ghost);
       }
       this.drawFlag(); // restore yellow flag if one was active
     }
@@ -289,7 +289,7 @@ export class WorldScene extends Phaser.Scene {
           this.drawOverlay();
         });
 
-      // ── [ / ] keys: cycle selected dwarf
+      // ── [ / ] keys: cycle selected goblin
       this.input.keyboard
         .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
         .on('down', () => this.cycleSelected(-1));
@@ -331,7 +331,7 @@ export class WorldScene extends Phaser.Scene {
       this.logHistory.push(entry);
       if (this.logHistory.length > 200) this.logHistory.shift();
     };
-    // Mobile bus events: overlay cycle + dwarf cycle (from MobileControls)
+    // Mobile bus events: overlay cycle + goblin cycle (from MobileControls)
     const overlayHandler = ({ mode }: { mode: OverlayMode }) => {
       this.overlayMode = mode;
       this.drawOverlay();
@@ -360,16 +360,16 @@ export class WorldScene extends Phaser.Scene {
   /** Serialise the full simulation state into a plain object suitable for JSON. */
   private buildSaveData(): SaveData {
     return {
-      version:            1,
+      version:            2,
       tick:               this.tick,
       grid:               this.grid,
-      dwarves:            this.dwarves.map(d => ({ ...d })),
-      goblins:            this.goblins.map(g => ({ ...g })),
+      goblins:            this.goblins.map(d => ({ ...d })),
+      adventurers:            this.adventurers.map(g => ({ ...g })),
       colonyGoal:         { ...this.colonyGoal },
       foodStockpiles:     this.foodStockpiles.map(s => ({ ...s })),
       oreStockpiles:      this.oreStockpiles.map(s => ({ ...s })),
       woodStockpiles:     this.woodStockpiles.map(s => ({ ...s })),
-      goblinKillCount:    this.goblinKillCount,
+      adventurerKillCount:    this.adventurerKillCount,
       spawnZone:          { ...this.spawnZone },
       pendingSuccessions: this.pendingSuccessions.map(s => ({ ...s })),
       commandTile:        this.commandTile ? { ...this.commandTile } : null,
@@ -531,27 +531,27 @@ export class WorldScene extends Phaser.Scene {
 
       const foodIdx = findStockpile(this.foodStockpiles);
       if (foodIdx >= 0) {
-        this.selectedDwarfId = null;
-        bus.emit('goblinSelect', null);
+        this.selectedGoblinId = null;
+        bus.emit('adventurerSelect', null);
         bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
         return;
       }
       const oreIdx = findStockpile(this.oreStockpiles);
       if (oreIdx >= 0) {
-        this.selectedDwarfId = null;
-        bus.emit('goblinSelect', null);
+        this.selectedGoblinId = null;
+        bus.emit('adventurerSelect', null);
         bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
         return;
       }
       const woodIdx = findStockpile(this.woodStockpiles);
       if (woodIdx >= 0) {
-        this.selectedDwarfId = null;
-        bus.emit('goblinSelect', null);
+        this.selectedGoblinId = null;
+        bus.emit('adventurerSelect', null);
         bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
         return;
       }
 
-      // Check for goblin click (with snap on touch)
+      // Check for adventurer click (with snap on touch)
       const findNearest = <T extends { x: number; y: number }>(list: T[]) => {
         if (SNAP_RADIUS === 0) return list.find(e => e.x === tx && e.y === ty);
         let best: T | undefined, bestDist = Infinity;
@@ -562,22 +562,22 @@ export class WorldScene extends Phaser.Scene {
         return best;
       };
 
-      const goblin = findNearest(this.goblins);
-      if (goblin) {
-        this.selectedDwarfId = null;
+      const adventurer = findNearest(this.adventurers);
+      if (adventurer) {
+        this.selectedGoblinId = null;
         bus.emit('stockpileSelect', null);
-        bus.emit('goblinSelect', goblin);
+        bus.emit('adventurerSelect', adventurer);
         return;
       }
 
-      // Left tap: select dwarf — prefer alive, fall back to dead ghost
-      const aliveDwarves = this.dwarves.filter(d => d.alive);
-      const deadDwarves  = this.dwarves.filter(d => !d.alive);
-      const hitAlive = findNearest(aliveDwarves);
+      // Left tap: select goblin — prefer alive, fall back to dead ghost
+      const aliveGoblins = this.goblins.filter(d => d.alive);
+      const deadDwarves  = this.goblins.filter(d => !d.alive);
+      const hitAlive = findNearest(aliveGoblins);
       const hitDead  = !hitAlive ? findNearest(deadDwarves) : undefined;
-      this.selectedDwarfId = (hitAlive ?? hitDead)?.id ?? null;
+      this.selectedGoblinId = (hitAlive ?? hitDead)?.id ?? null;
       bus.emit('stockpileSelect', null);
-      bus.emit('goblinSelect', null);
+      bus.emit('adventurerSelect', null);
       this.emitGameState(); // update panel immediately even when paused
     });
 
@@ -604,24 +604,24 @@ export class WorldScene extends Phaser.Scene {
     );
   }
 
-  /** Send commandTarget to selected dwarf (or all if none selected). */
+  /** Send commandTarget to selected goblin (or all if none selected). */
   private applyCommand(tx: number, ty: number) {
-    const targets = this.selectedDwarfId
-      ? this.dwarves.filter(d => d.alive && d.id === this.selectedDwarfId)
-      : this.dwarves.filter(d => d.alive);
+    const targets = this.selectedGoblinId
+      ? this.goblins.filter(d => d.alive && d.id === this.selectedGoblinId)
+      : this.goblins.filter(d => d.alive);
 
     for (const d of targets) {
       d.commandTarget = { x: tx, y: ty };
     }
 
-    const who = this.selectedDwarfId
-      ? (this.dwarves.find(d => d.id === this.selectedDwarfId)?.name ?? '?')
-      : `${targets.length} dwarves`;
+    const who = this.selectedGoblinId
+      ? (this.goblins.find(d => d.id === this.selectedGoblinId)?.name ?? '?')
+      : `${targets.length} goblins`;
 
     bus.emit('logEntry', {
       tick:       this.tick,
-      dwarfId:    this.selectedDwarfId ?? 'all',
-      dwarfName:  who,
+      goblinId:    this.selectedGoblinId ?? 'all',
+      goblinName:  who,
       message:    `ordered to (${tx},${ty})`,
       level:      'info',
     });
@@ -651,60 +651,60 @@ export class WorldScene extends Phaser.Scene {
     if (weatherMsg) {
       bus.emit('logEntry', {
         tick:      this.tick,
-        dwarfId:   'system',
-        dwarfName: 'WEATHER',
+        goblinId:   'system',
+        goblinName: 'WEATHER',
         message:   weatherMsg,
         level:     'info',
       });
     }
 
     // PIANO step 6 — check pending outcome verifications, log surprises
-    const surprises = llmSystem.checkVerifications(this.dwarves, this.tick);
+    const surprises = llmSystem.checkVerifications(this.goblins, this.tick);
     for (const msg of surprises) {
       bus.emit('logEntry', {
         tick:      this.tick,
-        dwarfId:   'system',
-        dwarfName: 'VERIFY',
+        goblinId:   'system',
+        goblinName: 'VERIFY',
         message:   msg,
         level:     'warn',
       });
     }
 
-    for (const d of this.dwarves) {
+    for (const d of this.goblins) {
       const wasAlive = d.alive;
-      tickAgentUtility(d, this.grid, this.tick, this.dwarves, (message, level) => {
+      tickAgentUtility(d, this.grid, this.tick, this.goblins, (message, level) => {
         bus.emit('logEntry', {
           tick:      this.tick,
-          dwarfId:   d.id,
-          dwarfName: d.name,
+          goblinId:   d.id,
+          goblinName: d.name,
           message,
           level,
         });
-      }, this.foodStockpiles, this.goblins, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
+      }, this.foodStockpiles, this.adventurers, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
       metabolismModifier(this.weather));
       if (wasAlive && !d.alive) {
-        this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
+        this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
 
       // Fire async LLM crisis check — never blocks the game loop
-      llmSystem.requestDecision(d, this.dwarves, this.grid, this.tick, this.goblins,
-        (dwarf, decision, situation) => {
-          dwarf.llmReasoning = decision.reasoning;
-          dwarf.task         = decision.action;  // show LLM action string as task label
+      llmSystem.requestDecision(d, this.goblins, this.grid, this.tick, this.adventurers,
+        (goblin, decision, situation) => {
+          goblin.llmReasoning = decision.reasoning;
+          goblin.task         = decision.action;  // show LLM action string as task label
 
           // Store structured intent with expiry (~7.5 s at 7 ticks/s)
           if (decision.intent && decision.intent !== 'none') {
-            dwarf.llmIntent       = decision.intent;
-            dwarf.llmIntentExpiry = this.tick + 50;
+            goblin.llmIntent       = decision.intent;
+            goblin.llmIntentExpiry = this.tick + 50;
           }
 
           // Push to rolling memory (uncapped; last 5 entries used in LLM prompts)
-          dwarf.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action, reasoning: decision.reasoning });
+          goblin.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action, reasoning: decision.reasoning });
 
           bus.emit('logEntry', {
             tick:      this.tick,
-            dwarfId:   dwarf.id,
-            dwarfName: dwarf.name,
+            goblinId:   goblin.id,
+            goblinName: goblin.name,
             message:   `[${situation.type}] ${decision.intent ?? 'none'} — "${decision.reasoning}"`,
             level:     'warn',
           });
@@ -715,53 +715,53 @@ export class WorldScene extends Phaser.Scene {
 
     growback(this.grid, growbackModifier(this.weather));
 
-    // ── Goblin raids ───────────────────────────────────────────────────────
-    const raid = maybeSpawnRaid(this.grid, this.dwarves, this.tick);
+    // ── Adventurer raids ───────────────────────────────────────────────────────
+    const raid = maybeSpawnRaid(this.grid, this.goblins, this.tick);
     if (raid) {
-      this.goblins.push(...raid.goblins);
+      this.adventurers.push(...raid.adventurers);
       bus.emit('logEntry', {
         tick:      this.tick,
-        dwarfId:   'goblin',
-        dwarfName: 'RAID',
-        message:   `⚔ ${raid.count} goblins storm from the ${raid.edge}!`,
+        goblinId:   'adventurer',
+        goblinName: 'RAID',
+        message:   `⚔ ${raid.count} adventurers storm from the ${raid.edge}! Run!`,
         level:     'error',
       });
     }
 
-    if (this.goblins.length > 0) {
-      const gr = tickGoblins(this.goblins, this.dwarves, this.grid, this.tick);
+    if (this.adventurers.length > 0) {
+      const gr = tickAdventurers(this.adventurers, this.goblins, this.grid, this.tick);
 
-      // Apply damage to targeted dwarves
-      for (const { dwarfId, damage } of gr.attacks) {
-        const d = this.dwarves.find(dw => dw.id === dwarfId);
+      // Apply damage to targeted goblins
+      for (const { goblinId, damage } of gr.attacks) {
+        const d = this.goblins.find(dw => dw.id === goblinId);
         if (d && d.alive) {
           d.health = Math.max(0, d.health - damage);
           d.morale = Math.max(0, d.morale - 5);
           if (d.health <= 0) {
             d.alive        = false;
             d.task         = 'dead';
-            d.causeOfDeath = 'killed by goblins';
+            d.causeOfDeath = 'killed by adventurers';
             bus.emit('logEntry', {
               tick:      this.tick,
-              dwarfId:   d.id,
-              dwarfName: d.name,
-              message:   'killed by goblins!',
+              goblinId:   d.id,
+              goblinName: d.name,
+              message:   'killed by adventurers!',
               level:     'error',
             });
-            this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
+            this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
           } else {
             // Survived — batch hits to reduce log noise (log every 3rd hit)
-            d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by goblin, ${d.health.toFixed(0)} hp remaining` });
+            d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by adventurer, ${d.health.toFixed(0)} hp remaining` });
             const hits = (this.combatHits.get(d.id) ?? 0) + 1;
             this.combatHits.set(d.id, hits);
             if (hits % 3 === 1) {  // log 1st hit, then every 3rd
               bus.emit('logEntry', {
                 tick:      this.tick,
-                dwarfId:   d.id,
-                dwarfName: d.name,
+                goblinId:   d.id,
+                goblinName: d.name,
                 message:   hits === 1
-                  ? `⚔ hit by goblin! (${d.health.toFixed(0)} hp)`
-                  : `⚔ fighting goblin (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
+                  ? `⚔ hit by adventurer! (${d.health.toFixed(0)} hp)`
+                  : `⚔ fighting adventurer (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
                 level:     'warn',
               });
             }
@@ -771,8 +771,8 @@ export class WorldScene extends Phaser.Scene {
               d.wound = w;
               bus.emit('logEntry', {
                 tick:      this.tick,
-                dwarfId:   d.id,
-                dwarfName: d.name,
+                goblinId:   d.id,
+                goblinName: d.name,
                 message:   `🩹 suffered a ${woundLabel(w.type)}!`,
                 level:     'warn',
               });
@@ -781,41 +781,41 @@ export class WorldScene extends Phaser.Scene {
         }
       }
 
-      // Emit goblin action log entries
+      // Emit adventurer action log entries
       for (const { message, level } of gr.logs) {
         bus.emit('logEntry', {
           tick:      this.tick,
-          dwarfId:   'goblin',
-          dwarfName: 'GOBLIN',
+          goblinId:   'adventurer',
+          goblinName: 'GOBLIN',
           message,
           level,
         });
       }
 
-      // Remove dead goblins and their sprites
-      if (gr.goblinDeaths.length > 0) {
-        const deadIds = new Set(gr.goblinDeaths);
-        this.goblins  = this.goblins.filter(g => !deadIds.has(g.id));
-        this.goblinKillCount += gr.goblinDeaths.length;
-        for (const id of gr.goblinDeaths) {
-          const spr = this.goblinSprites.get(id);
-          if (spr) { spr.destroy(); this.goblinSprites.delete(id); }
+      // Remove dead adventurers and their sprites
+      if (gr.adventurerDeaths.length > 0) {
+        const deadIds = new Set(gr.adventurerDeaths);
+        this.adventurers  = this.adventurers.filter(g => !deadIds.has(g.id));
+        this.adventurerKillCount += gr.adventurerDeaths.length;
+        for (const id of gr.adventurerDeaths) {
+          const spr = this.adventurerSprites.get(id);
+          if (spr) { spr.destroy(); this.adventurerSprites.delete(id); }
         }
-        // Add kill memory to the dwarves that scored the kill
-        for (const { dwarfId } of gr.kills) {
-          const killer = this.dwarves.find(dw => dw.id === dwarfId && dw.alive);
+        // Add kill memory to the goblins that scored the kill
+        for (const { goblinId } of gr.kills) {
+          const killer = this.goblins.find(dw => dw.id === goblinId && dw.alive);
           if (killer) {
-            killer.goblinKills += 1;
-            killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
+            killer.adventurerKills += 1;
+            killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'clobbered an adventurer in battle' });
             const hitsTaken = this.combatHits.get(killer.id) ?? 0;
             this.combatHits.delete(killer.id);
             bus.emit('logEntry', {
               tick:      this.tick,
-              dwarfId:   killer.id,
-              dwarfName: killer.name,
+              goblinId:   killer.id,
+              goblinName: killer.name,
               message:   hitsTaken > 0
-                ? `⚔ slew a goblin! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
-                : '⚔ slew a goblin!',
+                ? `⚔ clobbered an adventurer! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
+                : '⚔ clobbered an adventurer!',
               level:     'warn',
             });
           }
@@ -824,12 +824,12 @@ export class WorldScene extends Phaser.Scene {
     }
 
     // World events — tension-aware storyteller biases event selection
-    const ev = tickWorldEvents(this.grid, this.tick, this.dwarves, this.goblins);
+    const ev = tickWorldEvents(this.grid, this.tick, this.goblins, this.adventurers);
     if (ev.fired) {
       bus.emit('logEntry', {
         tick:      this.tick,
-        dwarfId:   'world',
-        dwarfName: 'WORLD',
+        goblinId:   'world',
+        goblinName: 'WORLD',
         message:   ev.message,
         level:     'warn',
       });
@@ -845,17 +845,17 @@ export class WorldScene extends Phaser.Scene {
       if (this.tick < s.spawnAtTick) continue;
       this.pendingSuccessions.splice(i, 1);
 
-      const dead = this.dwarves.find(d => d.id === s.deadDwarfId);
+      const dead = this.goblins.find(d => d.id === s.deadGoblinId);
       if (!dead) continue;
 
-      const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.dwarves, this.tick);
+      const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.goblins, this.tick);
       successor.homeTile = { x: this.foodStockpiles[0].x, y: this.foodStockpiles[0].y };
-      this.dwarves.push(successor);
+      this.goblins.push(successor);
 
       bus.emit('logEntry', {
         tick:      this.tick,
-        dwarfId:   successor.id,
-        dwarfName: successor.name,
+        goblinId:   successor.id,
+        goblinName: successor.name,
         message:   `arrives to take ${dead.name}'s place. [${successor.role.toUpperCase()}]`,
         level:     'info',
       });
@@ -885,7 +885,7 @@ export class WorldScene extends Phaser.Scene {
         const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
         this.foodStockpiles.push(nd);
         this.addFoodStockpileGraphics(nd);
-        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
           message: `New food stockpile established (${this.foodStockpiles.length} total)!`, level: 'info' });
       }
     }
@@ -897,7 +897,7 @@ export class WorldScene extends Phaser.Scene {
         const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
         this.oreStockpiles.push(ns);
         this.addOreStockpileGraphics(ns);
-        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
           message: `New ore stockpile established (${this.oreStockpiles.length} total)!`, level: 'info' });
       }
     }
@@ -909,16 +909,16 @@ export class WorldScene extends Phaser.Scene {
         const nw: WoodStockpile = { ...pos, wood: 0, maxWood: 200 };
         this.woodStockpiles.push(nw);
         this.addWoodStockpileGraphics(nw);
-        bus.emit('logEntry', { tick: this.tick, dwarfId: 'world', dwarfName: 'COLONY',
+        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
           message: `New wood stockpile established (${this.woodStockpiles.length} total)!`, level: 'info' });
       }
     }
 
     this.terrainDirty = true;
 
-    // Clear flag once all commanded dwarves have arrived
+    // Clear flag once all commanded goblins have arrived
     if (this.commandTile) {
-      const anyPending = this.dwarves.some(d => d.alive && d.commandTarget !== null);
+      const anyPending = this.goblins.some(d => d.alive && d.commandTarget !== null);
       if (!anyPending) {
         this.commandTile = null;
         this.flagGfx.clear();
@@ -949,11 +949,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private cycleSelected(direction: 1 | -1) {
-    const alive = this.dwarves.filter(d => d.alive);
+    const alive = this.goblins.filter(d => d.alive);
     if (alive.length === 0) return;
-    const currentIdx = alive.findIndex(d => d.id === this.selectedDwarfId);
+    const currentIdx = alive.findIndex(d => d.id === this.selectedGoblinId);
     const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
-    this.selectedDwarfId = alive[nextIdx].id;
+    this.selectedGoblinId = alive[nextIdx].id;
     this.emitGameState();
   }
 
@@ -967,10 +967,10 @@ export class WorldScene extends Phaser.Scene {
         foodRatio: t.maxFood     > 0 ? t.foodValue     / t.maxFood     : 0,
         matRatio:  t.maxMaterial > 0 ? t.materialValue / t.maxMaterial : 0,
       }))),
-      dwarves: this.dwarves
+      goblins: this.goblins
         .filter(d => d.alive)
         .map(d => ({ x: d.x, y: d.y, hunger: d.hunger })),
-      goblins: this.goblins.map(g => ({ x: g.x, y: g.y })),
+      adventurers: this.adventurers.map(g => ({ x: g.x, y: g.y })),
       viewport: {
         x: view.x / tpx,
         y: view.y / tpx,
@@ -982,13 +982,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private emitGameState() {
-    const alive = this.dwarves.filter(d => d.alive);
+    const alive = this.goblins.filter(d => d.alive);
     bus.emit('gameState', {
       tick:            this.tick,
-      dwarves:         this.dwarves.map(d => ({ ...d })),
+      goblins:         this.goblins.map(d => ({ ...d })),
       totalFood:       alive.reduce((s, d) => s + d.inventory.food, 0),
       totalMaterials:  alive.reduce((s, d) => s + d.inventory.materials, 0),
-      selectedDwarfId: this.selectedDwarfId,
+      selectedGoblinId: this.selectedGoblinId,
       overlayMode:     this.overlayMode,
       paused:          this.paused,
       speed:           this.speedMultiplier,
@@ -1004,7 +1004,7 @@ export class WorldScene extends Phaser.Scene {
   // ── Colony goal ────────────────────────────────────────────────────────
 
   private updateGoalProgress() {
-    const alive = this.dwarves.filter(d => d.alive);
+    const alive = this.goblins.filter(d => d.alive);
     switch (this.colonyGoal.type) {
       case 'stockpile_food':
         this.colonyGoal.progress = this.foodStockpiles.reduce((sum, d) => sum + d.food, 0);
@@ -1012,12 +1012,12 @@ export class WorldScene extends Phaser.Scene {
       case 'survive_ticks':
         this.colonyGoal.progress = this.tick - this.goalStartTick;
         break;
-      case 'defeat_goblins':
-        this.colonyGoal.progress = this.goblinKillCount;
+      case 'defeat_adventurers':
+        this.colonyGoal.progress = this.adventurerKillCount;
         break;
       case 'enclose_fort': {
         const remaining = fortEnclosureSlots(
-          this.foodStockpiles, this.oreStockpiles, this.grid, this.dwarves, '', this.goblins,
+          this.foodStockpiles, this.oreStockpiles, this.grid, this.goblins, '', this.adventurers,
         );
         this.colonyGoal.progress = remaining.length === 0 ? 1 : 0;
         break;
@@ -1028,7 +1028,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private completeGoal(alive: Dwarf[]) {
+  private completeGoal(alive: Goblin[]) {
     // Snapshot completed goal before cycling — needed for storyteller prompt
     const completedGoal = { ...this.colonyGoal };
     const gen = this.colonyGoal.generation + 1;
@@ -1037,17 +1037,17 @@ export class WorldScene extends Phaser.Scene {
     }
     bus.emit('logEntry', {
       tick:      this.tick,
-      dwarfId:   'world',
-      dwarfName: 'COLONY',
+      goblinId:   'world',
+      goblinName: 'COLONY',
       message:   `✓ Goal complete: ${this.colonyGoal.description}! Morale boost for all!`,
       level:     'info',
     });
-    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_goblins', 'enclose_fort'];
+    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_adventurers', 'enclose_fort'];
     const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
     // Reset relevant counters so the new goal tracks from zero
     // Note: food stockpile and ore stockpile totals are intentionally NOT cleared on goal completion
-    if (next === 'defeat_goblins') this.goblinKillCount = 0;
+    if (next === 'defeat_adventurers') this.adventurerKillCount = 0;
     this.goalStartTick = this.tick;
     this.colonyGoal = WorldScene.makeGoal(next, gen);
 
@@ -1055,7 +1055,7 @@ export class WorldScene extends Phaser.Scene {
     const significantEvents = filterSignificantEvents(this.logHistory, this.lastChapterTick);
     const chapterNum = this.chapters.length + 1;
     const snapshotTick = this.tick;
-    callStorytellerLLM(completedGoal, this.dwarves, this.goblins, significantEvents, snapshotTick)
+    callStorytellerLLM(completedGoal, this.goblins, this.adventurers, significantEvents, snapshotTick)
       .then(text => {
         const chapter: Chapter = {
           chapterNumber:  chapterNum,
@@ -1292,18 +1292,18 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Arrow at viewport edge pointing toward the selected dwarf when off-screen. */
+  /** Arrow at viewport edge pointing toward the selected goblin when off-screen. */
   private drawOffScreenIndicator() {
     this.offScreenGfx.clear();
-    if (!this.selectedDwarfId) return;
+    if (!this.selectedGoblinId) return;
 
-    const d = this.dwarves.find(dw => dw.id === this.selectedDwarfId && dw.alive);
+    const d = this.goblins.find(dw => dw.id === this.selectedGoblinId && dw.alive);
     if (!d) return;
 
     const cam  = this.cameras.main;
     const view = cam.worldView;
 
-    // Screen position of dwarf (world → screen)
+    // Screen position of goblin (world → screen)
     const sx = (d.x * TILE_SIZE + TILE_SIZE / 2 - view.x) * cam.zoom;
     const sy = (d.y * TILE_SIZE + TILE_SIZE / 2 - view.y) * cam.zoom;
 
@@ -1329,7 +1329,7 @@ export class WorldScene extends Phaser.Scene {
     const ax = cx + dx * t;
     const ay = cy + dy * t;
 
-    // Draw filled triangle arrow pointing toward dwarf
+    // Draw filled triangle arrow pointing toward goblin
     const angle   = Math.atan2(ny, nx);
     const tipSize = 10;
     const baseHalf = 6;
@@ -1349,41 +1349,41 @@ export class WorldScene extends Phaser.Scene {
   private drawAgents() {
     this.selectionGfx.clear();
 
-    // Convert newly-dead dwarves to tombstone sprites and remove their live sprite.
+    // Convert newly-dead goblins to tombstone sprites and remove their live sprite.
     // Ghost sprites are created once and stay until a new game.
-    const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? DWARF_FRAME;
-    for (const [id, spr] of this.dwarfSprites) {
-      const d = this.dwarves.find(dw => dw.id === id);
+    const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? GOBLIN_FRAME;
+    for (const [id, spr] of this.goblinSprites) {
+      const d = this.goblins.find(dw => dw.id === id);
       if (!d || !d.alive) {
-        if (!this.dwarfGhostSprites.has(id)) {
+        if (!this.goblinGhostSprites.has(id)) {
           const ghost = this.add.sprite(spr.x, spr.y, 'tiles', TOMBSTONE_FRAME);
           ghost.setTint(0xaaaaaa); // gray tombstone
-          this.dwarfGhostSprites.set(id, ghost);
+          this.goblinGhostSprites.set(id, ghost);
         }
         spr.destroy();
-        this.dwarfSprites.delete(id);
+        this.goblinSprites.delete(id);
       }
     }
 
-    // Red selection ring on ghost sprites of dead dwarves
-    for (const [id, spr] of this.dwarfGhostSprites) {
-      if (id === this.selectedDwarfId) {
+    // Red selection ring on ghost sprites of dead goblins
+    for (const [id, spr] of this.goblinGhostSprites) {
+      if (id === this.selectedGoblinId) {
         this.selectionGfx.lineStyle(2, 0xff4444, 0.85);
         this.selectionGfx.strokeCircle(spr.x, spr.y, TILE_SIZE / 2 + 3);
       }
     }
 
-    for (const d of this.dwarves) {
+    for (const d of this.goblins) {
       if (!d.alive) continue;
 
       const px = d.x * TILE_SIZE + TILE_SIZE / 2;
       const py = d.y * TILE_SIZE + TILE_SIZE / 2;
 
       // Get or create sprite
-      let spr = this.dwarfSprites.get(d.id);
+      let spr = this.goblinSprites.get(d.id);
       if (!spr) {
-        spr = this.add.sprite(px, py, 'tiles', DWARF_FRAME);
-        this.dwarfSprites.set(d.id, spr);
+        spr = this.add.sprite(px, py, 'tiles', GOBLIN_FRAME);
+        this.goblinSprites.set(d.id, spr);
       } else {
         spr.setPosition(px, py);
       }
@@ -1395,27 +1395,27 @@ export class WorldScene extends Phaser.Scene {
       spr.setTint((r << 16) | (g << 8) | 60);
 
       // Yellow selection ring
-      if (d.id === this.selectedDwarfId) {
+      if (d.id === this.selectedGoblinId) {
         this.selectionGfx.lineStyle(2, 0xffff00, 1);
         this.selectionGfx.strokeCircle(px, py, TILE_SIZE / 2 + 3);
       }
 
-      // Cyan ring when dwarf has an active command
+      // Cyan ring when goblin has an active command
       if (d.commandTarget) {
         this.selectionGfx.lineStyle(1, 0x00ffff, 0.7);
         this.selectionGfx.strokeCircle(px, py, TILE_SIZE / 2 + 1);
       }
     }
 
-    // ── Goblin sprites ──────────────────────────────────────────────────────
-    for (const g of this.goblins) {
+    // ── Adventurer sprites ──────────────────────────────────────────────────────
+    for (const g of this.adventurers) {
       const px = g.x * TILE_SIZE + TILE_SIZE / 2;
       const py = g.y * TILE_SIZE + TILE_SIZE / 2;
-      let spr = this.goblinSprites.get(g.id);
+      let spr = this.adventurerSprites.get(g.id);
       if (!spr) {
-        spr = this.add.sprite(px, py, 'tiles', GOBLIN_FRAME);
+        spr = this.add.sprite(px, py, 'tiles', ADVENTURER_FRAME);
         spr.setTint(0xff6600); // bright orange — clearly hostile
-        this.goblinSprites.set(g.id, spr);
+        this.adventurerSprites.set(g.id, spr);
       } else {
         spr.setPosition(px, py);
       }

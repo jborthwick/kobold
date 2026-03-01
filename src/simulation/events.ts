@@ -9,7 +9,7 @@
  * scheduled after each event so they don't cluster).
  */
 
-import { TileType, type Tile, type Dwarf, type Goblin } from '../shared/types';
+import { TileType, type Tile, type Goblin, type Adventurer } from '../shared/types';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -170,7 +170,7 @@ function applyOreDiscovery(grid: Tile[][]): string | null {
 /**
  * Steady mushroom sprouting — fires every 60 ticks (~8 s at 7 tps).
  * Creates a moderate patch (radius 2, up to 8 tiles) in a depleted or open area,
- * keeping the map viable after dwarves strip early patches.
+ * keeping the map viable after goblins strip early patches.
  *
  * Deliberately smaller than the world-event spread (radius 3–5, up to 14 tiles)
  * so the world event still feels like a meaningful bonus.
@@ -224,14 +224,14 @@ export interface WorldEventResult {
 
 type EventType = 'blight' | 'bounty' | 'ore' | 'mushroom';
 
-function colonyTension(dwarves?: Dwarf[], goblins?: Goblin[]): number {
-  if (!dwarves || dwarves.length === 0) return 50; // no data → neutral
-  const alive   = dwarves.filter(d => d.alive);
+function colonyTension(goblins?: Goblin[], adventurers?: Adventurer[]): number {
+  if (!goblins || goblins.length === 0) return 50; // no data → neutral
+  const alive   = goblins.filter(d => d.alive);
   if (alive.length === 0) return 100; // all dead → max tension
   const avgHunger  = alive.reduce((s, d) => s + d.hunger, 0) / alive.length;
   const avgMorale  = alive.reduce((s, d) => s + d.morale, 0) / alive.length;
-  const threatMod  = (goblins?.length ?? 0) * 15;
-  const recentDead = dwarves.filter(d => !d.alive).length * 20;
+  const threatMod  = (adventurers?.length ?? 0) * 15;
+  const recentDead = goblins.filter(d => !d.alive).length * 20;
   // 0 = peaceful, 100 = desperate
   return Math.min(100, avgHunger + (100 - avgMorale) * 0.5 + threatMod + recentDead);
 }
@@ -251,14 +251,14 @@ function chooseEvent(tension: number): EventType {
 
 export function tickWorldEvents(
   grid: Tile[][], tick: number,
-  dwarves?: Dwarf[], goblins?: Goblin[],
+  goblins?: Goblin[], adventurers?: Adventurer[],
 ): WorldEventResult {
   if (tick < nextEventTick) return { fired: false, message: '' };
 
   scheduleNext(); // always advance window first (prevents infinite loop on null returns)
 
   // Tension-aware event selection (storyteller)
-  const tension = colonyTension(dwarves, goblins);
+  const tension = colonyTension(goblins, adventurers);
   const event   = chooseEvent(tension);
   let msg: string | null = null;
 

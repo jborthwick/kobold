@@ -44,7 +44,7 @@ const WORLD_CONFIG = {
 
 export interface WorldGenResult {
   grid:      Tile[][];
-  /** Cleared walkable rectangle where dwarves spawn. */
+  /** Cleared walkable rectangle where goblins spawn. */
   spawnZone: { x: number; y: number; w: number; h: number };
   /** Seed string — display in UI for reproducibility. */
   seed:      string;

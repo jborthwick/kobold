@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, type TouchEvent, type MouseEvent } from 'react';
-import { ColonyGoalPanel, SelectedDwarfPanel } from './HUD';
+import { ColonyGoalPanel, SelectedGoblinPanel } from './HUD';
 import { EventLog } from './EventLog';
 import type { LayoutMode } from '../shared/useViewport';
 
@@ -134,7 +134,7 @@ export function MobileBottomSheet({ layout }: { layout: LayoutMode }) {
 
       <div style={styles.content}>
         <ColonyGoalPanel />
-        {sheetState !== 'collapsed' && <SelectedDwarfPanel />}
+        {sheetState !== 'collapsed' && <SelectedGoblinPanel />}
         {sheetState === 'expanded' && <EventLog layout={layout} />}
       </div>
     </div>

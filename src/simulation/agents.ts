@@ -1,6 +1,6 @@
 import * as ROT from 'rot-js';
-import { TileType, type Dwarf, type Tile, type DwarfRole, type MemoryEntry, type DwarfTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Goblin, type ResourceSite, type ColonyGoal } from '../shared/types';
-import { GRID_SIZE, INITIAL_DWARVES, DWARF_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { TileType, type Goblin, type Tile, type GoblinRole, type MemoryEntry, type GoblinTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Adventurer, type ResourceSite, type ColonyGoal } from '../shared/types';
+import { GRID_SIZE, INITIAL_GOBLINS, GOBLIN_NAMES, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 import { xpToLevel } from './skills';
 
@@ -9,9 +9,9 @@ function rand(min: number, max: number) {
 }
 
 // ── Resource site memory ───────────────────────────────────────────────────
-/** Min tile value worth storing in a dwarf's site memory. */
+/** Min tile value worth storing in a goblin's site memory. */
 export const SITE_RECORD_THRESHOLD = 3;
-/** Max remembered sites per type per dwarf. */
+/** Max remembered sites per type per goblin. */
 export const MAX_KNOWN_SITES = 5;
 /**
  * Manhattan radius within which two tiles are treated as the same patch.
@@ -21,7 +21,7 @@ export const MAX_KNOWN_SITES = 5;
 export const PATCH_MERGE_RADIUS = 4;
 
 /**
- * Upsert a resource site into a dwarf's memory list.
+ * Upsert a resource site into a goblin's memory list.
  * 1. Exact tile already known → refresh value + tick in place.
  * 2. Within PATCH_MERGE_RADIUS of an existing entry → same patch; upgrade
  *    the representative to the richer tile or just refresh its tick.
@@ -57,14 +57,14 @@ export function recordSite(sites: ResourceSite[], x: number, y: number, value: n
   if (value > sites[weakIdx].value) sites[weakIdx] = { x, y, value, tick };
 }
 
-// Tile types dwarves can harvest food from.
+// Tile types goblins can harvest food from.
 // Add entries here to unlock new food sources — no logic changes needed.
 export const FORAGEABLE_TILES = new Set<TileType>([
   TileType.Mushroom,
 ]);
 
 // Role assignment order and vision ranges
-const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
+const ROLE_ORDER: GoblinRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
 
 // ── Trait modifiers ──────────────────────────────────────────────────────────
 // Traits modify BT thresholds so personality drives behavioral divergence.
@@ -81,7 +81,7 @@ export interface TraitMods {
   socialDecayBonus?: number;  // extra social decay near friends (default 0; cheerful: 0.15)
 }
 
-export const TRAIT_MODS: Record<DwarfTrait, TraitMods> = {
+export const TRAIT_MODS: Record<GoblinTrait, TraitMods> = {
   helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15 },
   greedy:    { shareThreshold: 12, shareDonorKeeps: 8 },
   brave:     { fleeThreshold: 95 },
@@ -93,39 +93,60 @@ export const TRAIT_MODS: Record<DwarfTrait, TraitMods> = {
 };
 
 /** Look up a trait modifier with a default fallback. */
-export function traitMod<K extends keyof TraitMods>(dwarf: Dwarf, key: K, fallback: number): number {
-  return TRAIT_MODS[dwarf.trait]?.[key] ?? fallback;
+export function traitMod<K extends keyof TraitMods>(goblin: Goblin, key: K, fallback: number): number {
+  return TRAIT_MODS[goblin.trait]?.[key] ?? fallback;
 }
 
+/** Goblin-flavored display names for traits (internal values stay the same for BT logic). */
+export const GOBLIN_TRAIT_DISPLAY: Record<GoblinTrait, string> = {
+  helpful:   'Surprisingly Generous',
+  greedy:    'Shinies Hoarder',
+  brave:     'Too Dumb to Run',
+  paranoid:  'Sensibly Cautious',
+  lazy:      'Professional Napper',
+  cheerful:  'Annoyingly Cheerful',
+  mean:      'Bitey',
+  forgetful: 'What Was I Doing?',
+};
+
+/** Goblin-flavored display names for roles (internal values stay the same for BT logic). */
+export const GOBLIN_ROLE_DISPLAY: Record<GoblinRole, string> = {
+  forager:    'SCAVENGER',
+  miner:      'ROCK BITER',
+  scout:      'SNEAKY GIT',
+  fighter:    'BASHER',
+  lumberjack: 'TREE PUNCHER',
+};
+
 // ── Trait / bio / goal tables ─────────────────────────────────────────────────
-const DWARF_TRAITS: DwarfTrait[] = [
+const GOBLIN_TRAITS: GoblinTrait[] = [
   'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
 ];
 
-const DWARF_BIOS: string[] = [
-  'is far from home',
-  'loves his dog',
-  'never learned to swim',
-  'has a lucky coin',
-  'dreams of becoming a baker',
-  'lost a bet that brought him here',
-  'is secretly afraid of the dark',
-  'left behind a large debt',
-  'was exiled from the last colony',
-  'heard there is treasure here',
+const GOBLIN_BIOS: string[] = [
+  'ate a rock once and liked it',
+  'has an imaginary friend named Keith',
+  'claims to have invented fire',
+  'afraid of loud noises and also quiet ones',
+  'once stole a sword bigger than himself',
+  'was kicked out of three different caves',
+  'firmly believes the moon is edible',
+  'has a pet spider named Lord Bitington',
+  'convinced he can talk to mushrooms',
+  'lost a fight to a particularly aggressive squirrel',
 ];
 
-const DWARF_GOALS: string[] = [
-  'accumulate 50 food before winter',
-  'outlive every other dwarf',
-  'make at least one true friend',
-  'find the richest ore vein',
-  'survive the first goblin raid',
-  'never go hungry',
-  'explore every corner of the map',
-  'see the colony reach 10 dwarves',
+const GOBLIN_GOALS: string[] = [
+  'eat something that isn\'t a bug',
+  'find a rock that looks like a face',
+  'go one whole day without being hit',
+  'make a friend (a real one this time)',
+  'find something shiny',
+  'build something that doesn\'t fall down',
+  'survive until lunch',
+  'learn what a "plan" is',
 ];
-const ROLE_STATS: Record<DwarfRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
+const ROLE_STATS: Record<GoblinRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
   forager:    { visionMin: 5, visionMax: 8,  maxHealth: 100 },
   miner:      { visionMin: 4, visionMax: 6,  maxHealth: 100 },
   scout:      { visionMin: 7, visionMax: 12, maxHealth: 100 },
@@ -144,12 +165,12 @@ function toRoman(n: number): string {
   return result;
 }
 
-export function spawnDwarves(
+export function spawnGoblins(
   grid:      Tile[][],
   spawnZone: { x: number; y: number; w: number; h: number },
-): Dwarf[] {
-  const dwarves: Dwarf[] = [];
-  for (let i = 0; i < INITIAL_DWARVES; i++) {
+): Goblin[] {
+  const goblins: Goblin[] = [];
+  for (let i = 0; i < INITIAL_GOBLINS; i++) {
     let x: number, y: number;
     do {
       x = spawnZone.x + rand(0, spawnZone.w - 1);
@@ -159,9 +180,9 @@ export function spawnDwarves(
     const role  = ROLE_ORDER[i % ROLE_ORDER.length];
     const stats = ROLE_STATS[role];
 
-    const baseName = DWARF_NAMES[i % DWARF_NAMES.length];
-    dwarves.push({
-      id:            `dwarf-${i}`,
+    const baseName = GOBLIN_NAMES[i % GOBLIN_NAMES.length];
+    goblins.push({
+      id:            `goblin-${i}`,
       name:          baseName,
       baseName,
       generation:    1,
@@ -181,17 +202,17 @@ export function spawnDwarves(
       llmIntent:       null,
       llmIntentExpiry: 0,
       memory:          [],
-      relations:       {},   // populated lazily as dwarves interact
-      trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
-      bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
-      goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
+      relations:       {},   // populated lazily as goblins interact
+      trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
+      bio:             GOBLIN_BIOS[Math.floor(Math.random() * GOBLIN_BIOS.length)],
+      goal:            GOBLIN_GOALS[Math.floor(Math.random() * GOBLIN_GOALS.length)],
       wanderTarget:    null,
       wanderExpiry:    0,
       knownFoodSites:  [],
       knownOreSites:   [],
       knownWoodSites:  [],
       homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
-      goblinKills:     0,
+      adventurerKills:     0,
       fatigue:         0,
       social:          0,
       lastSocialTick:  0,
@@ -200,7 +221,7 @@ export function spawnDwarves(
       skillLevel:      0,
     });
   }
-  return dwarves;
+  return goblins;
 }
 
 // ── Succession ─────────────────────────────────────────────────────────────
@@ -209,16 +230,16 @@ export function spawnDwarves(
 export const SUCCESSION_DELAY = 300;
 
 /**
- * Spawn a new dwarf that inherits fragments of the predecessor's memory and
+ * Spawn a new goblin that inherits fragments of the predecessor's memory and
  * (muted) relationships.  Called by WorldScene when a pendingSuccession matures.
  */
 export function spawnSuccessor(
-  dead:       Dwarf,
+  dead:       Goblin,
   grid:       Tile[][],
   spawnZone:  { x: number; y: number; w: number; h: number },
-  allDwarves: Dwarf[],
+  allDwarves: Goblin[],
   tick:       number,
-): Dwarf {
+): Goblin {
   // Successor inherits the predecessor's base name with a roman numeral suffix.
   // e.g. "Bomer" → "Bomer II" → "Bomer III"
   const baseName   = dead.baseName;
@@ -272,7 +293,7 @@ export function spawnSuccessor(
   }
 
   return {
-    id:            `dwarf-${Date.now()}`,
+    id:            `goblin-${Date.now()}`,
     name,
     baseName,
     generation,
@@ -293,16 +314,16 @@ export function spawnSuccessor(
     llmIntentExpiry: 0,
     memory:          inheritedMemory,
     relations,
-    trait:           DWARF_TRAITS[Math.floor(Math.random() * DWARF_TRAITS.length)],
-    bio:             DWARF_BIOS[Math.floor(Math.random() * DWARF_BIOS.length)],
-    goal:            DWARF_GOALS[Math.floor(Math.random() * DWARF_GOALS.length)],
+    trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
+    bio:             GOBLIN_BIOS[Math.floor(Math.random() * GOBLIN_BIOS.length)],
+    goal:            GOBLIN_GOALS[Math.floor(Math.random() * GOBLIN_GOALS.length)],
     wanderTarget:    null,
     wanderExpiry:    0,
     knownFoodSites:  [],
     knownOreSites:   [],
     knownWoodSites:  [],
     homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
-    goblinKills:     0,
+    adventurerKills:     0,
     fatigue:         0,
     social:          0,
     lastSocialTick:  0,
@@ -314,9 +335,9 @@ export function spawnSuccessor(
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Scan a square of `radius` tiles around the dwarf for the richest forageable tile. */
+/** Scan a square of `radius` tiles around the goblin for the richest forageable tile. */
 export function bestFoodTile(
-  dwarf:  Dwarf,
+  goblin:  Goblin,
   grid:   Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
@@ -325,8 +346,8 @@ export function bestFoodTile(
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
-      const nx = dwarf.x + dx;
-      const ny = dwarf.y + dy;
+      const nx = goblin.x + dx;
+      const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (!FORAGEABLE_TILES.has(grid[ny][nx].type)) continue;
       const v = grid[ny][nx].foodValue;
@@ -336,10 +357,10 @@ export function bestFoodTile(
   return best;
 }
 
-/** Scan a square of `radius` tiles around the dwarf for the richest ore/stone material tile (miners).
+/** Scan a square of `radius` tiles around the goblin for the richest ore/stone material tile (miners).
  *  Excludes Forest tiles — wood is handled separately by lumberjacks via bestWoodTile(). */
 export function bestMaterialTile(
-  dwarf:  Dwarf,
+  goblin:  Goblin,
   grid:   Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
@@ -348,8 +369,8 @@ export function bestMaterialTile(
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
-      const nx = dwarf.x + dx;
-      const ny = dwarf.y + dy;
+      const nx = goblin.x + dx;
+      const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (grid[ny][nx].type === TileType.Forest) continue;  // forest = wood, not ore
       const v = grid[ny][nx].materialValue;
@@ -359,9 +380,9 @@ export function bestMaterialTile(
   return best;
 }
 
-/** Scan a square of `radius` tiles around the dwarf for the richest Forest tile with wood (lumberjacks). */
+/** Scan a square of `radius` tiles around the goblin for the richest Forest tile with wood (lumberjacks). */
 export function bestWoodTile(
-  dwarf:  Dwarf,
+  goblin:  Goblin,
   grid:   Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
@@ -370,8 +391,8 @@ export function bestWoodTile(
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
-      const nx = dwarf.x + dx;
-      const ny = dwarf.y + dy;
+      const nx = goblin.x + dx;
+      const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (grid[ny][nx].type !== TileType.Forest) continue;
       const v = grid[ny][nx].materialValue;
@@ -385,7 +406,7 @@ export function bestWoodTile(
  * Returns the next tile to step onto when moving from `from` toward `to`,
  * using rot.js A* for obstacle-aware pathfinding.
  * Falls back to staying in place if the destination is unreachable.
- * Exported so goblins can share the same pathfinding logic.
+ * Exported so adventurers can share the same pathfinding logic.
  */
 export function pathNextStep(
   from: { x: number; y: number },
@@ -434,16 +455,16 @@ export function fortWallSlots(
   foodStockpiles: Array<{ x: number; y: number }>,
   oreStockpiles:  Array<{ x: number; y: number }>,
   grid:           Tile[][],
-  dwarves:        Dwarf[] | undefined,
+  goblins:        Goblin[] | undefined,
   selfId:         string,
-  goblins?:       Goblin[],
+  adventurers?:       Adventurer[],
 ): Array<{ x: number; y: number }> {
   const MARGIN = 2;
   const slots: Array<{ x: number; y: number }> = [];
 
   const blocked = (x: number, y: number): boolean => {
-    if (dwarves?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y)) return true;
-    if (goblins?.some(g => g.x === x && g.y === y)) return true;
+    if (goblins?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y)) return true;
+    if (adventurers?.some(g => g.x === x && g.y === y)) return true;
     return false;
   };
 
@@ -534,9 +555,9 @@ export function fortEnclosureSlots(
   foodStockpiles: Array<{ x: number; y: number }>,
   oreStockpiles:  Array<{ x: number; y: number }>,
   grid:           Tile[][],
-  dwarves:        Dwarf[] | undefined,
+  goblins:        Goblin[] | undefined,
   selfId:         string,
-  goblins?:       Goblin[],
+  adventurers?:       Adventurer[],
 ): Array<{ x: number; y: number }> {
   const MARGIN  = 2;
   const dMaxX   = Math.max(...foodStockpiles.map(d => d.x)) + MARGIN;
@@ -553,8 +574,8 @@ export function fortEnclosureSlots(
   const doorX  = Math.floor((barXmin + barXmax) / 2);  // centre-corridor door
 
   const blocked = (x: number, y: number): boolean => {
-    if (dwarves?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y)) return true;
-    if (goblins?.some(g => g.x === x && g.y === y)) return true;
+    if (goblins?.some(d => d.alive && d.id !== selfId && d.x === x && d.y === y)) return true;
+    if (adventurers?.some(g => g.x === x && g.y === y)) return true;
     return false;
   };
 
@@ -584,97 +605,97 @@ export function fortEnclosureSlots(
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
 export function tickAgent(
-  dwarf:              Dwarf,
+  goblin:              Goblin,
   grid:               Tile[][],
   currentTick:        number,
-  dwarves?:           Dwarf[],
+  goblins?:           Goblin[],
   onLog?:             LogFn,
   foodStockpiles?:    FoodStockpile[],
-  goblins?:           Goblin[],
+  adventurers?:           Adventurer[],
   oreStockpiles?:     OreStockpile[],
   _colonyGoal?:       ColonyGoal,
   woodStockpiles?:    WoodStockpile[],
   /** Weather metabolism multiplier (1.0 = normal, 1.4 = cold). */
   weatherMetabolismMod?: number,
 ): void {
-  if (!dwarf.alive) return;
+  if (!goblin.alive) return;
 
-  // Safety escape: if the dwarf is somehow on a non-walkable tile (e.g. a wall was
+  // Safety escape: if the goblin is somehow on a non-walkable tile (e.g. a wall was
   // placed under them), nudge them to the nearest walkable neighbour.
-  if (!isWalkable(grid, dwarf.x, dwarf.y)) {
+  if (!isWalkable(grid, goblin.x, goblin.y)) {
     const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
-    const escape = dirs.find(d => isWalkable(grid, dwarf.x + d.x, dwarf.y + d.y));
-    if (escape) { dwarf.x += escape.x; dwarf.y += escape.y; }
+    const escape = dirs.find(d => isWalkable(grid, goblin.x + d.x, goblin.y + d.y));
+    if (escape) { goblin.x += escape.x; goblin.y += escape.y; }
   }
 
   // Hunger grows every tick (cold weather burns calories faster)
-  dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism * (weatherMetabolismMod ?? 1));
+  goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * (weatherMetabolismMod ?? 1));
 
   // Morale decays slowly when hungry, recovers when well-fed
-  if (dwarf.hunger > 60) {
-    dwarf.morale = Math.max(0,   dwarf.morale - 0.4);
-  } else if (dwarf.hunger < 30) {
-    dwarf.morale = Math.min(100, dwarf.morale + 0.2);
+  if (goblin.hunger > 60) {
+    goblin.morale = Math.max(0,   goblin.morale - 0.4);
+  } else if (goblin.hunger < 30) {
+    goblin.morale = Math.min(100, goblin.morale + 0.2);
   }
-  // Stress metabolism — demoralized dwarves burn calories faster (morale death spiral)
-  if (dwarf.morale < 25) {
-    dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism * 0.3);
+  // Stress metabolism — demoralized goblins burn calories faster (morale death spiral)
+  if (goblin.morale < 25) {
+    goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.3);
   }
 
   // ── Fatigue tick ────────────────────────────────────────────────────────
   // Fatigue rises from movement/work (applied at action sites below) and
-  // decays passively when idle. Lazy dwarves gain fatigue faster (×1.3).
+  // decays passively when idle. Lazy goblins gain fatigue faster (×1.3).
   // Effects: >70 → 30% skip movement + halved harvest; >90 → morale drain.
   // Rest intent: strong decay (−1.5/tick) handled in step 2.5.
   // Base idle decay is small so fatigue doesn't vanish instantly.
-  const fatigueRate = traitMod(dwarf, 'fatigueRate', 1.0);
-  dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.05); // tiny idle decay
-  if (dwarf.fatigue > 90) {
-    dwarf.morale = Math.max(0, dwarf.morale - 0.2);
+  const fatigueRate = traitMod(goblin, 'fatigueRate', 1.0);
+  goblin.fatigue = Math.max(0, goblin.fatigue - 0.05); // tiny idle decay
+  if (goblin.fatigue > 90) {
+    goblin.morale = Math.max(0, goblin.morale - 0.2);
   }
 
   // ── Social tick ─────────────────────────────────────────────────────────
-  // Social need rises when isolated from friendly dwarves (relation >= 40,
-  // within 3 tiles). Cheerful dwarves decay social faster near friends.
+  // Social need rises when isolated from friendly goblins (relation >= 40,
+  // within 3 tiles). Cheerful goblins decay social faster near friends.
   // Effects: >60 → morale drain −0.15/tick.
-  if (dwarves) {
+  if (goblins) {
     const FRIEND_RADIUS = 3;
     const FRIEND_REL    = 40;
-    const hasFriend = dwarves.some(
-      other => other.id !== dwarf.id && other.alive &&
-        Math.abs(other.x - dwarf.x) <= FRIEND_RADIUS &&
-        Math.abs(other.y - dwarf.y) <= FRIEND_RADIUS &&
-        (dwarf.relations[other.id] ?? 50) >= FRIEND_REL,
+    const hasFriend = goblins.some(
+      other => other.id !== goblin.id && other.alive &&
+        Math.abs(other.x - goblin.x) <= FRIEND_RADIUS &&
+        Math.abs(other.y - goblin.y) <= FRIEND_RADIUS &&
+        (goblin.relations[other.id] ?? 50) >= FRIEND_REL,
     );
     if (hasFriend) {
-      const socialBonus = traitMod(dwarf, 'socialDecayBonus', 0);
-      dwarf.social = Math.max(0, dwarf.social - (0.3 + socialBonus));
-      dwarf.lastSocialTick = currentTick;
-    } else if (currentTick - dwarf.lastSocialTick > 30) {
-      dwarf.social = Math.min(100, dwarf.social + 0.15);
+      const socialBonus = traitMod(goblin, 'socialDecayBonus', 0);
+      goblin.social = Math.max(0, goblin.social - (0.3 + socialBonus));
+      goblin.lastSocialTick = currentTick;
+    } else if (currentTick - goblin.lastSocialTick > 30) {
+      goblin.social = Math.min(100, goblin.social + 0.15);
     }
   }
-  if (dwarf.social > 60) {
-    dwarf.morale = Math.max(0, dwarf.morale - 0.15);
+  if (goblin.social > 60) {
+    goblin.morale = Math.max(0, goblin.morale - 0.15);
   }
 
   // Fatigue > 70: 30% chance to skip action this tick (exhaustion stumble)
-  if (dwarf.fatigue > 70 && Math.random() < 0.3) {
-    dwarf.task = 'exhausted…';
-    dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.5); // slight recovery from forced rest
+  if (goblin.fatigue > 70 && Math.random() < 0.3) {
+    goblin.task = 'exhausted…';
+    goblin.fatigue = Math.max(0, goblin.fatigue - 0.5); // slight recovery from forced rest
     return;
   }
 
   // ── 1. Starvation ─────────────────────────────────────────────────────
-  if (dwarf.hunger >= 100 && dwarf.inventory.food === 0) {
-    dwarf.health -= 2;
-    dwarf.morale  = Math.max(0, dwarf.morale - 2);
-    dwarf.task    = 'starving!';
-    onLog?.(`is starving! (health ${dwarf.health})`, 'warn');
-    if (dwarf.health <= 0) {
-      dwarf.alive         = false;
-      dwarf.task          = 'dead';
-      dwarf.causeOfDeath  = 'starvation';
+  if (goblin.hunger >= 100 && goblin.inventory.food === 0) {
+    goblin.health -= 2;
+    goblin.morale  = Math.max(0, goblin.morale - 2);
+    goblin.task    = 'starving!';
+    onLog?.(`is starving! (health ${goblin.health})`, 'warn');
+    if (goblin.health <= 0) {
+      goblin.alive         = false;
+      goblin.task          = 'dead';
+      goblin.causeOfDeath  = 'starvation';
       onLog?.('has died of starvation!', 'error');
       return;
     }
@@ -684,54 +705,54 @@ export function tickAgent(
   // ── 2. Eat from inventory ──────────────────────────────────────────────
   // Threshold at 70 (not 50) so hunger regularly crosses the 65 crisis
   // threshold first — giving the LLM a chance to react before they eat.
-  // Lazy dwarves eat at 55 (sooner); trait-driven via traitMod.
-  if (dwarf.hunger > traitMod(dwarf, 'eatThreshold', 70) && dwarf.inventory.food > 0) {
-    const bite        = Math.min(dwarf.inventory.food, 3);
-    dwarf.inventory.food -= bite;
-    dwarf.hunger      = Math.max(0, dwarf.hunger - bite * 20);
-    dwarf.task        = 'eating';
+  // Lazy goblins eat at 55 (sooner); trait-driven via traitMod.
+  if (goblin.hunger > traitMod(goblin, 'eatThreshold', 70) && goblin.inventory.food > 0) {
+    const bite        = Math.min(goblin.inventory.food, 3);
+    goblin.inventory.food -= bite;
+    goblin.hunger      = Math.max(0, goblin.hunger - bite * 20);
+    goblin.task        = 'eating';
     return;
   }
 
   // ── 2.5. Execute LLM intent (eat / rest) ──────────────────────────────
   // 'forage' and 'avoid' are handled in steps 4 / 5 via llmIntent check.
-  if (dwarf.llmIntent) {
-    if (currentTick > dwarf.llmIntentExpiry) {
-      dwarf.llmIntent = null;          // intent expired — clear it
+  if (goblin.llmIntent) {
+    if (currentTick > goblin.llmIntentExpiry) {
+      goblin.llmIntent = null;          // intent expired — clear it
     } else {
-      switch (dwarf.llmIntent) {
+      switch (goblin.llmIntent) {
         case 'eat':
           // Force-eat even below the normal 70-hunger threshold
-          if (dwarf.inventory.food > 0 && dwarf.hunger > 30) {
-            const bite           = Math.min(dwarf.inventory.food, 3);
-            dwarf.inventory.food -= bite;
-            dwarf.hunger         = Math.max(0, dwarf.hunger - bite * 20);
-            dwarf.task           = 'eating (LLM)';
+          if (goblin.inventory.food > 0 && goblin.hunger > 30) {
+            const bite           = Math.min(goblin.inventory.food, 3);
+            goblin.inventory.food -= bite;
+            goblin.hunger         = Math.max(0, goblin.hunger - bite * 20);
+            goblin.task           = 'eating (LLM)';
             return;
           }
           break;
         case 'rest':
-          dwarf.fatigue = Math.max(0, dwarf.fatigue - 1.5);
-          dwarf.task = 'resting';
+          goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
+          goblin.task = 'resting';
           return;                      // skip movement entirely
         case 'socialize': {
-          // Pathfind toward the nearest friendly dwarf
-          if (dwarves) {
+          // Pathfind toward the nearest friendly goblin
+          if (goblins) {
             const FRIEND_REL = 40;
             let bestDist = Infinity;
-            let bestFriend: Dwarf | null = null;
-            for (const other of dwarves) {
-              if (other.id === dwarf.id || !other.alive) continue;
-              if ((dwarf.relations[other.id] ?? 50) < FRIEND_REL) continue;
-              const dist = Math.abs(other.x - dwarf.x) + Math.abs(other.y - dwarf.y);
+            let bestFriend: Goblin | null = null;
+            for (const other of goblins) {
+              if (other.id === goblin.id || !other.alive) continue;
+              if ((goblin.relations[other.id] ?? 50) < FRIEND_REL) continue;
+              const dist = Math.abs(other.x - goblin.x) + Math.abs(other.y - goblin.y);
               if (dist < bestDist) { bestDist = dist; bestFriend = other; }
             }
             if (bestFriend && bestDist > 1) {
-              const step = pathNextStep({ x: dwarf.x, y: dwarf.y }, bestFriend, grid);
-              dwarf.x = step.x; dwarf.y = step.y;
-              dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
+              const step = pathNextStep({ x: goblin.x, y: goblin.y }, bestFriend, grid);
+              goblin.x = step.x; goblin.y = step.y;
+              goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate);
             }
-            dwarf.task = 'socializing';
+            goblin.task = 'socializing';
             return;
           }
           break;
@@ -745,35 +766,35 @@ export function tickAgent(
   }
 
   // ── 2.7. Food sharing ─────────────────────────────────────────────────
-  // Well-fed dwarves share 3 food with the hungriest starving neighbor.
+  // Well-fed goblins share 3 food with the hungriest starving neighbor.
   // Trait-driven: helpful shares at 6 food, greedy at 12; mean won't share with rivals.
-  const shareThresh     = traitMod(dwarf, 'shareThreshold', 8);
-  const shareDonorKeeps = traitMod(dwarf, 'shareDonorKeeps', 5);
-  const shareRelGate    = traitMod(dwarf, 'shareRelationGate', 30);
-  if (dwarves && dwarf.inventory.food >= shareThresh) {
+  const shareThresh     = traitMod(goblin, 'shareThreshold', 8);
+  const shareDonorKeeps = traitMod(goblin, 'shareDonorKeeps', 5);
+  const shareRelGate    = traitMod(goblin, 'shareRelationGate', 30);
+  if (goblins && goblin.inventory.food >= shareThresh) {
     const SHARE_RADIUS = 2;
-    const needy = dwarves
+    const needy = goblins
       .filter(d =>
-        d.alive && d.id !== dwarf.id &&
-        Math.abs(d.x - dwarf.x) <= SHARE_RADIUS &&
-        Math.abs(d.y - dwarf.y) <= SHARE_RADIUS &&
+        d.alive && d.id !== goblin.id &&
+        Math.abs(d.x - goblin.x) <= SHARE_RADIUS &&
+        Math.abs(d.y - goblin.y) <= SHARE_RADIUS &&
         d.hunger > 60 && d.inventory.food < 3 &&
-        (dwarf.relations[d.id] ?? 50) >= shareRelGate,  // won't share with rivals
+        (goblin.relations[d.id] ?? 50) >= shareRelGate,  // won't share with rivals
       )
       .sort((a, b) => b.hunger - a.hunger)[0] ?? null;
     if (needy) {
-      const gift = Math.min(3, dwarf.inventory.food - shareDonorKeeps);
+      const gift = Math.min(3, goblin.inventory.food - shareDonorKeeps);
       if (gift <= 0) { /* trait keeps too much — skip sharing */ }
       else {
-      dwarf.inventory.food -= gift;
+      goblin.inventory.food -= gift;
       needy.inventory.food  = Math.min(MAX_INVENTORY_FOOD, needy.inventory.food + gift);
       // Sharing builds positive ties: giver +10, recipient +15
-      dwarf.relations[needy.id] = Math.min(100, (dwarf.relations[needy.id] ?? 50) + 10);
-      needy.relations[dwarf.id] = Math.min(100, (needy.relations[dwarf.id] ?? 50) + 15);
-      dwarf.task = `sharing food → ${needy.name}`;
+      goblin.relations[needy.id] = Math.min(100, (goblin.relations[needy.id] ?? 50) + 10);
+      needy.relations[goblin.id] = Math.min(100, (needy.relations[goblin.id] ?? 50) + 15);
+      goblin.task = `sharing food → ${needy.name}`;
       onLog?.(`shared ${gift} food with ${needy.name} (hunger ${needy.hunger.toFixed(0)})`, 'info');
-      dwarf.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `shared ${gift} food with ${needy.name}` });
-      needy.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `received ${gift} food from ${dwarf.name}` });
+      goblin.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `shared ${gift} food with ${needy.name}` });
+      needy.memory.push({ tick: currentTick, crisis: 'food_sharing', action: `received ${gift} food from ${goblin.name}` });
       return;
       }  // end else (gift > 0)
     }
@@ -781,120 +802,120 @@ export function tickAgent(
 
   // ── 2.8. Food stockpile deposit / withdraw ────────────────────────────
   // When standing on any food stockpile tile: deposit surplus food or withdraw if hungry.
-  const standingFoodStockpile = foodStockpiles?.find(d => d.x === dwarf.x && d.y === dwarf.y) ?? null;
+  const standingFoodStockpile = foodStockpiles?.find(d => d.x === goblin.x && d.y === goblin.y) ?? null;
   if (standingFoodStockpile) {
-    if (dwarf.inventory.food >= 10) {
-      const amount = dwarf.inventory.food - 6;
+    if (goblin.inventory.food >= 10) {
+      const amount = goblin.inventory.food - 6;
       const stored = Math.min(amount, standingFoodStockpile.maxFood - standingFoodStockpile.food);
       if (stored > 0) {
         standingFoodStockpile.food += stored;
-        dwarf.inventory.food       -= stored;
-        dwarf.task                  = `deposited ${stored.toFixed(0)} → stockpile`;
+        goblin.inventory.food       -= stored;
+        goblin.task                  = `deposited ${stored.toFixed(0)} → stockpile`;
         return;
       }
     }
-    if (dwarf.hunger > 60 && dwarf.inventory.food < 2 && standingFoodStockpile.food > 0) {
+    if (goblin.hunger > 60 && goblin.inventory.food < 2 && standingFoodStockpile.food > 0) {
       const amount                = Math.min(4, standingFoodStockpile.food);
       standingFoodStockpile.food -= amount;
-      dwarf.inventory.food        = Math.min(MAX_INVENTORY_FOOD, dwarf.inventory.food + amount);
-      dwarf.task                  = `withdrew ${amount.toFixed(0)} from stockpile`;
+      goblin.inventory.food        = Math.min(MAX_INVENTORY_FOOD, goblin.inventory.food + amount);
+      goblin.task                  = `withdrew ${amount.toFixed(0)} from stockpile`;
       return;
     }
   }
 
   // ── 2.9. Ore stockpile deposit ────────────────────────────────────────
   // Miners standing on any ore stockpile tile deposit all carried ore.
-  const standingOreStockpile = oreStockpiles?.find(s => s.x === dwarf.x && s.y === dwarf.y) ?? null;
-  if (dwarf.role === 'miner' && standingOreStockpile && dwarf.inventory.materials > 0) {
-    const stored = Math.min(dwarf.inventory.materials, standingOreStockpile.maxOre - standingOreStockpile.ore);
+  const standingOreStockpile = oreStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
+  if (goblin.role === 'miner' && standingOreStockpile && goblin.inventory.materials > 0) {
+    const stored = Math.min(goblin.inventory.materials, standingOreStockpile.maxOre - standingOreStockpile.ore);
     if (stored > 0) {
       standingOreStockpile.ore  += stored;
-      dwarf.inventory.materials -= stored;
-      dwarf.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
+      goblin.inventory.materials -= stored;
+      goblin.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
       return;
     }
   }
 
   // ── 2.9b. Wood stockpile deposit ──────────────────────────────────────
   // Lumberjacks standing on any wood stockpile tile deposit all carried wood.
-  const standingWoodStockpile = woodStockpiles?.find(s => s.x === dwarf.x && s.y === dwarf.y) ?? null;
-  if (dwarf.role === 'lumberjack' && standingWoodStockpile && dwarf.inventory.materials > 0) {
-    const stored = Math.min(dwarf.inventory.materials, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
+  const standingWoodStockpile = woodStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
+  if (goblin.role === 'lumberjack' && standingWoodStockpile && goblin.inventory.materials > 0) {
+    const stored = Math.min(goblin.inventory.materials, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
     if (stored > 0) {
       standingWoodStockpile.wood  += stored;
-      dwarf.inventory.materials   -= stored;
-      dwarf.task                   = `deposited ${stored.toFixed(0)} wood → stockpile`;
+      goblin.inventory.materials   -= stored;
+      goblin.task                   = `deposited ${stored.toFixed(0)} wood → stockpile`;
       return;
     }
   }
 
   // ── 3. Follow player command ───────────────────────────────────────────
   // Player commands take priority over autonomous harvesting so right-click
-  // actually moves the dwarf without interruption.
-  if (dwarf.commandTarget) {
-    const { x: tx, y: ty } = dwarf.commandTarget;
-    if (dwarf.x === tx && dwarf.y === ty) {
+  // actually moves the goblin without interruption.
+  if (goblin.commandTarget) {
+    const { x: tx, y: ty } = goblin.commandTarget;
+    if (goblin.x === tx && goblin.y === ty) {
       onLog?.(`arrived at (${tx},${ty})`, 'info');
-      dwarf.commandTarget = null;
-      dwarf.task          = 'arrived';
+      goblin.commandTarget = null;
+      goblin.task          = 'arrived';
     } else {
-      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.commandTarget, grid);
-      dwarf.x    = next.x;
-      dwarf.y    = next.y;
-      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
-      dwarf.task = `→ (${tx},${ty})`;
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, goblin.commandTarget, grid);
+      goblin.x    = next.x;
+      goblin.y    = next.y;
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate);
+      goblin.task = `→ (${tx},${ty})`;
     }
     return;
   }
 
-  // ── 3.5. Fighter — hunt nearest goblin within vision×2 ──────────────────
-  // Fires only when there are goblins nearby and the LLM hasn't ordered rest.
-  // Fighter moves toward the closest goblin; when on the same tile the goblin
-  // will deal/receive combat damage in tickGoblins (18 hp per hit vs 8 for others).
+  // ── 3.5. Fighter — hunt nearest adventurer within vision×2 ──────────────────
+  // Fires only when there are adventurers nearby and the LLM hasn't ordered rest.
+  // Fighter moves toward the closest adventurer; when on the same tile the adventurer
+  // will deal/receive combat damage in tickAdventurers (18 hp per hit vs 8 for others).
   // Fighters abandon the hunt when too hungry — survival trumps combat.
-  // Brave dwarves fight at 95 hunger; paranoid ones bail at 60.
-  const fleeAt = traitMod(dwarf, 'fleeThreshold', 80);
-  if (dwarf.role === 'fighter' && goblins && goblins.length > 0
-      && dwarf.hunger < fleeAt) {
-    const HUNT_RADIUS = dwarf.vision * 2;
-    const nearest = goblins.reduce<{ g: Goblin; dist: number } | null>((best, g) => {
-      const dist = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
+  // Brave goblins fight at 95 hunger; paranoid ones bail at 60.
+  const fleeAt = traitMod(goblin, 'fleeThreshold', 80);
+  if (goblin.role === 'fighter' && adventurers && adventurers.length > 0
+      && goblin.hunger < fleeAt) {
+    const HUNT_RADIUS = goblin.vision * 2;
+    const nearest = adventurers.reduce<{ g: Adventurer; dist: number } | null>((best, g) => {
+      const dist = Math.abs(g.x - goblin.x) + Math.abs(g.y - goblin.y);
       return (!best || dist < best.dist) ? { g, dist } : best;
     }, null);
     if (nearest && nearest.dist <= HUNT_RADIUS) {
       if (nearest.dist > 0) {
         // First step
         const step1 = pathNextStep(
-          { x: dwarf.x, y: dwarf.y },
+          { x: goblin.x, y: goblin.y },
           { x: nearest.g.x, y: nearest.g.y },
           grid,
         );
-        dwarf.x = step1.x;
-        dwarf.y = step1.y;
-        // Sprint — take a second step so fighters reliably close on fleeing goblins
+        goblin.x = step1.x;
+        goblin.y = step1.y;
+        // Sprint — take a second step so fighters reliably close on fleeing adventurers
         const step2 = pathNextStep(
-          { x: dwarf.x, y: dwarf.y },
+          { x: goblin.x, y: goblin.y },
           { x: nearest.g.x, y: nearest.g.y },
           grid,
         );
-        dwarf.x = step2.x;
-        dwarf.y = step2.y;
+        goblin.x = step2.x;
+        goblin.y = step2.y;
       }
-      const distAfterMove = Math.abs(nearest.g.x - dwarf.x) + Math.abs(nearest.g.y - dwarf.y);
+      const distAfterMove = Math.abs(nearest.g.x - goblin.x) + Math.abs(nearest.g.y - goblin.y);
       // Fighting is hard work — double fatigue for combat + sprint
-      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
-      dwarf.task = distAfterMove === 0
-        ? 'fighting goblin!'
-        : `→ goblin (${distAfterMove} tiles)`;
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
+      goblin.task = distAfterMove === 0
+        ? 'fighting adventurer!'
+        : `→ adventurer (${distAfterMove} tiles)`;
       return;
     }
   }
 
   // ── 4. Forage + harvest (Sugarscape rule) ─────────────────────────────
   // Each tick: move toward the richest food tile, then harvest wherever
-  // you land.  Scan radius scales with desperation so dwarves search wider
+  // you land.  Scan radius scales with desperation so goblins search wider
   // even without LLM enabled.  LLM 'forage' intent pins it to the max (15).
-  //   normal            → dwarf.vision
+  //   normal            → goblin.vision
   //   hungry (> 65)     → min(vision × 2, 15)   ← deterministic, no LLM needed
   //   LLM intent forage → 15
   // Miners/lumberjacks skip food foraging when not yet hungry — they prefer to mine/log.
@@ -902,115 +923,115 @@ export function tickAgent(
   // Dwarves with a full inventory also skip — step 4.2 handles depot routing,
   // and step 5 wander (with its 25% home-drift) handles the depot-full case.
   // This prevents the fill-up → rush-to-food → fill-up loop.
-  const inventoryFull  = dwarf.inventory.food >= MAX_INVENTORY_FOOD;
+  const inventoryFull  = goblin.inventory.food >= MAX_INVENTORY_FOOD;
   const skipFoodForage = inventoryFull
-    || ((dwarf.role === 'miner' || dwarf.role === 'lumberjack') && dwarf.hunger < 50 && dwarf.llmIntent !== 'forage');
-  const radius = dwarf.llmIntent === 'forage' ? 15
-    : dwarf.hunger > 65 ? Math.min(dwarf.vision * 2, 15)
-    : dwarf.vision;
-  const foodTarget = skipFoodForage ? null : bestFoodTile(dwarf, grid, radius);
-  // Sight-memory: record any rich food tile the dwarf can currently see
+    || ((goblin.role === 'miner' || goblin.role === 'lumberjack') && goblin.hunger < 50 && goblin.llmIntent !== 'forage');
+  const radius = goblin.llmIntent === 'forage' ? 15
+    : goblin.hunger > 65 ? Math.min(goblin.vision * 2, 15)
+    : goblin.vision;
+  const foodTarget = skipFoodForage ? null : bestFoodTile(goblin, grid, radius);
+  // Sight-memory: record any rich food tile the goblin can currently see
   if (foodTarget) {
     const tv = grid[foodTarget.y][foodTarget.x].foodValue;
     if (tv >= SITE_RECORD_THRESHOLD) {
-      recordSite(dwarf.knownFoodSites, foodTarget.x, foodTarget.y, tv, currentTick);
+      recordSite(goblin.knownFoodSites, foodTarget.x, foodTarget.y, tv, currentTick);
     }
   }
   if (foodTarget) {
-    if (dwarf.x !== foodTarget.x || dwarf.y !== foodTarget.y) {
-      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, foodTarget, grid);
-      dwarf.x    = next.x;
-      dwarf.y    = next.y;
-      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
+    if (goblin.x !== foodTarget.x || goblin.y !== foodTarget.y) {
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, foodTarget, grid);
+      goblin.x    = next.x;
+      goblin.y    = next.y;
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate);
     }
-    const here = grid[dwarf.y][dwarf.x];
+    const here = grid[goblin.y][goblin.x];
 
-    // Contest yield — if a hungrier dwarf is on the same tile, let them harvest first.
+    // Contest yield — if a hungrier goblin is on the same tile, let them harvest first.
     // Allies (relation ≥ 60) share peacefully — no contest, no penalty.
-    if (dwarves) {
-      const rival = dwarves.find(d =>
-        d.alive && d.id !== dwarf.id &&
-        d.x === dwarf.x && d.y === dwarf.y &&
-        d.hunger > dwarf.hunger,
+    if (goblins) {
+      const rival = goblins.find(d =>
+        d.alive && d.id !== goblin.id &&
+        d.x === goblin.x && d.y === goblin.y &&
+        d.hunger > goblin.hunger,
       );
       if (rival) {
-        const relation = dwarf.relations[rival.id] ?? 50;
+        const relation = goblin.relations[rival.id] ?? 50;
         if (relation >= 60) {
           // Ally — yield peacefully, small relation boost for cooperation
-          dwarf.relations[rival.id] = Math.min(100, relation + 2);
-          dwarf.task = `sharing tile with ${rival.name}`;
+          goblin.relations[rival.id] = Math.min(100, relation + 2);
+          goblin.task = `sharing tile with ${rival.name}`;
           // Don't step away — just skip harvest this tick so ally eats
           return;
         }
-        // Non-ally: contest breeds resentment (mean dwarves take it harder)
-        const penalty = traitMod(dwarf, 'contestPenalty', -5);
-        dwarf.relations[rival.id] = Math.max(0, relation + penalty);
+        // Non-ally: contest breeds resentment (mean goblins take it harder)
+        const penalty = traitMod(goblin, 'contestPenalty', -5);
+        goblin.relations[rival.id] = Math.max(0, relation + penalty);
         // Step away to break the standoff rather than blocking indefinitely
         const escapeDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
         const escapeOpen = escapeDirs
-          .map(d => ({ x: dwarf.x + d.dx, y: dwarf.y + d.dy }))
+          .map(d => ({ x: goblin.x + d.dx, y: goblin.y + d.dy }))
           .filter(p => isWalkable(grid, p.x, p.y));
         if (escapeOpen.length > 0) {
           const step = escapeOpen[Math.floor(Math.random() * escapeOpen.length)];
-          dwarf.x = step.x;
-          dwarf.y = step.y;
+          goblin.x = step.x;
+          goblin.y = step.y;
         }
-        dwarf.task = `yielding to ${rival.name}`;
+        goblin.task = `yielding to ${rival.name}`;
         return;
       }
     }
 
     // inventoryFull → skipFoodForage → foodTarget=null, so we only reach this
     // point when there IS headroom.  Re-compute here for the harvest cap.
-    const headroom = MAX_INVENTORY_FOOD - dwarf.inventory.food;
+    const headroom = MAX_INVENTORY_FOOD - goblin.inventory.food;
     if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
       // Deplete tile aggressively, but yield less to inventory — encourages exploration
-      const depletionRate   = dwarf.role === 'forager' ? 6 : 5;
-      const baseYield       = dwarf.role === 'forager' ? 2 : 1;
+      const depletionRate   = goblin.role === 'forager' ? 6 : 5;
+      const baseYield       = goblin.role === 'forager' ? 2 : 1;
       // Morale scales harvest yield: 0.5× at morale 0, 1.0× at morale 100
-      const moraleScale     = 0.5 + (dwarf.morale / 100) * 0.5;
+      const moraleScale     = 0.5 + (goblin.morale / 100) * 0.5;
       // Fatigue > 70 halves harvest yield
-      const fatigueScale    = dwarf.fatigue > 70 ? 0.5 : 1.0;
+      const fatigueScale    = goblin.fatigue > 70 ? 0.5 : 1.0;
       const harvestYield    = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale));
-      dwarf.fatigue         = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
+      goblin.fatigue         = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
       const hadFood         = here.foodValue;
       const depleted        = Math.min(hadFood, depletionRate);
       here.foodValue        = Math.max(0, hadFood - depleted);
-      // Fully depleted tile reverts to bare dirt — forces dwarves to seek fresh patches.
+      // Fully depleted tile reverts to bare dirt — forces goblins to seek fresh patches.
       // New patches sprout periodically via tickMushroomSprout() in WorldScene.
       if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
       const amount          = Math.min(harvestYield, depleted, headroom);
-      dwarf.inventory.food += amount;
-      const label           = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
-      dwarf.task            = `${label} (food: ${dwarf.inventory.food.toFixed(0)})`;
+      goblin.inventory.food += amount;
+      const label           = goblin.llmIntent === 'forage' ? 'foraging (LLM)' : 'harvesting';
+      goblin.task            = `${label} (food: ${goblin.inventory.food.toFixed(0)})`;
     } else {
-      const label = dwarf.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
-      dwarf.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
+      const label = goblin.llmIntent === 'forage' ? 'foraging (LLM)' : 'foraging';
+      goblin.task  = `${label} → (${foodTarget.x},${foodTarget.y})`;
     }
     return;
   }
 
   // ── 4.2. Return home to deposit surplus food ──────────────────────────
   // Head to the nearest food stockpile that still has capacity to receive a deposit.
-  // Threshold matches step 2.8 (≥ 10 food) so dwarves only make the trip
+  // Threshold matches step 2.8 (≥ 10 food) so goblins only make the trip
   // when they'll actually deposit on arrival.
   const nearestFoodStockpileWithCapacity = foodStockpiles
     ?.filter(d => d.food < d.maxFood)
     .reduce<FoodStockpile | null>((best, d) => {
-      const dist     = Math.abs(d.x - dwarf.x) + Math.abs(d.y - dwarf.y);
-      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      const dist     = Math.abs(d.x - goblin.x) + Math.abs(d.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? d : best;
     }, null) ?? null;
-  if (nearestFoodStockpileWithCapacity && dwarf.inventory.food >= 10 && dwarf.hunger < 55
-      && !(dwarf.x === nearestFoodStockpileWithCapacity.x && dwarf.y === nearestFoodStockpileWithCapacity.y)) {
+  if (nearestFoodStockpileWithCapacity && goblin.inventory.food >= 10 && goblin.hunger < 55
+      && !(goblin.x === nearestFoodStockpileWithCapacity.x && goblin.y === nearestFoodStockpileWithCapacity.y)) {
     const next = pathNextStep(
-      { x: dwarf.x, y: dwarf.y },
+      { x: goblin.x, y: goblin.y },
       { x: nearestFoodStockpileWithCapacity.x, y: nearestFoodStockpileWithCapacity.y },
       grid,
     );
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
-    dwarf.task = `→ home (deposit)`;
+    goblin.x    = next.x;
+    goblin.y    = next.y;
+    goblin.task = `→ home (deposit)`;
     return;
   }
 
@@ -1020,21 +1041,21 @@ export function tickAgent(
   const nearestFoodStockpileWithFood = foodStockpiles
     ?.filter(d => d.food > 0)
     .reduce<FoodStockpile | null>((best, d) => {
-      const dist     = Math.abs(d.x - dwarf.x) + Math.abs(d.y - dwarf.y);
-      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      const dist     = Math.abs(d.x - goblin.x) + Math.abs(d.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? d : best;
     }, null) ?? null;
   if (nearestFoodStockpileWithFood
-      && !(dwarf.x === nearestFoodStockpileWithFood.x && dwarf.y === nearestFoodStockpileWithFood.y)
-      && dwarf.hunger > 65 && dwarf.inventory.food === 0) {
+      && !(goblin.x === nearestFoodStockpileWithFood.x && goblin.y === nearestFoodStockpileWithFood.y)
+      && goblin.hunger > 65 && goblin.inventory.food === 0) {
     const next = pathNextStep(
-      { x: dwarf.x, y: dwarf.y },
+      { x: goblin.x, y: goblin.y },
       { x: nearestFoodStockpileWithFood.x, y: nearestFoodStockpileWithFood.y },
       grid,
     );
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
-    dwarf.task = `→ stockpile (${nearestFoodStockpileWithFood.food.toFixed(0)} food)`;
+    goblin.x    = next.x;
+    goblin.y    = next.y;
+    goblin.task = `→ stockpile (${nearestFoodStockpileWithFood.food.toFixed(0)} food)`;
     return;
   }
 
@@ -1046,13 +1067,13 @@ export function tickAgent(
   //     surviving forageable tile and redirect the patch record to it.
   //   • If the whole patch is gone → evict the entry.
   // This means memory tracks the richest *surviving* tile in a patch, not
-  // a single tile that may have been eaten out from under the dwarf.
+  // a single tile that may have been eaten out from under the goblin.
   // Sated miners skip this so they head to ore instead of detouring to food.
-  if (!skipFoodForage && dwarf.knownFoodSites.length > 0) {
-    const best = dwarf.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
-    if (dwarf.x === best.x && dwarf.y === best.y) {
+  if (!skipFoodForage && goblin.knownFoodSites.length > 0) {
+    const best = goblin.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (goblin.x === best.x && goblin.y === best.y) {
       // Arrived — check if representative tile is still harvestable
-      const tileHere  = grid[dwarf.y][dwarf.x];
+      const tileHere  = grid[goblin.y][goblin.x];
       const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
       if (!stillGood) {
         // Scan patch radius for any surviving forageable tile
@@ -1071,24 +1092,24 @@ export function tickAgent(
         }
         if (better) {
           // Redirect the patch record to the richest surviving tile nearby
-          dwarf.knownFoodSites = dwarf.knownFoodSites.map(
+          goblin.knownFoodSites = goblin.knownFoodSites.map(
             s => (s.x === best.x && s.y === best.y) ? better! : s,
           );
         } else {
           // Patch exhausted — evict
-          dwarf.knownFoodSites = dwarf.knownFoodSites.filter(
+          goblin.knownFoodSites = goblin.knownFoodSites.filter(
             s => !(s.x === best.x && s.y === best.y),
           );
         }
       } else {
-        recordSite(dwarf.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
+        recordSite(goblin.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
       }
       // Fall through — step 4 will harvest on the next tick if the tile has food
     } else {
-      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
-      dwarf.x    = next.x;
-      dwarf.y    = next.y;
-      dwarf.task = `→ remembered patch`;
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, best, grid);
+      goblin.x    = next.x;
+      goblin.y    = next.y;
+      goblin.task = `→ remembered patch`;
       return;
     }
   }
@@ -1098,25 +1119,25 @@ export function tickAgent(
   // southward as new storage units are added.  Uses 3 ore per wall segment.
   // Find any ore stockpile with enough ore to pay for a wall.
   const buildStockpile = oreStockpiles?.find(s => s.ore >= 3) ?? null;
-  if (dwarf.role === 'miner' && foodStockpiles && foodStockpiles.length > 0
+  if (goblin.role === 'miner' && foodStockpiles && foodStockpiles.length > 0
       && oreStockpiles && oreStockpiles.length > 0 && buildStockpile
-      && dwarf.hunger < 65) {
+      && goblin.hunger < 65) {
     // Inner rooms first; once complete, switch to enclosing the compound
-    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
+    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) {
-      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, dwarves, dwarf.id, goblins);
+      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
     }
 
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
     for (const s of wallSlots) {
-      const dist = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
+      const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
       if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }
 
     if (nearestSlot) {
       const next = pathNextStep(
-        { x: dwarf.x, y: dwarf.y },
+        { x: goblin.x, y: goblin.y },
         { x: nearestSlot.x, y: nearestSlot.y },
         grid,
       );
@@ -1132,11 +1153,11 @@ export function tickAgent(
           growbackRate:  0,
         };
         buildStockpile.ore -= 3;
-        dwarf.task = 'built fort wall!';
+        goblin.task = 'built fort wall!';
       } else {
-        dwarf.x = next.x;
-        dwarf.y = next.y;
-        dwarf.task = '→ fort wall';
+        goblin.x = next.x;
+        goblin.y = next.y;
+        goblin.task = '→ fort wall';
       }
       return;
     }
@@ -1147,21 +1168,21 @@ export function tickAgent(
   const nearestOreStockpileWithCapacity = oreStockpiles
     ?.filter(s => s.ore < s.maxOre)
     .reduce<OreStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
-      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? s : best;
     }, null) ?? null;
-  if (dwarf.role === 'miner' && nearestOreStockpileWithCapacity
-      && dwarf.inventory.materials >= 8
-      && !(dwarf.x === nearestOreStockpileWithCapacity.x && dwarf.y === nearestOreStockpileWithCapacity.y)) {
+  if (goblin.role === 'miner' && nearestOreStockpileWithCapacity
+      && goblin.inventory.materials >= 8
+      && !(goblin.x === nearestOreStockpileWithCapacity.x && goblin.y === nearestOreStockpileWithCapacity.y)) {
     const next = pathNextStep(
-      { x: dwarf.x, y: dwarf.y },
+      { x: goblin.x, y: goblin.y },
       { x: nearestOreStockpileWithCapacity.x, y: nearestOreStockpileWithCapacity.y },
       grid,
     );
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
-    dwarf.task = `→ ore stockpile (${dwarf.inventory.materials.toFixed(0)} ore)`;
+    goblin.x    = next.x;
+    goblin.y    = next.y;
+    goblin.task = `→ ore stockpile (${goblin.inventory.materials.toFixed(0)} ore)`;
     return;
   }
 
@@ -1170,21 +1191,21 @@ export function tickAgent(
   const nearestWoodStockpileWithCapacity = woodStockpiles
     ?.filter(s => s.wood < s.maxWood)
     .reduce<WoodStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - dwarf.x) + Math.abs(s.y - dwarf.y);
-      const bestDist = best ? Math.abs(best.x - dwarf.x) + Math.abs(best.y - dwarf.y) : Infinity;
+      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? s : best;
     }, null) ?? null;
-  if (dwarf.role === 'lumberjack' && nearestWoodStockpileWithCapacity
-      && dwarf.inventory.materials >= 8
-      && !(dwarf.x === nearestWoodStockpileWithCapacity.x && dwarf.y === nearestWoodStockpileWithCapacity.y)) {
+  if (goblin.role === 'lumberjack' && nearestWoodStockpileWithCapacity
+      && goblin.inventory.materials >= 8
+      && !(goblin.x === nearestWoodStockpileWithCapacity.x && goblin.y === nearestWoodStockpileWithCapacity.y)) {
     const next = pathNextStep(
-      { x: dwarf.x, y: dwarf.y },
+      { x: goblin.x, y: goblin.y },
       { x: nearestWoodStockpileWithCapacity.x, y: nearestWoodStockpileWithCapacity.y },
       grid,
     );
-    dwarf.x    = next.x;
-    dwarf.y    = next.y;
-    dwarf.task = `→ wood stockpile (${dwarf.inventory.materials.toFixed(0)} wood)`;
+    goblin.x    = next.x;
+    goblin.y    = next.y;
+    goblin.task = `→ wood stockpile (${goblin.inventory.materials.toFixed(0)} wood)`;
     return;
   }
 
@@ -1192,11 +1213,11 @@ export function tickAgent(
   // When no ore is in vision, path toward the best-remembered ore site before
   // resorting to wander.  On arrival: refresh if still rich, scan the patch
   // radius for a surviving neighbour tile if depleted, evict if whole vein gone.
-  if (dwarf.role === 'miner' && dwarf.knownOreSites.length > 0) {
-    const best = dwarf.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
-    if (dwarf.x === best.x && dwarf.y === best.y) {
-      const mv = grid[dwarf.y][dwarf.x].type !== TileType.Forest
-        ? grid[dwarf.y][dwarf.x].materialValue : 0;
+  if (goblin.role === 'miner' && goblin.knownOreSites.length > 0) {
+    const best = goblin.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (goblin.x === best.x && goblin.y === best.y) {
+      const mv = grid[goblin.y][goblin.x].type !== TileType.Forest
+        ? grid[goblin.y][goblin.x].materialValue : 0;
       if (mv < 1) {
         // Scan patch radius for any surviving ore tile before evicting (skip Forest = wood)
         let better: ResourceSite | null = null;
@@ -1214,34 +1235,34 @@ export function tickAgent(
           }
         }
         if (better) {
-          dwarf.knownOreSites = dwarf.knownOreSites.map(
+          goblin.knownOreSites = goblin.knownOreSites.map(
             s => (s.x === best.x && s.y === best.y) ? better! : s,
           );
         } else {
-          dwarf.knownOreSites = dwarf.knownOreSites.filter(
+          goblin.knownOreSites = goblin.knownOreSites.filter(
             s => !(s.x === best.x && s.y === best.y),
           );
         }
-      } else if (grid[dwarf.y][dwarf.x].type !== TileType.Forest) {
-        recordSite(dwarf.knownOreSites, best.x, best.y, mv, currentTick);
+      } else if (grid[goblin.y][goblin.x].type !== TileType.Forest) {
+        recordSite(goblin.knownOreSites, best.x, best.y, mv, currentTick);
       }
       // Fall through — step 4.5 will mine on the next tick if value remains
     } else {
-      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
-      dwarf.x    = next.x;
-      dwarf.y    = next.y;
-      dwarf.task = `→ remembered ore`;
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, best, grid);
+      goblin.x    = next.x;
+      goblin.y    = next.y;
+      goblin.task = `→ remembered ore`;
       return;
     }
   }
 
   // ── 4.45b. Remembered forest patch (lumberjacks) ─────────────────────
   // Mirrors 4.45 logic for ore but targets forest tiles with wood.
-  if (dwarf.role === 'lumberjack' && dwarf.knownWoodSites.length > 0) {
-    const best = dwarf.knownWoodSites.reduce((a, b) => b.value > a.value ? b : a);
-    if (dwarf.x === best.x && dwarf.y === best.y) {
-      const mv = grid[dwarf.y][dwarf.x].materialValue;
-      if (mv < 1 || grid[dwarf.y][dwarf.x].type !== TileType.Forest) {
+  if (goblin.role === 'lumberjack' && goblin.knownWoodSites.length > 0) {
+    const best = goblin.knownWoodSites.reduce((a, b) => b.value > a.value ? b : a);
+    if (goblin.x === best.x && goblin.y === best.y) {
+      const mv = grid[goblin.y][goblin.x].materialValue;
+      if (mv < 1 || grid[goblin.y][goblin.x].type !== TileType.Forest) {
         // Scan patch radius for any surviving forest tile
         let better: ResourceSite | null = null;
         for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
@@ -1257,93 +1278,93 @@ export function tickAgent(
           }
         }
         if (better) {
-          dwarf.knownWoodSites = dwarf.knownWoodSites.map(
+          goblin.knownWoodSites = goblin.knownWoodSites.map(
             s => (s.x === best.x && s.y === best.y) ? better! : s,
           );
         } else {
-          dwarf.knownWoodSites = dwarf.knownWoodSites.filter(
+          goblin.knownWoodSites = goblin.knownWoodSites.filter(
             s => !(s.x === best.x && s.y === best.y),
           );
         }
       } else {
-        recordSite(dwarf.knownWoodSites, best.x, best.y, mv, currentTick);
+        recordSite(goblin.knownWoodSites, best.x, best.y, mv, currentTick);
       }
       // Fall through — step 4.5b will chop on the next tick if wood remains
     } else {
-      const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, best, grid);
-      dwarf.x    = next.x;
-      dwarf.y    = next.y;
-      dwarf.task = `→ remembered forest`;
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, best, grid);
+      goblin.x    = next.x;
+      goblin.y    = next.y;
+      goblin.task = `→ remembered forest`;
       return;
     }
   }
 
   // ── 4.5. Miners target ore/material tiles when no food found ──────────
-  if (dwarf.role === 'miner') {
-    const oreTarget = bestMaterialTile(dwarf, grid, dwarf.vision);
+  if (goblin.role === 'miner') {
+    const oreTarget = bestMaterialTile(goblin, grid, goblin.vision);
     // Sight-memory: record any rich ore tile currently visible
     if (oreTarget) {
       const mv = grid[oreTarget.y][oreTarget.x].materialValue;
       if (mv >= SITE_RECORD_THRESHOLD) {
-        recordSite(dwarf.knownOreSites, oreTarget.x, oreTarget.y, mv, currentTick);
+        recordSite(goblin.knownOreSites, oreTarget.x, oreTarget.y, mv, currentTick);
       }
     }
     if (oreTarget) {
-      if (dwarf.x !== oreTarget.x || dwarf.y !== oreTarget.y) {
-        const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, oreTarget, grid);
-        dwarf.x    = next.x;
-        dwarf.y    = next.y;
-        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
+      if (goblin.x !== oreTarget.x || goblin.y !== oreTarget.y) {
+        const next = pathNextStep({ x: goblin.x, y: goblin.y }, oreTarget, grid);
+        goblin.x    = next.x;
+        goblin.y    = next.y;
+        goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate);
       }
-      const here = grid[dwarf.y][dwarf.x];
+      const here = grid[goblin.y][goblin.x];
       if (here.materialValue >= 1) {
         const hadMat       = here.materialValue;
         const mined        = Math.min(hadMat, 2);
         here.materialValue = Math.max(0, hadMat - mined);
         // Exhausted ore vein reverts to bare stone — miners must find new veins
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        dwarf.inventory.materials = Math.min(
-          dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
+        goblin.inventory.materials = Math.min(
+          goblin.inventory.materials + mined, MAX_INVENTORY_FOOD,
         );
-        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
-        dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
+        goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
+        goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
       } else {
-        dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
+        goblin.task = `mining → (${oreTarget.x},${oreTarget.y})`;
       }
       return;
     }
   }
 
   // ── 4.5b. Lumberjacks target Forest tiles for wood ───────────────────
-  if (dwarf.role === 'lumberjack') {
-    const woodTarget = bestWoodTile(dwarf, grid, dwarf.vision);
+  if (goblin.role === 'lumberjack') {
+    const woodTarget = bestWoodTile(goblin, grid, goblin.vision);
     // Sight-memory: record any rich forest tile currently visible
     if (woodTarget) {
       const mv = grid[woodTarget.y][woodTarget.x].materialValue;
       if (mv >= SITE_RECORD_THRESHOLD) {
-        recordSite(dwarf.knownWoodSites, woodTarget.x, woodTarget.y, mv, currentTick);
+        recordSite(goblin.knownWoodSites, woodTarget.x, woodTarget.y, mv, currentTick);
       }
     }
     if (woodTarget) {
-      if (dwarf.x !== woodTarget.x || dwarf.y !== woodTarget.y) {
-        const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, woodTarget, grid);
-        dwarf.x    = next.x;
-        dwarf.y    = next.y;
-        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
+      if (goblin.x !== woodTarget.x || goblin.y !== woodTarget.y) {
+        const next = pathNextStep({ x: goblin.x, y: goblin.y }, woodTarget, grid);
+        goblin.x    = next.x;
+        goblin.y    = next.y;
+        goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate);
       }
-      const here = grid[dwarf.y][dwarf.x];
+      const here = grid[goblin.y][goblin.x];
       if (here.type === TileType.Forest && here.materialValue >= 1) {
         const hadWood      = here.materialValue;
         const chopped      = Math.min(hadWood, 2);
         here.materialValue = Math.max(0, hadWood - chopped);
         // Forest tile stays as Forest even when wood is depleted — it regrows
-        dwarf.inventory.materials = Math.min(
-          dwarf.inventory.materials + chopped, MAX_INVENTORY_FOOD,
+        goblin.inventory.materials = Math.min(
+          goblin.inventory.materials + chopped, MAX_INVENTORY_FOOD,
         );
-        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
-        dwarf.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
+        goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
+        goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
       } else {
-        dwarf.task = `→ forest (${woodTarget.x},${woodTarget.y})`;
+        goblin.task = `→ forest (${woodTarget.x},${woodTarget.y})`;
       }
       return;
     }
@@ -1355,26 +1376,26 @@ export function tickAgent(
   const WANDER_MAX_DIST   = 20;
 
   // 5a. Avoid — maximise distance from nearest rival within 5 tiles
-  if (dwarf.llmIntent === 'avoid' && dwarves) {
-    const rival = dwarves
-      .filter(r => r.alive && r.id !== dwarf.id)
-      .map(r    => ({ r, dist: Math.abs(r.x - dwarf.x) + Math.abs(r.y - dwarf.y) }))
+  if (goblin.llmIntent === 'avoid' && goblins) {
+    const rival = goblins
+      .filter(r => r.alive && r.id !== goblin.id)
+      .map(r    => ({ r, dist: Math.abs(r.x - goblin.x) + Math.abs(r.y - goblin.y) }))
       .filter(e  => e.dist <= 5)
       .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
 
     if (rival) {
       const avoidDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
       const avoidOpen = avoidDirs
-        .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
+        .map(d => ({ x: goblin.x + d.x, y: goblin.y + d.y }))
         .filter(p => isWalkable(grid, p.x, p.y));
       if (avoidOpen.length > 0) {
         const next = avoidOpen.reduce((best, p) =>
           (Math.abs(p.x - rival.x) + Math.abs(p.y - rival.y)) >
           (Math.abs(best.x - rival.x) + Math.abs(best.y - rival.y)) ? p : best,
         );
-        dwarf.x    = next.x;
-        dwarf.y    = next.y;
-        dwarf.task = `avoiding ${rival.name}`;
+        goblin.x    = next.x;
+        goblin.y    = next.y;
+        goblin.task = `avoiding ${rival.name}`;
       }
       return;
     }
@@ -1382,29 +1403,29 @@ export function tickAgent(
 
   // 5b. Persistent wander — pathfind toward a far-away waypoint held for
   // WANDER_HOLD_TICKS ticks.  Repick when expired or on arrival.
-  // ~25% of the time, drift toward home so dwarves naturally loop back to
+  // ~25% of the time, drift toward home so goblins naturally loop back to
   // the fort rather than permanently wandering the map's far edge.
 
   // Invalidate wander target if a wall (or other obstacle) was placed on it
-  // since we last set it — prevents dwarves from pathfinding into walls.
-  if (dwarf.wanderTarget && !isWalkable(grid, dwarf.wanderTarget.x, dwarf.wanderTarget.y)) {
-    dwarf.wanderTarget = null;
+  // since we last set it — prevents goblins from pathfinding into walls.
+  if (goblin.wanderTarget && !isWalkable(grid, goblin.wanderTarget.x, goblin.wanderTarget.y)) {
+    goblin.wanderTarget = null;
   }
 
-  if (!dwarf.wanderTarget || currentTick >= dwarf.wanderExpiry
-      || (dwarf.x === dwarf.wanderTarget.x && dwarf.y === dwarf.wanderTarget.y)) {
+  if (!goblin.wanderTarget || currentTick >= goblin.wanderExpiry
+      || (goblin.x === goblin.wanderTarget.x && goblin.y === goblin.wanderTarget.y)) {
     let picked = false;
 
     // Home drift — pull toward home but aim ±10 tiles out so the target lands
     // well outside the fort perimeter (MARGIN=2 → perimeter ≈ ±4 from depot).
-    // Paranoid dwarves drift home 50% of the time; others 25%.
-    const homeDrift = traitMod(dwarf, 'wanderHomeDrift', 0.25);
-    if (Math.random() < homeDrift && (dwarf.homeTile.x !== 0 || dwarf.homeTile.y !== 0)) {
-      const hx = dwarf.homeTile.x + Math.round((Math.random() - 0.5) * 20);
-      const hy = dwarf.homeTile.y + Math.round((Math.random() - 0.5) * 20);
+    // Paranoid goblins drift home 50% of the time; others 25%.
+    const homeDrift = traitMod(goblin, 'wanderHomeDrift', 0.25);
+    if (Math.random() < homeDrift && (goblin.homeTile.x !== 0 || goblin.homeTile.y !== 0)) {
+      const hx = goblin.homeTile.x + Math.round((Math.random() - 0.5) * 20);
+      const hy = goblin.homeTile.y + Math.round((Math.random() - 0.5) * 20);
       if (hx >= 0 && hx < GRID_SIZE && hy >= 0 && hy < GRID_SIZE && isWalkable(grid, hx, hy)) {
-        dwarf.wanderTarget = { x: hx, y: hy };
-        dwarf.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+        goblin.wanderTarget = { x: hx, y: hy };
+        goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
         picked = true;
       }
     }
@@ -1413,11 +1434,11 @@ export function tickAgent(
     for (let attempt = 0; attempt < 8; attempt++) {
       const angle = Math.random() * Math.PI * 2;
       const dist  = WANDER_MIN_DIST + Math.random() * (WANDER_MAX_DIST - WANDER_MIN_DIST);
-      const wx    = Math.round(dwarf.x + Math.cos(angle) * dist);
-      const wy    = Math.round(dwarf.y + Math.sin(angle) * dist);
+      const wx    = Math.round(goblin.x + Math.cos(angle) * dist);
+      const wy    = Math.round(goblin.y + Math.sin(angle) * dist);
       if (wx >= 0 && wx < GRID_SIZE && wy >= 0 && wy < GRID_SIZE && isWalkable(grid, wx, wy)) {
-        dwarf.wanderTarget = { x: wx, y: wy };
-        dwarf.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+        goblin.wanderTarget = { x: wx, y: wy };
+        goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
         picked = true;
         break;
       }
@@ -1427,21 +1448,21 @@ export function tickAgent(
       // Heavily constrained (surrounded by walls/water) — fall back to random adjacent step
       const fallDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
       const fallOpen = fallDirs
-        .map(d => ({ x: dwarf.x + d.x, y: dwarf.y + d.y }))
+        .map(d => ({ x: goblin.x + d.x, y: goblin.y + d.y }))
         .filter(p => isWalkable(grid, p.x, p.y));
       if (fallOpen.length > 0) {
         const fb = fallOpen[Math.floor(Math.random() * fallOpen.length)];
-        dwarf.x  = fb.x;
-        dwarf.y  = fb.y;
+        goblin.x  = fb.x;
+        goblin.y  = fb.y;
       }
-      dwarf.task = 'wandering';
+      goblin.task = 'wandering';
       return;
     }
   }
 
-  if (!dwarf.wanderTarget) { dwarf.task = 'idle'; return; }
-  const wanderNext = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.wanderTarget, grid);
-  dwarf.x    = wanderNext.x;
-  dwarf.y    = wanderNext.y;
-  dwarf.task = 'exploring';
+  if (!goblin.wanderTarget) { goblin.task = 'idle'; return; }
+  const wanderNext = pathNextStep({ x: goblin.x, y: goblin.y }, goblin.wanderTarget, grid);
+  goblin.x    = wanderNext.x;
+  goblin.y    = wanderNext.y;
+  goblin.task = 'exploring';
 }

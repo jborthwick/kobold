@@ -25,23 +25,23 @@ export interface Inventory {
 }
 
 /** Hostile NPC — spawns in raids from map edges. */
-export interface Goblin {
+export interface Adventurer {
   id:              string;
   x:               number;
   y:               number;
   health:          number;
   maxHealth:       number;
-  targetId:        string | null;  // id of the dwarf currently being chased
-  staggeredUntil?: number;         // tick until which the goblin cannot move (post-hit stagger)
+  targetId:        string | null;  // id of the goblin currently being chased
+  staggeredUntil?: number;         // tick until which the adventurer cannot move (post-hit stagger)
 }
 
 // PIANO step 5 — structured intent the LLM can set to override the BT
 export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'socialize' | 'none';
 
 // Permanent personality trait assigned at spawn
-export type DwarfTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
+export type GoblinTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
 
-// A tile location a dwarf has seen or visited — used for resource routing
+// A tile location a goblin has seen or visited — used for resource routing
 export interface ResourceSite {
   x:     number;
   y:     number;
@@ -59,7 +59,7 @@ export interface MemoryEntry {
 }
 
 // Agent role — assigned at spawn, permanent
-export type DwarfRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
+export type GoblinRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
 
 // Injury system — single wound slot, heals over time
 export type WoundType = 'bruised' | 'leg' | 'arm' | 'eye';
@@ -69,7 +69,7 @@ export interface Wound {
   healTick: number;    // tick at which the wound automatically heals
 }
 
-export interface Dwarf {
+export interface Goblin {
   id: string;
   name: string;
   x: number;  // tile coords
@@ -84,7 +84,7 @@ export interface Dwarf {
   alive: boolean;
   task: string;
   commandTarget: { x: number; y: number } | null;  // player-issued move order
-  llmReasoning:    string | null;    // last LLM decision shown in DwarfPanel
+  llmReasoning:    string | null;    // last LLM decision shown in GoblinPanel
   llmIntent:       LLMIntent | null; // active override intent (expires at llmIntentExpiry)
   llmIntentExpiry: number;           // tick after which intent is discarded
   memory:          MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
@@ -94,18 +94,18 @@ export interface Dwarf {
   knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
   knownWoodSites:  ResourceSite[];   // remembered forest wood sites (cap: 5)
   homeTile:        { x: number; y: number };  // fort/stockpile center — the colony's home base
-  role:            DwarfRole;
-  relations:       Record<string, number>;  // keyed by dwarf.id; 0–100 (50 = neutral)
-  trait:           DwarfTrait;  // permanent personality trait
+  role:            GoblinRole;
+  relations:       Record<string, number>;  // keyed by goblin.id; 0–100 (50 = neutral)
+  trait:           GoblinTrait;  // permanent personality trait
   bio:             string;      // quirky backstory blurb
   goal:            string;      // personal objective
   baseName:        string;      // name without roman numeral suffix (e.g. "Bomer")
-  generation:      number;      // 1 for original dwarves, increments for each succession
-  goblinKills:     number;      // lifetime count of goblins slain by this dwarf
-  causeOfDeath?:   string;      // set when dwarf dies; shown in HUD + passed to successor
+  generation:      number;      // 1 for original goblins, increments for each succession
+  adventurerKills:     number;      // lifetime count of adventurers slain by this goblin
+  causeOfDeath?:   string;      // set when goblin dies; shown in HUD + passed to successor
   fatigue:         number;      // 0–100; rises with movement/work, decays when resting
-  social:          number;      // 0–100; rises when isolated from friendly dwarves
-  lastSocialTick:  number;      // tick when dwarf last had a friend within proximity
+  social:          number;      // 0–100; rises when isolated from friendly goblins
+  lastSocialTick:  number;      // tick when goblin last had a friend within proximity
   lastLoggedTicks: Record<string, number>;  // cooldown tracking for event log (key = event type, value = tick)
   skillXp:         number;      // lifetime XP for role skill (0+)
   skillLevel:      number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
@@ -114,16 +114,16 @@ export interface Dwarf {
 
 export interface LogEntry {
   tick: number;
-  dwarfId: string;
-  dwarfName: string;
+  goblinId: string;
+  goblinName: string;
   message: string;
   level: 'info' | 'warn' | 'error';
 }
 
 export type OverlayMode = 'off' | 'food' | 'material' | 'wood';
 
-// Colony-wide shared goal — all dwarves contribute; cycles on completion
-export type ColonyGoalType = 'stockpile_food' | 'survive_ticks' | 'defeat_goblins' | 'enclose_fort';
+// Colony-wide shared goal — all goblins contribute; cycles on completion
+export type ColonyGoalType = 'stockpile_food' | 'survive_ticks' | 'defeat_adventurers' | 'enclose_fort';
 
 export interface ColonyGoal {
   type:        ColonyGoalType;
@@ -171,10 +171,10 @@ export interface TileInfo {
 export interface MiniMapData {
   /** One cell per tile: type + food fill ratio (0–1). */
   tiles:    { type: TileType; foodRatio: number; matRatio: number }[][];
-  /** Alive dwarf positions and hunger (0–100). */
-  dwarves:  { x: number; y: number; hunger: number }[];
-  /** Goblin positions. */
-  goblins:  { x: number; y: number }[];
+  /** Alive goblin positions and hunger (0–100). */
+  goblins:  { x: number; y: number; hunger: number }[];
+  /** Adventurer positions. */
+  adventurers:  { x: number; y: number }[];
   /** Camera viewport in tile-space. */
   viewport: { x: number; y: number; w: number; h: number };
 }
@@ -194,10 +194,10 @@ export interface Chapter {
 
 export interface GameState {
   tick: number;
-  dwarves: Dwarf[];
+  goblins: Goblin[];
   totalFood: number;
   totalMaterials: number;
-  selectedDwarfId: string | null;
+  selectedGoblinId: string | null;
   overlayMode: OverlayMode;
   paused: boolean;
   speed: number;  // multiplier: 0.25 | 0.5 | 1 | 2 | 4

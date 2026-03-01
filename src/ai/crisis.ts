@@ -10,7 +10,7 @@
  * Proxy routes: /api/llm-proxy → Anthropic, /api/groq-proxy → Groq
  */
 
-import type { Dwarf, Tile, LLMIntent, Goblin, ColonyGoal } from '../shared/types';
+import type { Goblin, Tile, LLMIntent, Adventurer, ColonyGoal } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
 
@@ -56,10 +56,10 @@ const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tick
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
-const GOBLIN_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within this distance
+const ADVENTURER_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within this distance
 const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
 const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis
-const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/dwarf/hour
+const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/goblin/hour
 
 // ── Crisis priority ──────────────────────────────────────────────────────────
 //
@@ -88,31 +88,31 @@ const CRISIS_PRIORITY: Record<string, CrisisPriority> = {
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
 export function detectCrisis(
-  dwarf:    Dwarf,
-  dwarves:  Dwarf[],
+  goblin:    Goblin,
+  goblins:  Goblin[],
   _grid:    Tile[][],
-  goblins?: Goblin[],
+  adventurers?: Adventurer[],
 ): CrisisSituation | null {
-  if (!dwarf.alive) return null;
+  if (!goblin.alive) return null;
 
-  const alive      = dwarves.filter(d => d.alive);
+  const alive      = goblins.filter(d => d.alive);
   const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
-  const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
+  const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} goblins. Health: ${goblin.health}/${goblin.maxHealth}.`;
 
-  // ── Goblin raid — checked first (most urgent) ─────────────────────────────
-  // Only fighters and brave dwarves get LLM raid calls — everyone else always
+  // ── Adventurer raid — checked first (most urgent) ─────────────────────────────
+  // Only fighters and brave goblins get LLM raid calls — everyone else always
   // flees via BT, so the LLM call is wasted budget. This cuts 3-4 calls per
-  // raid event. Also skip if the dwarf is too far away (can't engage anyway).
-  if (goblins && goblins.length > 0 && (dwarf.role === 'fighter' || dwarf.trait === 'brave')) {
-    const nearest = goblins.reduce<{ goblin: Goblin; dist: number } | null>((best, g) => {
-      const d = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
-      return (!best || d < best.dist) ? { goblin: g, dist: d } : best;
+  // raid event. Also skip if the goblin is too far away (can't engage anyway).
+  if (adventurers && adventurers.length > 0 && (goblin.role === 'fighter' || goblin.trait === 'brave')) {
+    const nearest = adventurers.reduce<{ adventurer: Adventurer; dist: number } | null>((best, g) => {
+      const d = Math.abs(g.x - goblin.x) + Math.abs(g.y - goblin.y);
+      return (!best || d < best.dist) ? { adventurer: g, dist: d } : best;
     }, null);
-    if (nearest && nearest.dist <= GOBLIN_RAID_AWARENESS) {
+    if (nearest && nearest.dist <= ADVENTURER_RAID_AWARENESS) {
       return {
-        type:          'goblin_raid',
+        type:          'adventurer_raid',
         description:   `Goblins are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
-        colonyContext: `${goblins.length} goblin${goblins.length !== 1 ? 's' : ''} in the area. ${ctx}`,
+        colonyContext: `${adventurers.length} adventurer${adventurers.length !== 1 ? 's' : ''} in the area. ${ctx}`,
       };
     }
   }
@@ -120,80 +120,80 @@ export function detectCrisis(
   // Low supplies — fires when inventory nearly empty AND hunger is rising.
   // This catches the realistic crisis *before* starvation, while there's
   // still time to act (go harvest, steal from rival, etc.).
-  if (dwarf.inventory.food <= LOW_SUPPLIES_FOOD && dwarf.hunger >= LOW_SUPPLIES_HUNGER) {
+  if (goblin.inventory.food <= LOW_SUPPLIES_FOOD && goblin.hunger >= LOW_SUPPLIES_HUNGER) {
     return {
       type:        'low_supplies',
-      description: `You are running out of food (only ${dwarf.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${dwarf.hunger.toFixed(0)}/100).`,
+      description: `You are running out of food (only ${goblin.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${goblin.hunger.toFixed(0)}/100).`,
       colonyContext: ctx,
     };
   }
 
   // Hunger crisis — fires when hungry, regardless of whether they still have some food
-  if (dwarf.hunger >= HUNGER_CRISIS_THRESHOLD) {
+  if (goblin.hunger >= HUNGER_CRISIS_THRESHOLD) {
     return {
       type:        'hunger',
-      description: `You are very hungry (hunger ${dwarf.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${dwarf.inventory.food.toFixed(0)} units).`,
+      description: `You are very hungry (hunger ${goblin.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${goblin.inventory.food.toFixed(0)} units).`,
       colonyContext: ctx,
     };
   }
 
   // Morale breaking point (morale decays in tickAgent when hungry)
-  if (dwarf.morale <= MORALE_CRISIS_THRESHOLD) {
+  if (goblin.morale <= MORALE_CRISIS_THRESHOLD) {
     return {
       type:        'morale',
-      description: `Your morale has fallen to ${dwarf.morale.toFixed(0)}/100. You are struggling to keep going.`,
+      description: `Your morale has fallen to ${goblin.morale.toFixed(0)}/100. You are struggling to keep going.`,
       colonyContext: ctx,
     };
   }
 
   // Exhaustion — fires when fatigue is critically high
-  if (dwarf.fatigue >= EXHAUSTION_THRESHOLD) {
+  if (goblin.fatigue >= EXHAUSTION_THRESHOLD) {
     return {
       type:        'exhaustion',
-      description: `You are exhausted (fatigue ${dwarf.fatigue.toFixed(0)}/100). Your body aches and you can barely keep moving.`,
+      description: `You are exhausted (fatigue ${goblin.fatigue.toFixed(0)}/100). Your body aches and you can barely keep moving.`,
       colonyContext: ctx,
     };
   }
 
   // Loneliness — fires when social need is critically high
-  if (dwarf.social >= LONELINESS_THRESHOLD) {
+  if (goblin.social >= LONELINESS_THRESHOLD) {
     return {
       type:        'loneliness',
-      description: `You feel lonely and isolated (social need ${dwarf.social.toFixed(0)}/100). You haven't been near a friend in a long time.`,
+      description: `You feel lonely and isolated (social need ${goblin.social.toFixed(0)}/100). You haven't been near a friend in a long time.`,
       colonyContext: ctx,
     };
   }
 
   // Resource contest — rival within CONTEST_RADIUS tiles targeting the same area
   // Scouts have wider situational awareness
-  const contestRadius = dwarf.role === 'scout' ? 4 : CONTEST_RADIUS;
+  const contestRadius = goblin.role === 'scout' ? 4 : CONTEST_RADIUS;
   const rival = alive.find(d =>
-    d.id !== dwarf.id &&
-    Math.abs(d.x - dwarf.x) <= contestRadius &&
-    Math.abs(d.y - dwarf.y) <= contestRadius &&
+    d.id !== goblin.id &&
+    Math.abs(d.x - goblin.x) <= contestRadius &&
+    Math.abs(d.y - goblin.y) <= contestRadius &&
     d.inventory.food < 3,   // only contest if rival is also food-hungry
   );
   if (rival) {
     return {
       type:        'resource_contest',
-      description: `${rival.name} is nearby (${Math.abs(rival.x - dwarf.x) + Math.abs(rival.y - dwarf.y)} tiles away) competing for the same scarce food.`,
-      colonyContext: `You carry ${dwarf.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
+      description: `${rival.name} is nearby (${Math.abs(rival.x - goblin.x) + Math.abs(rival.y - goblin.y)} tiles away) competing for the same scarce food.`,
+      colonyContext: `You carry ${goblin.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
     };
   }
 
-  // Resource sharing — fires when well-fed AND a nearby dwarf is struggling
+  // Resource sharing — fires when well-fed AND a nearby goblin is struggling
   const SHARE_RADIUS = 2;
-  if (dwarf.inventory.food >= 8) {
+  if (goblin.inventory.food >= 8) {
     const needyNeighbor = alive.find(d =>
-      d.id !== dwarf.id &&
-      Math.abs(d.x - dwarf.x) <= SHARE_RADIUS &&
-      Math.abs(d.y - dwarf.y) <= SHARE_RADIUS &&
+      d.id !== goblin.id &&
+      Math.abs(d.x - goblin.x) <= SHARE_RADIUS &&
+      Math.abs(d.y - goblin.y) <= SHARE_RADIUS &&
       d.hunger > 60 && d.inventory.food < 3,
     );
     if (needyNeighbor) {
       return {
         type:        'resource_sharing',
-        description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food). You are well-supplied with ${dwarf.inventory.food.toFixed(0)} units.`,
+        description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food). You are well-supplied with ${goblin.inventory.food.toFixed(0)} units.`,
         colonyContext: ctx,
       };
     }
@@ -204,41 +204,42 @@ export function detectCrisis(
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
-function roleLabel(dwarf: Dwarf): string {
-  if (dwarf.role === 'forager') return 'Forager — you specialize in harvesting food efficiently.';
-  if (dwarf.role === 'miner')   return 'Miner — you prioritize mining ore and stone over foraging.';
-  if (dwarf.role === 'fighter') return 'Fighter — you protect the colony by hunting and killing goblins.';
-  return 'Scout — you have wide vision and detect threats early.';
+function roleLabel(goblin: Goblin): string {
+  if (goblin.role === 'forager')    return 'Scavenger — you find food that hasn\'t gone completely bad yet.';
+  if (goblin.role === 'miner')      return 'Rock Biter — you chew through stone and sometimes find shiny things.';
+  if (goblin.role === 'fighter')    return 'Basher — you clobber adventurers who dare enter the colony.';
+  if (goblin.role === 'lumberjack') return 'Tree Puncher — you punch trees until they fall down (usually).';
+  return 'Sneaky Git — you have wide vision and detect threats early (mostly by being paranoid).';
 }
 
-function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[], colonyGoal?: ColonyGoal): string {
+function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin[], colonyGoal?: ColonyGoal): string {
   // PIANO step 2 — inject short-term memory if present (cap at 5 entries; with VERIFY outcomes)
-  const memBlock = dwarf.memory.length > 0
-    ? `\nRECENT DECISIONS:\n${dwarf.memory.slice(-5).map(m => {
+  const memBlock = goblin.memory.length > 0
+    ? `\nRECENT DECISIONS:\n${goblin.memory.slice(-5).map(m => {
         const out = m.outcome ? ` → OUTCOME: ${m.outcome}` : '';
         return `  [tick ${m.tick}] ${m.crisis}: "${m.action}"${out}`;
       }).join('\n')}`
     : '';
 
-  // Relationship context — include all dwarves whose relation has meaningfully diverged from neutral
-  const others = dwarves.filter(d => d.id !== dwarf.id && d.alive);
+  // Relationship context — include all goblins whose relation has meaningfully diverged from neutral
+  const others = goblins.filter(d => d.id !== goblin.id && d.alive);
   const relParts: string[] = [];
   others
-    .filter(d => (dwarf.relations[d.id] ?? 50) > 60)
-    .sort((a, b) => (dwarf.relations[b.id] ?? 50) - (dwarf.relations[a.id] ?? 50))
-    .forEach(d => relParts.push(`Ally: ${d.name} (bond ${(dwarf.relations[d.id] ?? 50).toFixed(0)}/100)`));
+    .filter(d => (goblin.relations[d.id] ?? 50) > 60)
+    .sort((a, b) => (goblin.relations[b.id] ?? 50) - (goblin.relations[a.id] ?? 50))
+    .forEach(d => relParts.push(`Ally: ${d.name} (bond ${(goblin.relations[d.id] ?? 50).toFixed(0)}/100)`));
   others
-    .filter(d => (dwarf.relations[d.id] ?? 50) < 40)
-    .sort((a, b) => (dwarf.relations[a.id] ?? 50) - (dwarf.relations[b.id] ?? 50))
-    .forEach(d => relParts.push(`Rival: ${d.name} (tension ${(100 - (dwarf.relations[d.id] ?? 50)).toFixed(0)}/100)`));
+    .filter(d => (goblin.relations[d.id] ?? 50) < 40)
+    .sort((a, b) => (goblin.relations[a.id] ?? 50) - (goblin.relations[b.id] ?? 50))
+    .forEach(d => relParts.push(`Rival: ${d.name} (tension ${(100 - (goblin.relations[d.id] ?? 50)).toFixed(0)}/100)`));
   const relBlock = relParts.length > 0 ? `\nRelationships: ${relParts.join('. ')}` : '';
 
   const goalLine = colonyGoal
     ? `\nColony goal: ${colonyGoal.description} (${colonyGoal.progress.toFixed(0)}/${colonyGoal.target})`
     : '';
 
-  const homeDist = Math.round(Math.hypot(dwarf.x - dwarf.homeTile.x, dwarf.y - dwarf.homeTile.y));
-  const homeStr  = `Fort home at (${dwarf.homeTile.x},${dwarf.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
+  const homeDist = Math.round(Math.hypot(goblin.x - goblin.homeTile.x, goblin.y - goblin.homeTile.y));
+  const homeStr  = `Fort home at (${goblin.homeTile.x},${goblin.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
 
   const WOUND_EFFECTS: Record<string, string> = {
     bruised: 'tiring faster',
@@ -246,17 +247,17 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[],
     arm:     'weak arm, reduced harvesting and combat',
     eye:     'impaired vision, can\'t see far',
   };
-  const skillLine = (dwarf.skillLevel ?? 0) > 0
-    ? `\nSkill: Level ${dwarf.skillLevel} ${dwarf.role} (${dwarf.skillXp} XP).`
+  const skillLine = (goblin.skillLevel ?? 0) > 0
+    ? `\nSkill: Level ${goblin.skillLevel} ${goblin.role} (${goblin.skillXp} XP).`
     : '';
-  const woundLine = dwarf.wound
-    ? `\nWOUNDED: ${dwarf.wound.type} — ${WOUND_EFFECTS[dwarf.wound.type] ?? dwarf.wound.type}.`
+  const woundLine = goblin.wound
+    ? `\nWOUNDED: ${goblin.wound.type} — ${WOUND_EFFECTS[goblin.wound.type] ?? goblin.wound.type}.`
     : '';
 
-  return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
-Personality: ${dwarf.trait}. "${dwarf.bio}". Personal goal: ${dwarf.goal}.
-Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100, Fatigue: ${dwarf.fatigue.toFixed(0)}/100, Social need: ${dwarf.social.toFixed(0)}/100
-Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}. ${homeStr}${skillLine}${woundLine}
+  return `You are ${goblin.name}, a goblin ${roleLabel(goblin)}
+Personality: ${goblin.trait}. "${goblin.bio}". Personal goal: ${goblin.goal}.
+Status — Health: ${goblin.health}/${goblin.maxHealth}, Hunger: ${goblin.hunger.toFixed(0)}/100, Morale: ${goblin.morale.toFixed(0)}/100, Fatigue: ${goblin.fatigue.toFixed(0)}/100, Social need: ${goblin.social.toFixed(0)}/100
+Food carried: ${goblin.inventory.food.toFixed(0)} units. Current task: ${goblin.task}. ${homeStr}${skillLine}${woundLine}
 
 CRISIS: ${situation.description}
 Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}
@@ -269,24 +270,24 @@ Respond ONLY as valid JSON (no markdown, no extra text):
   "emotional_state": "3-5 words describing how you feel",
   "expectedOutcome": "one short sentence — what you expect to happen"
 }
-intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still and recover fatigue, avoid=move away from rivals/goblins, socialize=seek out a friendly dwarf for company, none=normal behaviour`;
+intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still and recover fatigue, avoid=move away from rivals/adventurers, socialize=seek out a friendly goblin for company, none=normal behaviour`;
 }
 
 // ── LLM Decision System ───────────────────────────────────────────────────────
 
 type DecisionCallback = (
-  dwarf:     Dwarf,
+  goblin:     Goblin,
   decision:  LLMDecision,
   situation: CrisisSituation,
 ) => void;
 
 interface VerifySnapshot {
-  dwarfId:          string;
+  goblinId:          string;
   verifyAtTick:     number;        // currentTick + 40
   intent:           LLMIntent;
   hungerAtDecision: number;
   foodAtDecision:   number;
-  memoryEntryIndex: number;        // index into dwarf.memory to backfill
+  memoryEntryIndex: number;        // index into goblin.memory to backfill
 }
 
 export class LLMDecisionSystem {
@@ -301,7 +302,7 @@ export class LLMDecisionSystem {
   private cooldownUntil       = new Map<string, number>();
   // Medium-priority crises use a longer cooldown (2×) to save budget
   private mediumCooldownUntil = new Map<string, number>();
-  // Colony-wide raid cooldown — only one dwarf responds via LLM per raid wave
+  // Colony-wide raid cooldown — only one goblin responds via LLM per raid wave
   private raidCooldownUntil = 0;
   // PIANO step 6 — pending outcome verifications
   private pendingVerifications = new Map<string, VerifySnapshot>();
@@ -369,20 +370,20 @@ export class LLMDecisionSystem {
    * isn't on cooldown.  Never awaited — the game loop must not block.
    */
   requestDecision(
-    dwarf:       Dwarf,
-    dwarves:     Dwarf[],
+    goblin:       Goblin,
+    goblins:     Goblin[],
     grid:        Tile[][],
     currentTick: number,
-    goblins:     Goblin[],
+    adventurers:     Adventurer[],
     onDecision:  DecisionCallback,
     colonyGoal?: ColonyGoal,
   ): void {
     if (!this.enabled)                                         return;
-    if (!dwarf.alive)                                          return;
-    if (this.pendingRequests.has(dwarf.id))                    return;
-    if ((this.cooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
+    if (!goblin.alive)                                          return;
+    if (this.pendingRequests.has(goblin.id))                    return;
+    if ((this.cooldownUntil.get(goblin.id) ?? 0) > currentTick) return;
 
-    const situation = detectCrisis(dwarf, dwarves, grid, goblins);
+    const situation = detectCrisis(goblin, goblins, grid, adventurers);
     if (!situation) return;
 
     // ── Priority filter ──────────────────────────────────────────────────────
@@ -392,10 +393,10 @@ export class LLMDecisionSystem {
     const priority = CRISIS_PRIORITY[situation.type] ?? 'low';
     if (priority === 'low') return;
     if (priority === 'medium') {
-      if ((this.mediumCooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
+      if ((this.mediumCooldownUntil.get(goblin.id) ?? 0) > currentTick) return;
     }
-    // Colony-wide raid cooldown — one LLM call per raid wave, not one per dwarf
-    if (situation.type === 'goblin_raid') {
+    // Colony-wide raid cooldown — one LLM call per raid wave, not one per goblin
+    if (situation.type === 'adventurer_raid') {
       if (this.raidCooldownUntil > currentTick) return;
       this.raidCooldownUntil = currentTick + COOLDOWN_TICKS;
     }
@@ -403,26 +404,26 @@ export class LLMDecisionSystem {
     // Rate-limit gate — skip if provider's RPM/RPD budget is exhausted
     if (!this.canCallNow()) return;
 
-    const promise = this.callLLM(dwarf, situation, dwarves, colonyGoal);
-    this.pendingRequests.set(dwarf.id, promise);
+    const promise = this.callLLM(goblin, situation, goblins, colonyGoal);
+    this.pendingRequests.set(goblin.id, promise);
 
     // Detached — resolves on its own; game loop continues
     promise.then(decision => {
-      this.pendingRequests.delete(dwarf.id);
-      this.cooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS);
+      this.pendingRequests.delete(goblin.id);
+      this.cooldownUntil.set(goblin.id, currentTick + COOLDOWN_TICKS);
       // Medium-priority crises get 2× cooldown so they fire half as often
-      this.mediumCooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS * 2);
+      this.mediumCooldownUntil.set(goblin.id, currentTick + COOLDOWN_TICKS * 2);
       if (decision) {
-        onDecision(dwarf, decision, situation);
+        onDecision(goblin, decision, situation);
         // PIANO step 6 — schedule outcome verification after 40 ticks
         if (decision.intent && decision.intent !== 'none') {
-          this.pendingVerifications.set(dwarf.id, {
-            dwarfId:          dwarf.id,
+          this.pendingVerifications.set(goblin.id, {
+            goblinId:          goblin.id,
             verifyAtTick:     currentTick + 40,
             intent:           decision.intent,
-            hungerAtDecision: dwarf.hunger,
-            foodAtDecision:   dwarf.inventory.food,
-            memoryEntryIndex: dwarf.memory.length - 1,
+            hungerAtDecision: goblin.hunger,
+            foodAtDecision:   goblin.inventory.food,
+            memoryEntryIndex: goblin.memory.length - 1,
           });
         }
       }
@@ -433,26 +434,26 @@ export class LLMDecisionSystem {
    * Called once per game tick from WorldScene. Checks pending verifications,
    * backfills outcomes into memory, and returns surprise messages for the log.
    */
-  public checkVerifications(dwarves: Dwarf[], currentTick: number): string[] {
+  public checkVerifications(goblins: Goblin[], currentTick: number): string[] {
     const surprises: string[] = [];
     for (const [id, snap] of this.pendingVerifications) {
       if (currentTick < snap.verifyAtTick) continue;
       this.pendingVerifications.delete(id);
-      const dwarf = dwarves.find(d => d.id === id && d.alive);
-      if (!dwarf) continue;
-      const result = this.evaluateOutcome(dwarf, snap);
+      const goblin = goblins.find(d => d.id === id && d.alive);
+      if (!goblin) continue;
+      const result = this.evaluateOutcome(goblin, snap);
       if (result) {
-        const entry = dwarf.memory[snap.memoryEntryIndex];
+        const entry = goblin.memory[snap.memoryEntryIndex];
         if (entry) entry.outcome = result;
-        surprises.push(`${dwarf.name}: ${result}`);
+        surprises.push(`${goblin.name}: ${result}`);
       }
     }
     return surprises;
   }
 
-  private evaluateOutcome(dwarf: Dwarf, snap: VerifySnapshot): string | null {
-    const hungerDelta = dwarf.hunger - snap.hungerAtDecision;
-    const foodDelta   = dwarf.inventory.food - snap.foodAtDecision;
+  private evaluateOutcome(goblin: Goblin, snap: VerifySnapshot): string | null {
+    const hungerDelta = goblin.hunger - snap.hungerAtDecision;
+    const foodDelta   = goblin.inventory.food - snap.foodAtDecision;
     switch (snap.intent) {
       case 'eat':    return hungerDelta >= 0
         ? `eating failed — hunger rose ${hungerDelta.toFixed(0)}`
@@ -460,20 +461,20 @@ export class LLMDecisionSystem {
       case 'forage': return foodDelta <= 0
         ? `foraging failed — no food collected`
         : null;
-      case 'rest':   return dwarf.hunger > 80
-        ? `resting while starving (hunger ${dwarf.hunger.toFixed(0)})`
+      case 'rest':   return goblin.hunger > 80
+        ? `resting while starving (hunger ${goblin.hunger.toFixed(0)})`
         : null;
-      case 'socialize': return dwarf.social > 70
-        ? `socializing failed — still lonely (social ${dwarf.social.toFixed(0)})`
+      case 'socialize': return goblin.social > 70
+        ? `socializing failed — still lonely (social ${goblin.social.toFixed(0)})`
         : null;
       default:       return null;
     }
   }
 
   private async callLLM(
-    dwarf:      Dwarf,
+    goblin:      Goblin,
     situation:  CrisisSituation,
-    dwarves:    Dwarf[],
+    goblins:    Goblin[],
     colonyGoal?: ColonyGoal,
   ): Promise<LLMDecision | null> {
     const cfg = PROVIDERS[this.provider];
@@ -486,16 +487,16 @@ export class LLMDecisionSystem {
         body: JSON.stringify({
           model:      cfg.model,
           max_tokens: cfg.maxTokens,
-          messages: [{ role: 'user', content: buildPrompt(dwarf, situation, dwarves, colonyGoal) }],
+          messages: [{ role: 'user', content: buildPrompt(goblin, situation, goblins, colonyGoal) }],
         }),
       });
 
       if (res.status === 429) {
-        console.warn(`[LLM/${this.provider}] rate-limited (429) for ${dwarf.name} — backing off`);
+        console.warn(`[LLM/${this.provider}] rate-limited (429) for ${goblin.name} — backing off`);
         return null;
       }
       if (!res.ok) {
-        console.warn(`[LLM/${this.provider}] HTTP ${res.status} for ${dwarf.name}`);
+        console.warn(`[LLM/${this.provider}] HTTP ${res.status} for ${goblin.name}`);
         return null;
       }
 
@@ -544,16 +545,16 @@ export const llmSystem = new LLMDecisionSystem();
  * Returns a short sentence (≤120 chars) or null on failure / timeout.
  * Never throws; always safe to fire-and-forget.
  */
-export async function callSuccessionLLM(dead: Dwarf, successor: Dwarf): Promise<string | null> {
+export async function callSuccessionLLM(dead: Goblin, successor: Goblin): Promise<string | null> {
   if (!llmSystem.canCallNowPublic()) return null; // rate-limit gate
   const cfg = PROVIDERS[llmSystem.provider];
   const memSnippet = dead.memory.length > 0
     ? ` Their last known acts: ${dead.memory.slice(-2).map(m => `"${m.action}"`).join(', ')}.`
     : '';
   const prompt =
-    `You are ${successor.name}, a new ${successor.role} dwarf arriving at a small colony. ` +
+    `You are ${successor.name}, a new goblin stumbling into a chaotic colony. ` +
     `${dead.name} (${dead.role}) recently died here.${memSnippet} ` +
-    `In one sentence (max 15 words), what is your first thought on arriving? ` +
+    `In one sentence (max 15 words), what is your first thought? Be funny and goblin-like. ` +
     `Reply with just the sentence, no quotes.`;
   try {
     llmSystem.recordCallPublic();

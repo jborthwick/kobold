@@ -48,7 +48,7 @@ export function EventLog({ layout = 'desktop' as LayoutMode }: { layout?: Layout
           : entries.map((e, i) => (
               <div key={i} style={{ ...styles.entry, color: levelColor(e.level) }}>
                 <span style={styles.tick}>[{e.tick}]</span>
-                <span style={styles.name}>{e.dwarfName}</span>
+                <span style={styles.name}>{e.goblinName}</span>
                 {e.message}
               </div>
             ))

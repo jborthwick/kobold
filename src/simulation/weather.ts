@@ -1,5 +1,5 @@
 /**
- * Weather system — a global state that modifies growback rates and dwarf metabolism.
+ * Weather system — a global state that modifies growback rates and goblin metabolism.
  *
  * Weather creates cascading scarcity/abundance without touching any agent logic
  * directly.  Drought → growback drops → food dries up → hunger crisis → morale

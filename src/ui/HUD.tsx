@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
 import type { LLMProvider } from '../ai/crisis';
-import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin, Season, WeatherType, Chapter } from '../shared/types';
+import { GOBLIN_TRAIT_DISPLAY, GOBLIN_ROLE_DISPLAY } from '../simulation/agents';
+import type { GameState, Goblin, OverlayMode, GoblinRole, GoblinTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Adventurer, Season, WeatherType, Chapter } from '../shared/types';
 import type { LayoutMode } from '../shared/useViewport';
 
-/** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
+/** Find the goblin with the highest/lowest relation score relative to `goblin`. */
 function topRelation(
-  dwarf:   Dwarf,
-  all:     Dwarf[],
+  goblin:   Goblin,
+  all:     Goblin[],
   mode:    'ally' | 'rival',
 ): { name: string; score: number } | null {
-  const others = all.filter(d => d.id !== dwarf.id);
+  const others = all.filter(d => d.id !== goblin.id);
   if (others.length === 0) return null;
   const sorted = others
-    .map(d => ({ name: d.name, score: dwarf.relations[d.id] ?? 50 }))
+    .map(d => ({ name: d.name, score: goblin.relations[d.id] ?? 50 }))
     .sort((a, b) => mode === 'ally' ? b.score - a.score : a.score - b.score);
   const top = sorted[0];
   if (mode === 'ally'  && top.score <= 55) return null;
@@ -46,7 +47,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   if (!state) return null;
 
-  const alive = state.dwarves.filter(d => d.alive);
+  const alive = state.goblins.filter(d => d.alive);
   const isPhone = layout === 'phone';
   const isDesktop = layout === 'desktop';
 
@@ -64,7 +65,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   return (
     <div style={topBarStyle}>
-      <Stat label={isPhone ? 'd' : 'dwarves'} value={`${alive.length}/${state.dwarves.length}`} />
+      <Stat label={isPhone ? 'g' : 'goblins'} value={`${alive.length}/${state.goblins.length}`} />
       <Stat label={isPhone ? 'f' : 'food'}    value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'm' : 'mats'}    value={state.totalMaterials.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
@@ -118,7 +119,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 }
 
 /** Standalone panel that sits at the bottom of the right sidebar. */
-export function SelectedDwarfPanel() {
+export function SelectedGoblinPanel() {
   const [state, setState] = useState<GameState | null>(null);
 
   useEffect(() => {
@@ -126,11 +127,11 @@ export function SelectedDwarfPanel() {
     return () => bus.off('gameState', setState);
   }, []);
 
-  if (!state?.selectedDwarfId) return null;
-  const selected = state.dwarves.find(d => d.id === state.selectedDwarfId);
+  if (!state?.selectedGoblinId) return null;
+  const selected = state.goblins.find(d => d.id === state.selectedGoblinId);
   if (!selected) return null;
 
-  return <DwarfPanel dwarf={selected} allDwarves={state.dwarves} />;
+  return <GoblinPanel goblin={selected} allGoblins={state.goblins} />;
 }
 
 /** Debug panel showing live LLM token usage for the current session. */
@@ -257,10 +258,10 @@ export function StockpilePanel() {
   const label    = isFoodSp ? 'Food Stockpile' : isOreSp ? 'Ore Stockpile' : 'Wood Stockpile';
   const resource = isFoodSp ? 'food' : isOreSp ? 'ore' : 'wood';
 
-  // Count dwarves carrying items of this type
+  // Count goblins carrying items of this type
   const carriers = isFoodSp
-    ? state.dwarves.filter(d => d.alive && d.inventory.food > 0).length
-    : state.dwarves.filter(d => d.alive && d.inventory.materials > 0).length;
+    ? state.goblins.filter(d => d.alive && d.inventory.food > 0).length
+    : state.goblins.filter(d => d.alive && d.inventory.materials > 0).length;
 
   return (
     <div style={{ ...styles.panel, borderLeft: `2px solid ${color}` }}>
@@ -274,33 +275,33 @@ export function StockpilePanel() {
         <div style={{ fontSize: 9, color: '#999', marginTop: 2 }}>{amount.toFixed(0)} / {max}</div>
       </div>
       <div style={{ fontSize: 9, color: '#888' }}>
-        dwarves carrying {resource}: <span style={{ color }}>{carriers}</span>
+        goblins carrying {resource}: <span style={{ color }}>{carriers}</span>
       </div>
     </div>
   );
 }
 
-/** Panel shown when the player clicks a goblin. */
-export function GoblinPanel() {
-  const [goblin, setGoblin] = useState<Goblin | null>(null);
+/** Panel shown when the player clicks an adventurer. */
+export function AdventurerPanel() {
+  const [adventurer, setAdventurer] = useState<Adventurer | null>(null);
 
   useEffect(() => {
-    bus.on('goblinSelect', setGoblin);
-    return () => bus.off('goblinSelect', setGoblin);
+    bus.on('adventurerSelect', setAdventurer);
+    return () => bus.off('adventurerSelect', setAdventurer);
   }, []);
 
-  if (!goblin) return null;
+  if (!adventurer) return null;
 
-  const hpPct = goblin.maxHealth > 0 ? Math.min(1, goblin.health / goblin.maxHealth) : 0;
+  const hpPct = adventurer.maxHealth > 0 ? Math.min(1, adventurer.health / adventurer.maxHealth) : 0;
   return (
     <div style={{ ...styles.panel, borderLeft: '2px solid #e74c3c' }}>
-      <div style={{ ...styles.panelName, color: '#e74c3c' }}>⚔ Goblin</div>
+      <div style={{ ...styles.panelName, color: '#e74c3c' }}>⚔ Adventurer</div>
       <div style={{ fontSize: 9, color: '#888', marginBottom: 6 }}>
-        pos ({goblin.x}, {goblin.y}){goblin.targetId ? ' · pursuing' : ' · wandering'}
+        pos ({adventurer.x}, {adventurer.y}){adventurer.targetId ? ' · pursuing' : ' · wandering'}
       </div>
-      <Bar label="health" value={goblin.health} max={goblin.maxHealth} color="#e74c3c" />
+      <Bar label="health" value={adventurer.health} max={adventurer.maxHealth} color="#e74c3c" />
       <div style={{ fontSize: 9, color: '#999', marginTop: 3 }}>
-        {goblin.health.toFixed(0)} / {goblin.maxHealth} hp
+        {adventurer.health.toFixed(0)} / {adventurer.maxHealth} hp
         {hpPct < 0.5 && <span style={{ color: '#e67e22', marginLeft: 6 }}>⚠ wounded</span>}
       </div>
       <div style={{ fontSize: 9, color: '#666', marginTop: 4, fontStyle: 'italic' }}>
@@ -506,7 +507,7 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
   );
 }
 
-function roleColor(role: DwarfRole): string {
+function roleColor(role: GoblinRole): string {
   return role === 'forager'    ? '#56d973'
        : role === 'miner'      ? '#ff8800'
        : role === 'fighter'    ? '#e74c3c'
@@ -514,7 +515,7 @@ function roleColor(role: DwarfRole): string {
        : '#7ec8e3';  // scout
 }
 
-const TRAIT_COLORS: Record<DwarfTrait, string> = {
+const TRAIT_COLORS: Record<GoblinTrait, string> = {
   lazy:      '#888',
   forgetful: '#9988cc',
   helpful:   '#56d973',
@@ -524,66 +525,66 @@ const TRAIT_COLORS: Record<DwarfTrait, string> = {
   greedy:    '#f0c040',
   cheerful:  '#ff9fd8',
 };
-function traitColor(trait: DwarfTrait): string {
+function traitColor(trait: GoblinTrait): string {
   return TRAIT_COLORS[trait] ?? '#aaa';
 }
 
-function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }) {
-  const ally  = topRelation(dwarf, allDwarves, 'ally');
-  const rival = topRelation(dwarf, allDwarves, 'rival');
+function GoblinPanel({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Goblin[] }) {
+  const ally  = topRelation(goblin, allGoblins, 'ally');
+  const rival = topRelation(goblin, allGoblins, 'rival');
 
   return (
-    <div style={{ ...styles.panel, ...(!dwarf.alive ? styles.panelDead : {}) }}>
-      <div style={styles.panelName}>{dwarf.name}</div>
-      {dwarf.alive
-        ? <div style={{ color: roleColor(dwarf.role), fontSize: 10, marginBottom: 4 }}>[{dwarf.role.toUpperCase()}]</div>
+    <div style={{ ...styles.panel, ...(!goblin.alive ? styles.panelDead : {}) }}>
+      <div style={styles.panelName}>{goblin.name}</div>
+      {goblin.alive
+        ? <div style={{ color: roleColor(goblin.role), fontSize: 10, marginBottom: 4 }}>[{GOBLIN_ROLE_DISPLAY[goblin.role]}]</div>
         : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>
-            [DECEASED{dwarf.causeOfDeath ? ` — ${dwarf.causeOfDeath}` : ''}]
+            [DECEASED{goblin.causeOfDeath ? ` — ${goblin.causeOfDeath}` : ''}]
           </div>
       }
       <div style={{ fontSize: 9, color: '#a08060', fontStyle: 'italic', marginBottom: 4 }}>
-        {dwarf.bio}
+        {goblin.bio}
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-        <span style={{ color: traitColor(dwarf.trait), fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }}>
-          {dwarf.trait}
+        <span style={{ color: traitColor(goblin.trait), fontSize: 9, fontWeight: 'bold' }}>
+          {GOBLIN_TRAIT_DISPLAY[goblin.trait]}
         </span>
-        <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {dwarf.goal}</span>
+        <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {goblin.goal}</span>
       </div>
-      <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
-      <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
-      <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
-      <Bar label="fatigue" value={dwarf.fatigue} max={100}            color="#9b59b6" />
-      <Bar label="social" value={dwarf.social}  max={100}             color="#f39c12" />
+      <Bar label="health" value={goblin.health}  max={goblin.maxHealth} color="#e74c3c" />
+      <Bar label="hunger" value={goblin.hunger}  max={100}             color="#e67e22" />
+      <Bar label="morale" value={goblin.morale}  max={100}             color="#3498db" />
+      <Bar label="fatigue" value={goblin.fatigue} max={100}            color="#9b59b6" />
+      <Bar label="social" value={goblin.social}  max={100}             color="#f39c12" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
-        <span>🍄 {dwarf.inventory.food.toFixed(1)}</span>
-        {dwarf.role === 'lumberjack'
-          ? <span style={{ color: '#8bc34a' }}>🪵 {dwarf.inventory.materials.toFixed(1)}</span>
-          : <span style={{ color: '#ff8800' }}>⛏ {dwarf.inventory.materials.toFixed(1)}</span>
+        <span>🍄 {goblin.inventory.food.toFixed(1)}</span>
+        {goblin.role === 'lumberjack'
+          ? <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.materials.toFixed(1)}</span>
+          : <span style={{ color: '#ff8800' }}>⛏ {goblin.inventory.materials.toFixed(1)}</span>
         }
-        {dwarf.goblinKills > 0 && (
-          <span style={{ color: '#e74c3c' }}>⚔ {dwarf.goblinKills} kill{dwarf.goblinKills !== 1 ? 's' : ''}</span>
+        {goblin.adventurerKills > 0 && (
+          <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
         )}
-        {(dwarf.skillLevel ?? 0) > 0 && (
-          <span style={{ color: '#ffd700' }}>⭐ Lv.{dwarf.skillLevel} {dwarf.role}</span>
+        {(goblin.skillLevel ?? 0) > 0 && (
+          <span style={{ color: '#ffd700' }}>⭐ Lv.{goblin.skillLevel} {goblin.role}</span>
         )}
       </div>
-      {dwarf.wound && (
+      {goblin.wound && (
         <div style={{ ...styles.panelRow, color: '#ff6b6b', fontSize: 10 }}>
-          🩹 {dwarf.wound.type} wound
+          🩹 {goblin.wound.type} wound
         </div>
       )}
-      <div style={styles.task}>{dwarf.task}</div>
+      <div style={styles.task}>{goblin.task}</div>
       {(ally || rival) && (
         <div style={styles.relSection}>
           {ally  && <div style={styles.relAlly}>♥ {ally.name} ({ally.score})</div>}
           {rival && <div style={styles.relRival}>⚔ {rival.name} ({100 - rival.score})</div>}
         </div>
       )}
-      {dwarf.memory.length > 0 && (
+      {goblin.memory.length > 0 && (
         <div style={styles.memorySection}>
           <div style={styles.memoryHeader}>HISTORY</div>
-          {[...dwarf.memory].reverse().map((m, i) => (
+          {[...goblin.memory].reverse().map((m, i) => (
             <div key={i} style={styles.memoryEntry}>
               <div>
                 <span style={styles.memoryTick}>[{m.tick}]</span>
