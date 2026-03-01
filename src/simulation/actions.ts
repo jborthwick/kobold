@@ -155,12 +155,14 @@ const eat: Action = {
     return sigmoid(dwarf.hunger, mid);
   },
   execute: ({ dwarf, currentTick, onLog }) => {
+    const wasDesperatelyHungry = dwarf.hunger > 80;
     const bite = Math.min(dwarf.inventory.food, 3);
     dwarf.inventory.food -= bite;
     dwarf.hunger = Math.max(0, dwarf.hunger - bite * 20);
     dwarf.task = 'eating';
-    if (shouldLog(dwarf, 'eat', currentTick, 60)) {
-      onLog?.(`🍖 ${traitText(dwarf, 'eat')}`, 'info');
+    // Only log desperate eating — routine meals are too noisy
+    if (wasDesperatelyHungry && shouldLog(dwarf, 'eat', currentTick, 200)) {
+      onLog?.(`🍖 ${traitText(dwarf, 'eat')} — was starving`, 'warn');
     }
   },
 };
@@ -171,12 +173,10 @@ const rest: Action = {
   intentMatch: 'rest',
   eligible: ({ dwarf }) => dwarf.fatigue > 20,
   score: ({ dwarf }) => sigmoid(dwarf.fatigue, 60),
-  execute: ({ dwarf, currentTick, onLog }) => {
+  execute: ({ dwarf }) => {
     dwarf.fatigue = Math.max(0, dwarf.fatigue - 1.5);
     dwarf.task = 'resting';
-    if (shouldLog(dwarf, 'rest', currentTick, 60)) {
-      onLog?.(`💤 ${traitText(dwarf, 'rest')}`, 'info');
-    }
+    // Rest is routine — no log entry (too noisy)
   },
 };
 

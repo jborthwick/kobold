@@ -78,9 +78,8 @@ function updateNeeds(
       onLog?.('😤 morale is dangerously low', 'warn');
     }
   }
-  if (dwarf.morale > 75 && shouldLog(dwarf, 'morale_high', currentTick, 300)) {
-    onLog?.('😊 feeling great', 'info');
-  }
+  // High morale is the default state — not worth logging individually
+  // (colony-wide morale shifts are reported by world events instead)
 
   // Fatigue — tiny idle decay; traits via fatigueRate applied at action sites
   dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.05);
@@ -116,6 +115,27 @@ function updateNeeds(
     }
   }
 }
+
+// ── Narrative action names for log display ─────────────────────────────────────
+
+const ACTION_DISPLAY_NAMES: Record<string, string> = {
+  eat:          'eating',
+  rest:         'resting',
+  forage:       'foraging',
+  mine:         'mining',
+  chop:         'logging',
+  fight:        'fighting',
+  share:        'sharing food',
+  depositFood:  'stockpiling food',
+  withdrawFood: 'raiding the stockpile',
+  depositOre:   'hauling ore',
+  depositWood:  'hauling wood',
+  buildWall:    'building',
+  socialize:    'socializing',
+  avoidRival:   'avoiding a rival',
+  wander:       'exploring',
+  commandMove:  'following orders',
+};
 
 // ── Selector loop ──────────────────────────────────────────────────────────────
 
@@ -249,10 +269,12 @@ export function tickAgentUtility(
     }
   }
 
-  // Close-call log: top two scores within 0.08 and both meaningful — interesting decisions
-  if (bestAction && secondScore >= 0 && bestScore - secondScore <= 0.08 && bestScore > 0.3) {
-    if (shouldLog(dwarf, 'close_call', currentTick, 50)) {
-      onLog?.(`⚖ torn between ${bestAction.name} and ${secondName} (${bestScore.toFixed(2)} vs ${secondScore.toFixed(2)})`, 'info');
+  // Close-call log: only truly agonizing decisions (within 0.03, both urgent)
+  if (bestAction && secondScore >= 0 && bestScore - secondScore <= 0.03 && bestScore > 0.45) {
+    if (shouldLog(dwarf, 'close_call', currentTick, 400)) {
+      const nameA = ACTION_DISPLAY_NAMES[bestAction.name] ?? bestAction.name;
+      const nameB = ACTION_DISPLAY_NAMES[secondName] ?? secondName;
+      onLog?.(`⚖ agonizing over ${nameA} vs ${nameB}`, 'info');
     }
   }
 
