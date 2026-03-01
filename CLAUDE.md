@@ -308,19 +308,24 @@ Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/dw
 
 - **Grid:** 64×64 tiles, 16×16 px (Kenney 1-bit `colored_packed.png`)
 - **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom
-- **Layout:** Fully procedural every game — nothing is hardcoded. `generateWorld()`
-  returns `{ grid, spawnZone }`:
-  - **River:** base Y chosen randomly at 35–55% of map height; sinusoidal wiggle applied
-    via two overlapping sine waves (`Math.sin(x * 0.07 …) + Math.sin(x * 0.18 …)`).
-    `riverBandMin / riverBandMax` are the conservative extremes used to keep features clear.
-    Two column-range gaps left as crossings.
-  - **Forest clusters:** 2–3 large blobs on far side of river, 1 small blob near spawn.
-    Each placed with `placeForestCluster(cx, cy, r, foodMin, foodMax)`.
-  - **Ore clusters:** 1–2 clusters on far side (opposite forest-heavy side).
-  - **Mushroom clusters:** 5–8 patches (radius 2–4) scattered across the map.
-  - **Farmland:** 1–2 strips (~4×3 tiles) on the spawn side as fallback food.
-  - **Spawn zone:** 12×6 rectangle, centred horizontally, placed on a random side of the
-    river. Cleared last (overwrites all terrain to walkable Dirt).
+- **Layout:** Dual-noise biome classification (Red Blob Games pattern).
+  `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`:
+  - **Noise fields:** Two independent Simplex noise fields (elevation + moisture) via
+    `simplex-noise` npm package, seeded with Mulberry32 PRNG. Fractal Brownian motion
+    (3 octaves, persistence 0.5, lacunarity 2.0) at each tile.
+  - **Biome lookup:** `classifyBiome(elevation, moisture) → TileType`:
+    - Water: elevation < 0.22 (natural lakes/ponds)
+    - LOW (0.22–0.38): Mushroom / Farmland / Grass / Dirt by moisture
+    - MED (0.38–0.58): Forest / Grass / Dirt by moisture
+    - HIGH (0.58–0.78): Forest / Dirt / Stone by moisture
+    - PEAK (≥ 0.78): Ore / Stone by moisture
+  - **Resource values** derived from noise position (not random): `tileResourceValues()`
+    maps tile type + elevation/moisture to food/material/growback using WORLD_CONFIG constants.
+  - **No explicit river** — water bodies emerge naturally from the elevation field.
+  - **Spawn zone:** 12×6 rectangle, best of 40 seeded random candidates + center fallback.
+    Scored by walkability (>80% non-water) and nearby food count (15-tile radius).
+    If < 20 food tiles nearby, a guaranteed mushroom patch is seeded ~6 tiles away.
+  - **Fully seeded:** same seed = identical world. Seed displayed in console.
 - **`FORAGEABLE_TILES`** (`src/simulation/agents.ts`): `Set<TileType>` listing harvestable
   tile types. Currently `{ Mushroom }`. Add one line to unlock a new food source.
 - **Harvest split:** tile loses `depletionRate` (5–6) per visit but dwarf only gains
@@ -470,6 +475,21 @@ Every dwarf acted identically regardless of personality.
 - **Emergent cascades:** winter cold → fast depletion + high metabolism → hunger → low morale →
   reduced harvest + stress metabolism → greedy hoarding → relation grudges → sharing blocked →
   starvation spiral → storyteller sends relief → spring rain → recovery
+
+### Iteration 9 ✅ — Dual-noise biome world generation
+- **Simplex noise biome classification** (Red Blob Games pattern): two independent noise fields
+  (elevation + moisture) with fractal Brownian motion → biome lookup table replaces hand-placed
+  cluster stampers. Each seed produces genuinely different world topology
+- **Seeded Mulberry32 PRNG** inline (~10 lines) instead of `alea` (CJS-only, incompatible with
+  `verbatimModuleSyntax: true`). `simplex-noise` v4 accepts any `() => number`
+- **Removed explicit sinusoidal river** — water bodies emerge naturally from elevation < 0.22
+- **Removed cluster stampers** (`placeForestCluster`, `placeOreCluster`, `placeMushroomCluster`,
+  `placeFarmland`) and 8-pass ordered placement system
+- **Noise-based spawn placement**: best of 40 seeded random candidates + center fallback,
+  scored by walkability (>80% non-water) and nearby food count (15-tile radius)
+- **World seed saved and restored** in `SaveData` (`worldSeed?: string`, backward compatible)
+- **Coherent biome regions**: forests cluster in moist midlands, mushroom bogs in wet lowlands,
+  ore/stone on dry peaks — 2-3 distinct biome regions on 64×64 map
 
 ---
 

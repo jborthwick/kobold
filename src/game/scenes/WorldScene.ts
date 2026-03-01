@@ -80,6 +80,8 @@ export class WorldScene extends Phaser.Scene {
 
   // Event log history (persisted to save, restored on load)
   private logHistory: LogEntry[] = [];
+  // World seed — stored for save/load and display
+  private worldSeed = '';
 
   // WASD keys (null when keyboard unavailable on touch devices)
   private wasd: {
@@ -147,13 +149,16 @@ export class WorldScene extends Phaser.Scene {
       setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
       // Restore weather or initialize if save predates weather system
       this.weather = save.weather ?? createWeather(save.tick);
+      this.worldSeed = save.worldSeed ?? '';
     } else {
       bus.emit('clearLog', undefined);
       this.logHistory = [];
       // New game — procedural world + fresh dwarves
-      const { grid, spawnZone } = generateWorld();
+      const { grid, spawnZone, seed } = generateWorld();
       this.grid      = grid;
       this.spawnZone = spawnZone;
+      this.worldSeed = seed;
+      console.log('World seed:', seed);
       this.dwarves   = spawnDwarves(this.grid, spawnZone);
       resetGoblins();
       this.goblins = spawnInitialGoblins(this.grid, 3);
@@ -358,6 +363,7 @@ export class WorldScene extends Phaser.Scene {
       logHistory:         [...this.logHistory],
       nextWorldEventTick: getNextEventTick(),
       weather:            { ...this.weather },
+      worldSeed:          this.worldSeed,
     };
   }
 

@@ -21,6 +21,8 @@ export interface SaveData {
   nextWorldEventTick: number;
   /** Weather state — optional for backward compat with old saves. */
   weather?: Weather;
+  /** World seed — optional for backward compat with old saves. */
+  worldSeed?: string;
 }
 
 const KEY = 'kobold_save_v1';
