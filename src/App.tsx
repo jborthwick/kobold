@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PhaserGame } from './game/PhaserGame';
-import { HUD, SelectedDwarfPanel, ColonyGoalPanel, StockpilePanel, GoblinPanel, TokenDebugPanel } from './ui/HUD';
+import { HUD, SelectedDwarfPanel, ColonyGoalPanel, ChroniclePanel, StockpilePanel, GoblinPanel, TokenDebugPanel } from './ui/HUD';
 import { EventLog } from './ui/EventLog';
 import { MiniMap } from './ui/MiniMap';
 import { TilePicker } from './ui/TilePicker';
@@ -64,6 +64,7 @@ export default function App() {
           pointerEvents: 'none',
         }}>
           <ColonyGoalPanel />
+          <ChroniclePanel />
           <EventLog layout={layout} />
           <SelectedDwarfPanel />
           <StockpilePanel />

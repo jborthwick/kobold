@@ -6,13 +6,48 @@
  *  - LLMDecisionSystem    singleton class; manages in-flight requests and
  *                         per-agent cooldowns; never blocks the game loop
  *
- * Proxy route: /api/llm-proxy → Vite dev server → api.anthropic.com/v1/messages
- * In production this will be a Cloudflare Worker at the same path.
+ * Providers: Anthropic (Claude) and Groq (Llama) — switchable at runtime.
+ * Proxy routes: /api/llm-proxy → Anthropic, /api/groq-proxy → Groq
  */
 
 import type { Dwarf, Tile, LLMIntent, Goblin, ColonyGoal } from '../shared/types';
 import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
+
+// ── LLM provider abstraction ─────────────────────────────────────────────────
+
+export type LLMProvider = 'anthropic' | 'groq';
+
+export interface ProviderConfig {
+  url:          string;
+  model:        string;
+  maxTokens:    number;
+  /** Client-side rate limits — 0 = unlimited (e.g. Anthropic). */
+  rateLimit:    { maxRPM: number; maxRPD: number };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extractText:  (data: any) => string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extractUsage: (data: any) => { input: number; output: number };
+}
+
+export const PROVIDERS: Record<LLMProvider, ProviderConfig> = {
+  anthropic: {
+    url:          '/api/llm-proxy',
+    model:        'claude-haiku-4-5',
+    maxTokens:    256,
+    rateLimit:    { maxRPM: 0, maxRPD: 0 },  // Anthropic limits are generous; no client gating
+    extractText:  (d) => d?.content?.[0]?.text ?? '',
+    extractUsage: (d) => ({ input: d?.usage?.input_tokens ?? 0, output: d?.usage?.output_tokens ?? 0 }),
+  },
+  groq: {
+    url:          '/api/groq-proxy',
+    model:        'meta-llama/llama-4-scout-17b-16e-instruct',
+    maxTokens:    256,
+    rateLimit:    { maxRPM: 25, maxRPD: 900 },  // free tier: 30 RPM / 1K RPD — leave headroom
+    extractText:  (d) => d?.choices?.[0]?.message?.content ?? '',
+    extractUsage: (d) => ({ input: d?.usage?.prompt_tokens ?? 0, output: d?.usage?.completion_tokens ?? 0 }),
+  },
+};
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -25,7 +60,30 @@ const GOBLIN_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within thi
 const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
 const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis
 const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/dwarf/hour
-const MODEL                     = 'claude-haiku-4-5';
+
+// ── Crisis priority ──────────────────────────────────────────────────────────
+//
+// Not every crisis needs an LLM call. Low-priority crises (hunger, exhaustion,
+// loneliness) have obvious BT-handled responses — the LLM would just say "eat",
+// "rest", or "socialize" every time, burning rate-limit budget for zero emergent
+// value. Only high-priority crises with genuine decision space are sent to the LLM.
+//
+// Medium-priority crises (morale) are interesting for flavor but the mechanical
+// response is still deterministic — we send them at a lower rate by requiring a
+// longer cooldown.
+
+type CrisisPriority = 'high' | 'medium' | 'low';
+
+const CRISIS_PRIORITY: Record<string, CrisisPriority> = {
+  goblin_raid:      'high',    // fight-or-flee dilemma, personality-dependent
+  low_supplies:     'high',    // genuine decision point — forage, share, depot?
+  resource_contest: 'high',    // social dilemma — trait/relation driven
+  resource_sharing: 'high',    // greedy vs helpful — key personality tension
+  morale:           'medium',  // flavor value, but BT handles the mechanics
+  hunger:           'low',     // always "eat" — no decision space
+  exhaustion:       'low',     // always "rest" — no decision space
+  loneliness:       'low',     // always "socialize" — no decision space
+};
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
@@ -42,7 +100,10 @@ export function detectCrisis(
   const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} dwarves. Health: ${dwarf.health}/${dwarf.maxHealth}.`;
 
   // ── Goblin raid — checked first (most urgent) ─────────────────────────────
-  if (goblins && goblins.length > 0) {
+  // Only fighters and brave dwarves get LLM raid calls — everyone else always
+  // flees via BT, so the LLM call is wasted budget. This cuts 3-4 calls per
+  // raid event. Also skip if the dwarf is too far away (can't engage anyway).
+  if (goblins && goblins.length > 0 && (dwarf.role === 'fighter' || dwarf.trait === 'brave')) {
     const nearest = goblins.reduce<{ goblin: Goblin; dist: number } | null>((best, g) => {
       const d = Math.abs(g.x - dwarf.x) + Math.abs(g.y - dwarf.y);
       return (!best || d < best.dist) ? { goblin: g, dist: d } : best;
@@ -231,11 +292,17 @@ interface VerifySnapshot {
 export class LLMDecisionSystem {
   /** Set to false to suppress all LLM calls (e.g. dev toggle). */
   public enabled = false;
+  /** Active LLM provider — switchable at runtime via HUD toggle. */
+  public provider: LLMProvider = 'groq';
 
   // One Promise per agent — prevents duplicate in-flight calls
   private pendingRequests = new Map<string, Promise<LLMDecision | null>>();
   // Per-agent cooldown: don't fire again until this tick
-  private cooldownUntil   = new Map<string, number>();
+  private cooldownUntil       = new Map<string, number>();
+  // Medium-priority crises use a longer cooldown (2×) to save budget
+  private mediumCooldownUntil = new Map<string, number>();
+  // Colony-wide raid cooldown — only one dwarf responds via LLM per raid wave
+  private raidCooldownUntil = 0;
   // PIANO step 6 — pending outcome verifications
   private pendingVerifications = new Map<string, VerifySnapshot>();
 
@@ -243,6 +310,59 @@ export class LLMDecisionSystem {
   public sessionInputTokens  = 0;
   public sessionOutputTokens = 0;
   public sessionCallCount    = 0;
+
+  // ── Wall-clock rate limiter (protects Groq free-tier limits) ──────────────
+  /** Timestamps (Date.now()) of recent calls — pruned to last 60 s. */
+  private recentCallTimestamps: number[] = [];
+  /** Running daily call counter — resets after 24 h. */
+  private dailyCallCount = 0;
+  /** Wall-clock time when dailyCallCount was last reset. */
+  private dailyResetAt   = Date.now() + 86_400_000; // +24 h
+
+  /**
+   * Returns true if the current provider's rate limits allow another call.
+   * For providers with no client-side limits (maxRPM=0) this always returns true.
+   */
+  private canCallNow(): boolean {
+    const { maxRPM, maxRPD } = PROVIDERS[this.provider].rateLimit;
+    if (maxRPM === 0 && maxRPD === 0) return true; // no limits configured
+
+    const now = Date.now();
+
+    // Reset daily counter every 24 h
+    if (now >= this.dailyResetAt) {
+      this.dailyCallCount = 0;
+      this.dailyResetAt   = now + 86_400_000;
+    }
+
+    // RPD check
+    if (maxRPD > 0 && this.dailyCallCount >= maxRPD) {
+      console.warn(`[LLM/${this.provider}] daily limit reached (${maxRPD} RPD) — skipping`);
+      return false;
+    }
+
+    // RPM check — prune timestamps older than 60 s
+    if (maxRPM > 0) {
+      const cutoff = now - 60_000;
+      this.recentCallTimestamps = this.recentCallTimestamps.filter(t => t > cutoff);
+      if (this.recentCallTimestamps.length >= maxRPM) {
+        console.warn(`[LLM/${this.provider}] minute limit reached (${maxRPM} RPM) — skipping`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /** Record that a call was just made — updates rate-limit counters. */
+  private recordCall(): void {
+    this.recentCallTimestamps.push(Date.now());
+    this.dailyCallCount++;
+  }
+
+  /** Public wrappers — used by callSuccessionLLM (standalone function). */
+  public canCallNowPublic(): boolean  { return this.canCallNow(); }
+  public recordCallPublic(): void     { this.recordCall(); }
 
   /**
    * Check for a crisis, fire an async LLM call if one is found and the agent
@@ -265,6 +385,24 @@ export class LLMDecisionSystem {
     const situation = detectCrisis(dwarf, dwarves, grid, goblins);
     if (!situation) return;
 
+    // ── Priority filter ──────────────────────────────────────────────────────
+    // Low-priority crises (hunger, exhaustion, loneliness) have obvious BT
+    // responses — skip the LLM call entirely. Medium-priority (morale) uses
+    // a 2× longer cooldown so it fires less often, saving rate-limit budget.
+    const priority = CRISIS_PRIORITY[situation.type] ?? 'low';
+    if (priority === 'low') return;
+    if (priority === 'medium') {
+      if ((this.mediumCooldownUntil.get(dwarf.id) ?? 0) > currentTick) return;
+    }
+    // Colony-wide raid cooldown — one LLM call per raid wave, not one per dwarf
+    if (situation.type === 'goblin_raid') {
+      if (this.raidCooldownUntil > currentTick) return;
+      this.raidCooldownUntil = currentTick + COOLDOWN_TICKS;
+    }
+
+    // Rate-limit gate — skip if provider's RPM/RPD budget is exhausted
+    if (!this.canCallNow()) return;
+
     const promise = this.callLLM(dwarf, situation, dwarves, colonyGoal);
     this.pendingRequests.set(dwarf.id, promise);
 
@@ -272,6 +410,8 @@ export class LLMDecisionSystem {
     promise.then(decision => {
       this.pendingRequests.delete(dwarf.id);
       this.cooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS);
+      // Medium-priority crises get 2× cooldown so they fire half as often
+      this.mediumCooldownUntil.set(dwarf.id, currentTick + COOLDOWN_TICKS * 2);
       if (decision) {
         onDecision(dwarf, decision, situation);
         // PIANO step 6 — schedule outcome verification after 40 ticks
@@ -336,25 +476,31 @@ export class LLMDecisionSystem {
     dwarves:    Dwarf[],
     colonyGoal?: ColonyGoal,
   ): Promise<LLMDecision | null> {
+    const cfg = PROVIDERS[this.provider];
     try {
-      const res = await fetch('/api/llm-proxy', {
+      this.recordCall();
+      const res = await fetch(cfg.url, {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
         signal:  AbortSignal.timeout(5_000),
         body: JSON.stringify({
-          model:      MODEL,
-          max_tokens: 256,
+          model:      cfg.model,
+          max_tokens: cfg.maxTokens,
           messages: [{ role: 'user', content: buildPrompt(dwarf, situation, dwarves, colonyGoal) }],
         }),
       });
 
+      if (res.status === 429) {
+        console.warn(`[LLM/${this.provider}] rate-limited (429) for ${dwarf.name} — backing off`);
+        return null;
+      }
       if (!res.ok) {
-        console.warn(`[LLM] HTTP ${res.status} for ${dwarf.name}`);
+        console.warn(`[LLM/${this.provider}] HTTP ${res.status} for ${dwarf.name}`);
         return null;
       }
 
-      const data    = await res.json() as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
-      const raw     = data?.content?.[0]?.text ?? '';
+      const data    = await res.json();
+      const raw     = cfg.extractText(data);
       // Some models wrap JSON in markdown fences — strip them before parsing
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const decision = JSON.parse(cleaned) as LLMDecision;
@@ -365,24 +511,23 @@ export class LLMDecisionSystem {
       decision.expectedOutcome  ??= 'unknown outcome';
 
       // Track token usage and broadcast to UI
-      const inTok  = data.usage?.input_tokens  ?? 0;
-      const outTok = data.usage?.output_tokens ?? 0;
-      this.sessionInputTokens  += inTok;
-      this.sessionOutputTokens += outTok;
+      const usage  = cfg.extractUsage(data);
+      this.sessionInputTokens  += usage.input;
+      this.sessionOutputTokens += usage.output;
       this.sessionCallCount++;
       bus.emit('tokenUsage', {
         inputTotal:  this.sessionInputTokens,
         outputTotal: this.sessionOutputTokens,
         callCount:   this.sessionCallCount,
-        lastInput:   inTok,
-        lastOutput:  outTok,
+        lastInput:   usage.input,
+        lastOutput:  usage.output,
       });
 
       return decision;
     } catch (err) {
       const name = (err as Error).name;
       if (name !== 'AbortError' && name !== 'TimeoutError') {
-        console.warn('[LLM] call failed:', err);
+        console.warn(`[LLM/${this.provider}] call failed:`, err);
       }
       return null;
     }
@@ -400,6 +545,8 @@ export const llmSystem = new LLMDecisionSystem();
  * Never throws; always safe to fire-and-forget.
  */
 export async function callSuccessionLLM(dead: Dwarf, successor: Dwarf): Promise<string | null> {
+  if (!llmSystem.canCallNowPublic()) return null; // rate-limit gate
+  const cfg = PROVIDERS[llmSystem.provider];
   const memSnippet = dead.memory.length > 0
     ? ` Their last known acts: ${dead.memory.slice(-2).map(m => `"${m.action}"`).join(', ')}.`
     : '';
@@ -409,31 +556,32 @@ export async function callSuccessionLLM(dead: Dwarf, successor: Dwarf): Promise<
     `In one sentence (max 15 words), what is your first thought on arriving? ` +
     `Reply with just the sentence, no quotes.`;
   try {
-    const res = await fetch('/api/llm-proxy', {
+    llmSystem.recordCallPublic();
+    const res = await fetch(cfg.url, {
       method:  'POST',
       headers: { 'content-type': 'application/json' },
       signal:  AbortSignal.timeout(5_000),
       body: JSON.stringify({
-        model:      MODEL,
+        model:      cfg.model,
         max_tokens: 60,
         messages:   [{ role: 'user', content: prompt }],
       }),
     });
+    if (res.status === 429) return null; // rate-limited by server
     if (!res.ok) return null;
-    const data = await res.json() as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
-    const inTok  = data.usage?.input_tokens  ?? 0;
-    const outTok = data.usage?.output_tokens ?? 0;
-    llmSystem.sessionInputTokens  += inTok;
-    llmSystem.sessionOutputTokens += outTok;
+    const data  = await res.json();
+    const usage = cfg.extractUsage(data);
+    llmSystem.sessionInputTokens  += usage.input;
+    llmSystem.sessionOutputTokens += usage.output;
     llmSystem.sessionCallCount++;
     bus.emit('tokenUsage', {
       inputTotal:  llmSystem.sessionInputTokens,
       outputTotal: llmSystem.sessionOutputTokens,
       callCount:   llmSystem.sessionCallCount,
-      lastInput:   inTok,
-      lastOutput:  outTok,
+      lastInput:   usage.input,
+      lastOutput:  usage.output,
     });
-    return data?.content?.[0]?.text?.trim().slice(0, 120) ?? null;
+    return cfg.extractText(data)?.trim().slice(0, 120) ?? null;
   } catch {
     return null;
   }

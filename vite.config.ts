@@ -120,6 +120,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // /api/llm-proxy  →  https://api.anthropic.com/v1/messages
         // API key injected server-side via loadEnv; never exposed to browser
+        // Anthropic (Claude) — /api/llm-proxy → api.anthropic.com/v1/messages
         '/api/llm-proxy': {
           target:       'https://api.anthropic.com',
           changeOrigin: true,
@@ -130,6 +131,15 @@ export default defineConfig(({ mode }) => {
             // Vite forwards the browser Origin header; Anthropic requires this
             // flag when it detects a cross-origin / browser-initiated request.
             'anthropic-dangerous-direct-browser-access': 'true',
+          },
+        },
+        // Groq (Llama) — /api/groq-proxy → api.groq.com/openai/v1/chat/completions
+        '/api/groq-proxy': {
+          target:       'https://api.groq.com',
+          changeOrigin: true,
+          rewrite:      () => '/openai/v1/chat/completions',
+          headers: {
+            'Authorization': `Bearer ${env.GROQ_API_KEY ?? ''}`,
           },
         },
       },

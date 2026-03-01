@@ -183,6 +183,15 @@ export interface MiniMapData {
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold';
 
+/** One narrator chapter — generated when a colony goal completes. */
+export interface Chapter {
+  chapterNumber:  number;                // 1-indexed
+  goalType:       ColonyGoal['type'];
+  goalGeneration: number;
+  text:           string;                // 2-4 sentences of narrator prose
+  tick:           number;
+}
+
 export interface GameState {
   tick: number;
   dwarves: Dwarf[];

@@ -1,4 +1,4 @@
-import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry } from './types';
+import type { Tile, Dwarf, Goblin, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter } from './types';
 import type { Weather } from '../simulation/weather';
 
 export interface SaveData {
@@ -23,6 +23,10 @@ export interface SaveData {
   weather?: Weather;
   /** World seed — optional for backward compat with old saves. */
   worldSeed?: string;
+  /** Chronicle chapters — optional for backward compat with old saves. */
+  chapters?: Chapter[];
+  /** Tick at which the current goal started — optional for backward compat. */
+  goalStartTick?: number;
 }
 
 const KEY = 'kobold_save_v1';

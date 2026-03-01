@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../shared/events';
-import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin, Season, WeatherType } from '../shared/types';
+import type { LLMProvider } from '../ai/crisis';
+import type { GameState, Dwarf, OverlayMode, DwarfRole, DwarfTrait, TileInfo, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, Goblin, Season, WeatherType, Chapter } from '../shared/types';
 import type { LayoutMode } from '../shared/useViewport';
 
 /** Find the dwarf with the highest/lowest relation score relative to `dwarf`. */
@@ -23,6 +24,7 @@ function topRelation(
 export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode }) {
   const [state,      setState]      = useState<GameState | null>(null);
   const [llmEnabled, setLlmEnabled] = useState(false);
+  const [provider,   setProvider]   = useState<LLMProvider>('groq');
   const [confirmNew, setConfirmNew] = useState(false);
 
   useEffect(() => {
@@ -34,6 +36,12 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     const next = !llmEnabled;
     setLlmEnabled(next);
     bus.emit('settingsChange', { llmEnabled: next });
+  };
+
+  const cycleProvider = () => {
+    const next: LLMProvider = provider === 'anthropic' ? 'groq' : 'anthropic';
+    setProvider(next);
+    bus.emit('settingsChange', { llmProvider: next });
   };
 
   if (!state) return null;
@@ -73,6 +81,15 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
           style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
         >
           {llmEnabled ? '🤖 LLM' : '💤 LLM'}
+        </button>
+      )}
+      {/* Provider toggle: only visible when LLM is enabled */}
+      {isDesktop && llmEnabled && (
+        <button
+          onClick={cycleProvider}
+          style={{ ...styles.llmToggle, ...styles.providerToggle }}
+        >
+          {provider === 'anthropic' ? '⚡ Claude' : '⚡ Groq'}
         </button>
       )}
       {/* New colony: desktop only */}
@@ -372,6 +389,48 @@ export function ColonyGoalPanel() {
   );
 }
 
+/** Chronicle panel — shows storyteller chapter summaries in a parchment-themed panel. */
+export function ChroniclePanel() {
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const onChapter = (ch: Chapter) => setChapters(prev => [...prev, ch]);
+    const onRestore = (chs: Chapter[]) => setChapters(chs);
+    bus.on('chronicleChapter', onChapter);
+    bus.on('restoreChronicle', onRestore);
+    return () => {
+      bus.off('chronicleChapter', onChapter);
+      bus.off('restoreChronicle', onRestore);
+    };
+  }, []);
+
+  if (chapters.length === 0) return null;
+
+  const latest = chapters[chapters.length - 1];
+  const shown  = expanded ? chapters : [latest];
+
+  return (
+    <div
+      style={styles.chroniclePanel}
+      onClick={() => setExpanded(e => !e)}
+    >
+      <div style={styles.chronicleHeader}>
+        <span>📜 CHRONICLE</span>
+        <span style={styles.chronicleToggle}>{expanded ? '▲' : `▼ ${chapters.length} ch.`}</span>
+      </div>
+      {shown.map(ch => (
+        <div key={ch.chapterNumber} style={styles.chronicleEntry}>
+          <div style={styles.chronicleLabel}>
+            Chapter {ch.chapterNumber} · tick {ch.tick}
+          </div>
+          <div style={styles.chronicleText}>{ch.text}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={styles.stat}>
@@ -659,6 +718,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(120,120,120,0.2)',
     color:      '#777',
   },
+  providerToggle: {
+    background: 'rgba(100,140,220,0.2)',
+    color:      '#7ec8e3',
+  },
   relSection: {
     marginTop:  6,
     paddingTop: 6,
@@ -874,5 +937,51 @@ const styles: Record<string, React.CSSProperties> = {
   newColonyBtnNo: {
     background: 'rgba(120,120,120,0.2)',
     color:      '#aaa',
+  },
+  chroniclePanel: {
+    background:    'rgba(30, 22, 12, 0.85)',
+    padding:       '8px 12px',
+    fontFamily:    'monospace',
+    fontSize:      11,
+    color:         '#d4c4a0',
+    userSelect:    'none',
+    pointerEvents: 'auto' as const,
+    cursor:        'pointer',
+    flexShrink:    0,
+    borderLeft:    '2px solid #8b7355',
+    borderBottom:  '1px solid #333',
+    maxHeight:     200,
+    overflowY:     'auto' as const,
+    scrollbarWidth: 'thin' as const,
+    scrollbarColor: '#6b5b45 transparent',
+  },
+  chronicleHeader: {
+    display:        'flex',
+    justifyContent: 'space-between',
+    alignItems:     'center',
+    fontSize:       8,
+    color:          '#6b5b45',
+    letterSpacing:  '0.1em',
+    textTransform:  'uppercase' as const,
+    marginBottom:   4,
+  },
+  chronicleToggle: {
+    fontSize: 8,
+    color:    '#6b5b45',
+  },
+  chronicleEntry: {
+    marginBottom: 6,
+  },
+  chronicleLabel: {
+    fontSize:     8,
+    color:        '#6b5b45',
+    marginBottom: 2,
+  },
+  chronicleText: {
+    color:      '#d4c4a0',
+    fontStyle:  'italic',
+    fontSize:   10,
+    lineHeight: '1.5',
+    wordBreak:  'break-word' as const,
   },
 };
