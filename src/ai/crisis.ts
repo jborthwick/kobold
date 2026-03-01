@@ -22,6 +22,8 @@ const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival 
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
 const GOBLIN_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within this distance
+const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
+const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis
 const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/dwarf/hour
 const MODEL                     = 'claude-haiku-4-5';
 
@@ -79,6 +81,24 @@ export function detectCrisis(
     return {
       type:        'morale',
       description: `Your morale has fallen to ${dwarf.morale.toFixed(0)}/100. You are struggling to keep going.`,
+      colonyContext: ctx,
+    };
+  }
+
+  // Exhaustion — fires when fatigue is critically high
+  if (dwarf.fatigue >= EXHAUSTION_THRESHOLD) {
+    return {
+      type:        'exhaustion',
+      description: `You are exhausted (fatigue ${dwarf.fatigue.toFixed(0)}/100). Your body aches and you can barely keep moving.`,
+      colonyContext: ctx,
+    };
+  }
+
+  // Loneliness — fires when social need is critically high
+  if (dwarf.social >= LONELINESS_THRESHOLD) {
+    return {
+      type:        'loneliness',
+      description: `You feel lonely and isolated (social need ${dwarf.social.toFixed(0)}/100). You haven't been near a friend in a long time.`,
       colonyContext: ctx,
     };
   }
@@ -161,7 +181,7 @@ function buildPrompt(dwarf: Dwarf, situation: CrisisSituation, dwarves: Dwarf[],
 
   return `You are ${dwarf.name}, a dwarf ${roleLabel(dwarf)}
 Personality: ${dwarf.trait}. "${dwarf.bio}". Personal goal: ${dwarf.goal}.
-Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100
+Status — Health: ${dwarf.health}/${dwarf.maxHealth}, Hunger: ${dwarf.hunger.toFixed(0)}/100, Morale: ${dwarf.morale.toFixed(0)}/100, Fatigue: ${dwarf.fatigue.toFixed(0)}/100, Social need: ${dwarf.social.toFixed(0)}/100
 Food carried: ${dwarf.inventory.food.toFixed(0)} units. Current task: ${dwarf.task}. ${homeStr}
 
 CRISIS: ${situation.description}
@@ -170,12 +190,12 @@ Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}
 Respond ONLY as valid JSON (no markdown, no extra text):
 {
   "action": "one short sentence — what you will do next",
-  "intent": "eat | forage | rest | avoid | none",
+  "intent": "eat | forage | rest | avoid | socialize | none",
   "reasoning": "internal monologue, 1-2 sentences",
   "emotional_state": "3-5 words describing how you feel",
   "expectedOutcome": "one short sentence — what you expect to happen"
 }
-intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still, avoid=move away from rivals/goblins, none=normal behaviour`;
+intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest=stay still and recover fatigue, avoid=move away from rivals/goblins, socialize=seek out a friendly dwarf for company, none=normal behaviour`;
 }
 
 // ── LLM Decision System ───────────────────────────────────────────────────────
@@ -289,6 +309,9 @@ export class LLMDecisionSystem {
         : null;
       case 'rest':   return dwarf.hunger > 80
         ? `resting while starving (hunger ${dwarf.hunger.toFixed(0)})`
+        : null;
+      case 'socialize': return dwarf.social > 70
+        ? `socializing failed — still lonely (social ${dwarf.social.toFixed(0)})`
         : null;
       default:       return null;
     }

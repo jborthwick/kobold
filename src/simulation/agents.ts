@@ -9,15 +9,15 @@ function rand(min: number, max: number) {
 
 // ── Resource site memory ───────────────────────────────────────────────────
 /** Min tile value worth storing in a dwarf's site memory. */
-const SITE_RECORD_THRESHOLD = 3;
+export const SITE_RECORD_THRESHOLD = 3;
 /** Max remembered sites per type per dwarf. */
-const MAX_KNOWN_SITES = 5;
+export const MAX_KNOWN_SITES = 5;
 /**
  * Manhattan radius within which two tiles are treated as the same patch.
  * Prevents a cluster of 10 adjacent mushrooms from burning all 5 memory
  * slots on individual tiles from the same group.
  */
-const PATCH_MERGE_RADIUS = 4;
+export const PATCH_MERGE_RADIUS = 4;
 
 /**
  * Upsert a resource site into a dwarf's memory list.
@@ -31,7 +31,7 @@ const PATCH_MERGE_RADIUS = 4;
  * before calling, so non-harvestable tiles (Forest, Stone, etc.) are
  * never stored.
  */
-function recordSite(sites: ResourceSite[], x: number, y: number, value: number, tick: number): void {
+export function recordSite(sites: ResourceSite[], x: number, y: number, value: number, tick: number): void {
   // 1. Exact tile already known — refresh
   const idx = sites.findIndex(s => s.x === x && s.y === y);
   if (idx >= 0) { sites[idx] = { x, y, value, tick }; return; }
@@ -58,7 +58,7 @@ function recordSite(sites: ResourceSite[], x: number, y: number, value: number, 
 
 // Tile types dwarves can harvest food from.
 // Add entries here to unlock new food sources — no logic changes needed.
-const FORAGEABLE_TILES = new Set<TileType>([
+export const FORAGEABLE_TILES = new Set<TileType>([
   TileType.Mushroom,
 ]);
 
@@ -68,7 +68,7 @@ const ROLE_ORDER: DwarfRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fig
 // ── Trait modifiers ──────────────────────────────────────────────────────────
 // Traits modify BT thresholds so personality drives behavioral divergence.
 // Missing keys fall back to defaults in traitMod() below.
-interface TraitMods {
+export interface TraitMods {
   shareThreshold?: number;    // food >= X to trigger sharing (default 8)
   shareDonorKeeps?: number;   // keep >= X after sharing (default 5)
   eatThreshold?: number;      // hunger > X to eat (default 70)
@@ -76,21 +76,23 @@ interface TraitMods {
   wanderHomeDrift?: number;   // probability of drifting home (default 0.25)
   contestPenalty?: number;    // relation penalty on losing contest (default -5)
   shareRelationGate?: number; // min relation to share food (default 30)
+  fatigueRate?: number;       // fatigue gain multiplier (default 1.0; lazy: 1.3)
+  socialDecayBonus?: number;  // extra social decay near friends (default 0; cheerful: 0.15)
 }
 
-const TRAIT_MODS: Record<DwarfTrait, TraitMods> = {
+export const TRAIT_MODS: Record<DwarfTrait, TraitMods> = {
   helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15 },
   greedy:    { shareThreshold: 12, shareDonorKeeps: 8 },
   brave:     { fleeThreshold: 95 },
   paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5 },
-  lazy:      { eatThreshold: 55 },
-  cheerful:  { shareThreshold: 6, shareRelationGate: 20 },
+  lazy:      { eatThreshold: 55, fatigueRate: 1.3 },
+  cheerful:  { shareThreshold: 6, shareRelationGate: 20, socialDecayBonus: 0.15 },
   mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55 },
   forgetful: {},  // personality-flavor only for now
 };
 
 /** Look up a trait modifier with a default fallback. */
-function traitMod<K extends keyof TraitMods>(dwarf: Dwarf, key: K, fallback: number): number {
+export function traitMod<K extends keyof TraitMods>(dwarf: Dwarf, key: K, fallback: number): number {
   return TRAIT_MODS[dwarf.trait]?.[key] ?? fallback;
 }
 
@@ -189,6 +191,10 @@ export function spawnDwarves(
       knownWoodSites:  [],
       homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
       goblinKills:     0,
+      fatigue:         0,
+      social:          0,
+      lastSocialTick:  0,
+      lastLoggedTicks: { morale_high: 0 },  // suppress "feeling great" at spawn
     });
   }
   return dwarves;
@@ -294,13 +300,17 @@ export function spawnSuccessor(
     knownWoodSites:  [],
     homeTile:        { x: 0, y: 0 },  // overwritten by WorldScene after stockpile is placed
     goblinKills:     0,
+    fatigue:         0,
+    social:          0,
+    lastSocialTick:  0,
+    lastLoggedTicks: { morale_high: 0 },  // suppress "feeling great" at spawn
   };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Scan a square of `radius` tiles around the dwarf for the richest forageable tile. */
-function bestFoodTile(
+export function bestFoodTile(
   dwarf:  Dwarf,
   grid:   Tile[][],
   radius: number,
@@ -323,7 +333,7 @@ function bestFoodTile(
 
 /** Scan a square of `radius` tiles around the dwarf for the richest ore/stone material tile (miners).
  *  Excludes Forest tiles — wood is handled separately by lumberjacks via bestWoodTile(). */
-function bestMaterialTile(
+export function bestMaterialTile(
   dwarf:  Dwarf,
   grid:   Tile[][],
   radius: number,
@@ -345,7 +355,7 @@ function bestMaterialTile(
 }
 
 /** Scan a square of `radius` tiles around the dwarf for the richest Forest tile with wood (lumberjacks). */
-function bestWoodTile(
+export function bestWoodTile(
   dwarf:  Dwarf,
   grid:   Tile[][],
   radius: number,
@@ -415,7 +425,7 @@ export function pathNextStep(
  *
  * Miners fill slots nearest-first, so outer walls build before interior rows.
  */
-function fortWallSlots(
+export function fortWallSlots(
   foodStockpiles: Array<{ x: number; y: number }>,
   oreStockpiles:  Array<{ x: number; y: number }>,
   grid:           Tile[][],
@@ -606,6 +616,50 @@ export function tickAgent(
     dwarf.hunger = Math.min(100, dwarf.hunger + dwarf.metabolism * 0.3);
   }
 
+  // ── Fatigue tick ────────────────────────────────────────────────────────
+  // Fatigue rises from movement/work (applied at action sites below) and
+  // decays passively when idle. Lazy dwarves gain fatigue faster (×1.3).
+  // Effects: >70 → 30% skip movement + halved harvest; >90 → morale drain.
+  // Rest intent: strong decay (−1.5/tick) handled in step 2.5.
+  // Base idle decay is small so fatigue doesn't vanish instantly.
+  const fatigueRate = traitMod(dwarf, 'fatigueRate', 1.0);
+  dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.05); // tiny idle decay
+  if (dwarf.fatigue > 90) {
+    dwarf.morale = Math.max(0, dwarf.morale - 0.2);
+  }
+
+  // ── Social tick ─────────────────────────────────────────────────────────
+  // Social need rises when isolated from friendly dwarves (relation >= 40,
+  // within 3 tiles). Cheerful dwarves decay social faster near friends.
+  // Effects: >60 → morale drain −0.15/tick.
+  if (dwarves) {
+    const FRIEND_RADIUS = 3;
+    const FRIEND_REL    = 40;
+    const hasFriend = dwarves.some(
+      other => other.id !== dwarf.id && other.alive &&
+        Math.abs(other.x - dwarf.x) <= FRIEND_RADIUS &&
+        Math.abs(other.y - dwarf.y) <= FRIEND_RADIUS &&
+        (dwarf.relations[other.id] ?? 50) >= FRIEND_REL,
+    );
+    if (hasFriend) {
+      const socialBonus = traitMod(dwarf, 'socialDecayBonus', 0);
+      dwarf.social = Math.max(0, dwarf.social - (0.3 + socialBonus));
+      dwarf.lastSocialTick = currentTick;
+    } else if (currentTick - dwarf.lastSocialTick > 30) {
+      dwarf.social = Math.min(100, dwarf.social + 0.15);
+    }
+  }
+  if (dwarf.social > 60) {
+    dwarf.morale = Math.max(0, dwarf.morale - 0.15);
+  }
+
+  // Fatigue > 70: 30% chance to skip action this tick (exhaustion stumble)
+  if (dwarf.fatigue > 70 && Math.random() < 0.3) {
+    dwarf.task = 'exhausted…';
+    dwarf.fatigue = Math.max(0, dwarf.fatigue - 0.5); // slight recovery from forced rest
+    return;
+  }
+
   // ── 1. Starvation ─────────────────────────────────────────────────────
   if (dwarf.hunger >= 100 && dwarf.inventory.food === 0) {
     dwarf.health -= 2;
@@ -653,8 +707,33 @@ export function tickAgent(
           }
           break;
         case 'rest':
+          dwarf.fatigue = Math.max(0, dwarf.fatigue - 1.5);
           dwarf.task = 'resting';
           return;                      // skip movement entirely
+        case 'socialize': {
+          // Pathfind toward the nearest friendly dwarf
+          if (dwarves) {
+            const FRIEND_REL = 40;
+            let bestDist = Infinity;
+            let bestFriend: Dwarf | null = null;
+            for (const other of dwarves) {
+              if (other.id === dwarf.id || !other.alive) continue;
+              if ((dwarf.relations[other.id] ?? 50) < FRIEND_REL) continue;
+              const dist = Math.abs(other.x - dwarf.x) + Math.abs(other.y - dwarf.y);
+              if (dist < bestDist) { bestDist = dist; bestFriend = other; }
+            }
+            if (bestFriend && bestDist > 1) {
+              const step = pathNextStep(dwarf.x, dwarf.y, bestFriend.x, bestFriend.y, grid);
+              if (step) {
+                dwarf.x = step[0]; dwarf.y = step[1];
+                dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
+              }
+            }
+            dwarf.task = 'socializing';
+            return;
+          }
+          break;
+        }
         case 'forage':
         case 'avoid':
         case 'none':
@@ -760,6 +839,7 @@ export function tickAgent(
       const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, dwarf.commandTarget, grid);
       dwarf.x    = next.x;
       dwarf.y    = next.y;
+      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
       dwarf.task = `→ (${tx},${ty})`;
     }
     return;
@@ -799,6 +879,8 @@ export function tickAgent(
         dwarf.y = step2.y;
       }
       const distAfterMove = Math.abs(nearest.g.x - dwarf.x) + Math.abs(nearest.g.y - dwarf.y);
+      // Fighting is hard work — double fatigue for combat + sprint
+      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
       dwarf.task = distAfterMove === 0
         ? 'fighting goblin!'
         : `→ goblin (${distAfterMove} tiles)`;
@@ -837,6 +919,7 @@ export function tickAgent(
       const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, foodTarget, grid);
       dwarf.x    = next.x;
       dwarf.y    = next.y;
+      dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
     }
     const here = grid[dwarf.y][dwarf.x];
 
@@ -884,7 +967,10 @@ export function tickAgent(
       const baseYield       = dwarf.role === 'forager' ? 2 : 1;
       // Morale scales harvest yield: 0.5× at morale 0, 1.0× at morale 100
       const moraleScale     = 0.5 + (dwarf.morale / 100) * 0.5;
-      const harvestYield    = Math.max(1, Math.round(baseYield * moraleScale));
+      // Fatigue > 70 halves harvest yield
+      const fatigueScale    = dwarf.fatigue > 70 ? 0.5 : 1.0;
+      const harvestYield    = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale));
+      dwarf.fatigue         = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
       const hadFood         = here.foodValue;
       const depleted        = Math.min(hadFood, depletionRate);
       here.foodValue        = Math.max(0, hadFood - depleted);
@@ -1205,6 +1291,7 @@ export function tickAgent(
         const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, oreTarget, grid);
         dwarf.x    = next.x;
         dwarf.y    = next.y;
+        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
       }
       const here = grid[dwarf.y][dwarf.x];
       if (here.materialValue >= 1) {
@@ -1216,6 +1303,7 @@ export function tickAgent(
         dwarf.inventory.materials = Math.min(
           dwarf.inventory.materials + mined, MAX_INVENTORY_FOOD,
         );
+        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
         dwarf.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
       } else {
         dwarf.task = `mining → (${oreTarget.x},${oreTarget.y})`;
@@ -1239,6 +1327,7 @@ export function tickAgent(
         const next = pathNextStep({ x: dwarf.x, y: dwarf.y }, woodTarget, grid);
         dwarf.x    = next.x;
         dwarf.y    = next.y;
+        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.2 * fatigueRate);
       }
       const here = grid[dwarf.y][dwarf.x];
       if (here.type === TileType.Forest && here.materialValue >= 1) {
@@ -1249,6 +1338,7 @@ export function tickAgent(
         dwarf.inventory.materials = Math.min(
           dwarf.inventory.materials + chopped, MAX_INVENTORY_FOOD,
         );
+        dwarf.fatigue = Math.min(100, dwarf.fatigue + 0.4 * fatigueRate);
         dwarf.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
       } else {
         dwarf.task = `→ forest (${woodTarget.x},${woodTarget.y})`;

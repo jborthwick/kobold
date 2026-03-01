@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
-import { spawnDwarves, tickAgent, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
+import { spawnDwarves, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
+import { tickAgentUtility } from '../../simulation/utilityAI';
 import { maybeSpawnRaid, tickGoblins, resetGoblins, spawnInitialGoblins } from '../../simulation/goblins';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
@@ -59,6 +60,10 @@ export class WorldScene extends Phaser.Scene {
 
   // Weather system — affects growback rates and dwarf metabolism
   private weather!: Weather;
+
+  // Event log noise reduction
+  private mushroomLogCounter = 0;
+  private combatHits = new Map<string, number>();  // dwarf id → hit count this encounter
 
   // Colony goal + food/ore/wood stockpiles (expand as each fills up)
   private colonyGoal!: ColonyGoal;
@@ -119,6 +124,13 @@ export class WorldScene extends Phaser.Scene {
       this.grid               = save.grid;
       this.spawnZone          = save.spawnZone;
       this.dwarves            = save.dwarves;
+      // Backward compat — default new needs fields for saves that predate them
+      for (const d of this.dwarves) {
+        d.fatigue        ??= 0;
+        d.social         ??= 0;
+        d.lastSocialTick  ??= save.tick;
+        d.lastLoggedTicks ??= {};
+      }
       this.goblins            = save.goblins;
       this.tick               = save.tick;
       this.colonyGoal         = save.colonyGoal;
@@ -637,7 +649,7 @@ export class WorldScene extends Phaser.Scene {
 
     for (const d of this.dwarves) {
       const wasAlive = d.alive;
-      tickAgent(d, this.grid, this.tick, this.dwarves, (message, level) => {
+      tickAgentUtility(d, this.grid, this.tick, this.dwarves, (message, level) => {
         bus.emit('logEntry', {
           tick:      this.tick,
           dwarfId:   d.id,
@@ -715,15 +727,21 @@ export class WorldScene extends Phaser.Scene {
             });
             this.pendingSuccessions.push({ deadDwarfId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
           } else {
-            // Survived — log the hit and add a memory so the LLM knows they were in combat
+            // Survived — batch hits to reduce log noise (log every 3rd hit)
             d.memory.push({ tick: this.tick, crisis: 'combat', action: `hit by goblin, ${d.health.toFixed(0)} hp remaining` });
-            bus.emit('logEntry', {
-              tick:      this.tick,
-              dwarfId:   d.id,
-              dwarfName: d.name,
-              message:   `⚔ hit by goblin! (${d.health.toFixed(0)} hp)`,
-              level:     'warn',
-            });
+            const hits = (this.combatHits.get(d.id) ?? 0) + 1;
+            this.combatHits.set(d.id, hits);
+            if (hits % 3 === 1) {  // log 1st hit, then every 3rd
+              bus.emit('logEntry', {
+                tick:      this.tick,
+                dwarfId:   d.id,
+                dwarfName: d.name,
+                message:   hits === 1
+                  ? `⚔ hit by goblin! (${d.health.toFixed(0)} hp)`
+                  : `⚔ fighting goblin (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
+                level:     'warn',
+              });
+            }
           }
         }
       }
@@ -754,11 +772,15 @@ export class WorldScene extends Phaser.Scene {
           if (killer) {
             killer.goblinKills += 1;
             killer.memory.push({ tick: this.tick, crisis: 'combat', action: 'slew a goblin in battle' });
+            const hitsTaken = this.combatHits.get(killer.id) ?? 0;
+            this.combatHits.delete(killer.id);
             bus.emit('logEntry', {
               tick:      this.tick,
               dwarfId:   killer.id,
               dwarfName: killer.name,
-              message:   '⚔ slew a goblin!',
+              message:   hitsTaken > 0
+                ? `⚔ slew a goblin! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
+                : '⚔ slew a goblin!',
               level:     'warn',
             });
           }
@@ -781,13 +803,16 @@ export class WorldScene extends Phaser.Scene {
     // Small steady mushroom sprouting — every 150 ticks, a fresh 1–4 tile patch
     const sprout = tickMushroomSprout(this.grid, this.tick);
     if (sprout) {
-      bus.emit('logEntry', {
-        tick:      this.tick,
-        dwarfId:   'world',
-        dwarfName: 'WORLD',
-        message:   `🍄 ${sprout}`,
-        level:     'info',
-      });
+      this.mushroomLogCounter++;
+      if (this.mushroomLogCounter % 3 === 0) {
+        bus.emit('logEntry', {
+          tick:      this.tick,
+          dwarfId:   'world',
+          dwarfName: 'WORLD',
+          message:   `🍄 ${sprout}`,
+          level:     'info',
+        });
+      }
     }
 
     // ── Succession — spawn queued replacements ──────────────────────────────

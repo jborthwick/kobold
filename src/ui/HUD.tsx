@@ -494,6 +494,8 @@ function DwarfPanel({ dwarf, allDwarves }: { dwarf: Dwarf; allDwarves: Dwarf[] }
       <Bar label="health" value={dwarf.health}  max={dwarf.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={dwarf.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={dwarf.morale}  max={100}             color="#3498db" />
+      <Bar label="fatigue" value={dwarf.fatigue} max={100}            color="#9b59b6" />
+      <Bar label="social" value={dwarf.social}  max={100}             color="#f39c12" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {dwarf.inventory.food.toFixed(1)}</span>
         {dwarf.role === 'lumberjack'

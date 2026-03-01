@@ -36,7 +36,7 @@ export interface Goblin {
 }
 
 // PIANO step 5 — structured intent the LLM can set to override the BT
-export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'none';
+export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'socialize' | 'none';
 
 // Permanent personality trait assigned at spawn
 export type DwarfTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
@@ -95,6 +95,10 @@ export interface Dwarf {
   generation:      number;      // 1 for original dwarves, increments for each succession
   goblinKills:     number;      // lifetime count of goblins slain by this dwarf
   causeOfDeath?:   string;      // set when dwarf dies; shown in HUD + passed to successor
+  fatigue:         number;      // 0–100; rises with movement/work, decays when resting
+  social:          number;      // 0–100; rises when isolated from friendly dwarves
+  lastSocialTick:  number;      // tick when dwarf last had a friend within proximity
+  lastLoggedTicks: Record<string, number>;  // cooldown tracking for event log (key = event type, value = tick)
 }
 
 export interface LogEntry {

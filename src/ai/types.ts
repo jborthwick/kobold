@@ -7,7 +7,7 @@ export interface LLMDecision {
 }
 
 export interface CrisisSituation {
-  type:          'hunger' | 'morale' | 'resource_contest' | 'low_supplies' | 'resource_sharing' | 'goblin_raid';
+  type:          'hunger' | 'morale' | 'resource_contest' | 'low_supplies' | 'resource_sharing' | 'goblin_raid' | 'exhaustion' | 'loneliness';
   description:   string;
   colonyContext: string;
 }
