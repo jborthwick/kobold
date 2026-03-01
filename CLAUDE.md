@@ -1,6 +1,6 @@
 # Dwarf Colony Sim — Agent Instructions
 
-A browser-based colony survival game inspired by Dwarf Fortress. Small colony of LLM-driven dwarf agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is a crisis decision-maker, not a chatbot.
+A browser-based colony survival game inspired by RimWorld and Dwarf Fortress . Small colony of LLM-driven dwarf agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is a crisis decision-maker, not a chatbot.
 
 ---
 
@@ -174,23 +174,32 @@ export interface Dwarf {
 
 ```
 1.   Starvation: hunger ≥ 100 AND inventory empty → health -= 2, morale -= 2
-2.   Eat: hunger > 70 AND inventory food > 0 → eat 3 units
+1.5  Stress metabolism: morale < 25 → hunger += metabolism × 1.3 (death spiral)
+2.   Eat: hunger > eatThreshold AND inventory food > 0 → eat 3 units
+       Trait-modified: lazy eats at 55 (not 70)
 2.5  LLM intent:
        eat   → force-eat below normal threshold (hunger > 30)
        rest  → stay put this tick
        forage/avoid → handled in steps 4/5
-2.7  Food sharing: food ≥ 8 AND nearby dwarf (≤2 tiles) hunger > 60 AND food < 3
-       → gift 3 food to hungriest neighbor; donor keeps ≥ 5
+2.7  Food sharing: food ≥ shareThreshold AND nearby dwarf (≤2 tiles) hunger > 60 AND food < 3
+       → gift 3 food to hungriest neighbor; donor keeps ≥ keepMin
+       Trait-modified: helpful shares at 6/keeps 3; greedy at 12/keeps 8; mean at 14
+       Relation-gated: won't share if neighbor relation < shareRelationGate (default 30; mean: 55)
+       Allies (relation ≥ 60) get cooperative yield bonus (+2) instead of contest penalty
 2.8  Depot deposit/withdraw: when standing on depot tile
        food ≥ 10 → deposit (food − 6) to depot
        hunger > 60 AND food < 2 AND depot.food > 0 → withdraw min(4, depot.food)
 3.   Player command: commandTarget set → pathfind toward it (A*)
 3.5  Fighter hunt: (fighters only) nearest goblin within vision×2 → pathfind toward it;
        on contact tickGoblins handles combat (18 hp/hit vs 8 for other roles)
+       Trait-modified: brave fights until hunger 95; paranoid flees at hunger 60
 4.   Forage + harvest (Sugarscape rule):
        scan vision radius (or 10 if llmIntent='forage') for richest food tile
        move toward it, harvest on arrival
+       Harvest yield scales with morale: 0.5× at morale 0, 1.0× at morale 100
        Contest yield: if hungrier dwarf on same tile → skip harvest this tick
+         Allies (relation ≥ 60) yield peacefully with cooperation bonus (+2)
+         Mean trait doubles contest penalty (−10 not −5)
 4.3  Depot run: hunger > 65 AND food == 0 AND depot.food > 0 → pathfind to depot
 4.5  Miner ore targeting: (miners only, when no food in vision)
        scan for richest material tile, mine 2 units/tick
@@ -214,6 +223,56 @@ Fires a crisis (and queues an LLM call) for the first matching condition:
 | `resource_sharing` | own food ≥ 8 AND nearby rival hunger > 60 AND rival food < 3 |
 
 Morale dynamics: decays −0.4/tick when hunger > 60; recovers +0.2/tick when hunger < 30.
+
+---
+
+## Trait modifiers (`TRAIT_MODS` in `agents.ts`)
+
+Traits modify hardcoded BT thresholds via `traitMod()` helper:
+
+| Trait | Behavioral effect |
+|-------|-------------------|
+| `helpful` | Shares food at 6 (not 8), keeps only 3; shares even with low-trust neighbors |
+| `greedy` | Won't share until 12 food, keeps 8; won't share with rivals |
+| `brave` | Fights goblins until 95 hunger (not 80) |
+| `paranoid` | Flees combat at 60 hunger; drifts home 50% of the time (not 25%) |
+| `lazy` | Eats at 55 hunger (not 70) — consumes food faster |
+| `cheerful` | Shares at 6 food; shares with more neighbors (low relation gate) |
+| `mean` | Won't share until 14 food; contest penalty doubled (−10 not −5); won't share with non-allies |
+| `forgetful` | No modifier (flavor only — could later affect memory size) |
+
+---
+
+## Weather system (`src/simulation/weather.ts`)
+
+Global state modifying growback rates and dwarf metabolism:
+
+| Weather | Growback | Metabolism | When |
+|---------|----------|------------|------|
+| Clear | 1.0× | 1.0× | Default |
+| Rain | 1.8× | 1.0× | Common in spring |
+| Drought | 0.25× | 1.0× | Common in summer |
+| Cold | 0.5× | 1.4× | Dominates winter |
+
+Seasons cycle every 600 ticks (~85 s). Weather shifts at season boundaries and
+randomly mid-season (0.2% per tick). Displayed in HUD top bar.
+Touches zero agent code — modifies `growback()` multiplier and `tickAgent()` metabolism
+multiplier; existing hunger/morale/sharing mechanics cascade from there.
+
+---
+
+## Tension-aware storyteller (`src/simulation/events.ts`)
+
+Replaced flat 25/25/25/25 event distribution with colony-health-aware selection:
+
+| Colony tension | Event bias |
+|----------------|------------|
+| High (>70) | 45% bounty, 40% mushroom, 15% ore (help colony) |
+| Low (<30) | 50% blight, 25% ore, 25% mushroom (challenge colony) |
+| Medium | Uniform random (unpredictable) |
+
+Tension = f(avg hunger, avg morale, goblin count, recent deaths). Creates dramatic
+pacing: a struggling colony gets relief, a thriving colony gets challenged.
 
 ---
 
@@ -311,8 +370,9 @@ src/
 │   └── tileConfig.ts            # Frame arrays per TileType; auto-saved by tile picker
 ├── simulation/
 │   ├── world.ts                 # generateWorld(), growback(), isWalkable()
-│   ├── agents.ts                # spawnDwarves(), tickAgent() behavior tree
-│   └── events.ts                # tickWorldEvents() — blight/bounty/ore discovery
+│   ├── agents.ts                # spawnDwarves(), tickAgent() behavior tree, TRAIT_MODS
+│   ├── events.ts                # tickWorldEvents() — tension-aware storyteller
+│   └── weather.ts               # Weather state, season cycling, growback/metabolism multipliers
 ├── ai/
 │   ├── crisis.ts                # detectCrisis(), LLMDecisionSystem, buildPrompt()
 │   └── types.ts                 # LLMDecision, CrisisSituation interfaces
@@ -389,6 +449,28 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 - **`ColonyGoalPanel`** in right sidebar: gold progress bar for current goal + depot food level
 - **Phaser render-order fix**: all overlay Graphics/Text must be created after `createBlankLayer()`
 
+### Iteration 8 ✅ — Emergent behavior: traits, relations, morale, weather, storyteller
+Prior to this iteration, traits/relations/morale/personal goals were wired into the data
+model, rendered in UI, and sent to the LLM — but gated **zero** behavior tree decisions.
+Every dwarf acted identically regardless of personality.
+
+- **Trait modifiers → BT thresholds:** `TRAIT_MODS` map + `traitMod()` helper make 8 traits
+  (helpful, greedy, brave, paranoid, lazy, cheerful, mean, forgetful) modify 6 hardcoded
+  thresholds (eat, share, keep, fight-flee, contest penalty, relation gate)
+- **Relations gate sharing and contests:** dwarves refuse to share food with neighbors whose
+  relation score < `shareRelationGate` (30 default, 55 for mean). Allies (relation ≥ 60)
+  yield peacefully with cooperation bonus instead of contest penalty
+- **Morale affects BT:** stress metabolism (morale < 25 → +30% hunger/tick death spiral);
+  harvest yield scales 0.5×–1.0× with morale
+- **Weather system** (`src/simulation/weather.ts`): clear/rain/drought/cold modifies growback
+  and metabolism multipliers. Seasons cycle every 600 ticks. Touches zero agent code — cascades
+  through existing hunger/morale/sharing mechanics
+- **Tension-aware storyteller:** colony health score biases world events — struggling colonies
+  get bounty/mushroom relief, thriving colonies get blight challenges
+- **Emergent cascades:** winter cold → fast depletion + high metabolism → hunger → low morale →
+  reduced harvest + stress metabolism → greedy hoarding → relation grudges → sharing blocked →
+  starvation spiral → storyteller sends relief → spring rain → recovery
+
 ---
 
 ## Key constraints
@@ -407,12 +489,14 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 
 **Gameplay depth**
 - [ ] Ore gathered to community stockpile; dwarves build fortress walls
-- [ ] Seasons: growback rate changes, winter food scarcity
+- [x] Seasons & weather: growback rate changes, winter food scarcity (Iteration 8)
 - [ ] Trade: merchant caravans, negotiation LLM calls
 
 **Intelligence depth**
 - [ ] Long-term goal generation per dwarf (personal goals between crises)
 - [ ] Memory compression: summarize old entries via cheap LLM call
+- [x] Trait-driven behavior: personality traits modify BT thresholds (Iteration 8)
+- [x] Relation-gated social behavior: sharing/contests depend on relation scores (Iteration 8)
 - [ ] Factional behavior: relationship clusters → informal coordinated factions
 
 **Infrastructure**
@@ -431,8 +515,16 @@ vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-pr
 
 - Phaser 3 docs: https://newdocs.phaser.io/docs/3.90.0
 - rot.js docs: https://ondras.github.io/rot.js/manual/
-- Project Sid (PIANO architecture): https://arxiv.org/abs/2411.00114
-- Sugarscape paper: https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html
-- LLM Sugarscape survival study: https://arxiv.org/abs/2508.12920
 - Kenney 1-bit Pack: https://kenney.nl/assets/1-bit-pack
-- Red Blob Games colony sim reference: https://www.redblobgames.com/x/2327-roguelike-dev/
+- LLM Sugarscape survival study: https://arxiv.org/abs/2508.12920
+
+---
+
+## Appendix: Game design references
+
+- [How RimWorld fleshes out the Dwarf Fortress formula](https://www.gamedeveloper.com/design/how-i-rimworld-i-fleshes-out-the-i-dwarf-fortress-i-formula)
+- [Deep Emergent Play: RimWorld case study](https://steemit.com/gaming/@loreshapergames/deep-emergent-play-a-case-study)
+- [PIANO cognitive architecture (Project Sid)](https://arxiv.org/abs/2411.00114)
+- [Sugarscape model](https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html)
+- [Red Blob Games — Terrain from Noise](https://www.redblobgames.com/maps/terrain-from-noise/)
+- [Red Blob Games — Roguelike Dev](https://www.redblobgames.com/x/2327-roguelike-dev/)
