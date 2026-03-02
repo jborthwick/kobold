@@ -39,138 +39,29 @@ cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
 
 ---
 
-## Stack decisions
+## Stack & architecture
 
-| Layer | Choice | Status | Notes |
-|---|---|---|---|
-| Language | TypeScript 5.x | ✅ live | End-to-end type safety |
-| Bundler | Vite 7.x | ✅ live | Native TS, HMR, proxy plugin for LLM |
-| Game engine | Phaser 3.90+ | ✅ live | TilemapLayer terrain + sprite goblins |
-| Roguelike algorithms | rot.js 2.x | ✅ live | A* pathfinding in `pathNextStep()` |
-| UI overlay | React 19 | ✅ live | HUD, GoblinPanel, EventLog, TilePicker |
-| Event bus | mitt (200 bytes) | ✅ live | Typed events for Phaser ↔ React |
-| LLM | claude-haiku-4-5 | ✅ live | Via Vite dev-server proxy at `/api/llm-proxy` |
-| Art assets | Kenney 1-bit Pack | ✅ live | `colored_packed.png` 49×22, 16×16 px, CC0 |
-| ECS | Koota (pmndrs) | ⏸ deferred | Plain TS interfaces used instead; revisit at ~20+ goblins |
-| Worker RPC | Comlink (Google) | ⏸ deferred | Simulation runs on main thread for now |
-| Backend | Cloudflare Workers + Hono | ⏸ deferred | Vite proxy used in dev; CF Worker is Phase 3 |
-| KV store | Cloudflare KV | ⏸ deferred | No rate-limiting yet |
-| Map editor | Tiled Map Editor | ✗ replaced | Procedural world gen + in-game tile picker (T key) |
-| Grid plugin | RexRainbow Board | ✗ not needed | rot.js A* is sufficient |
+TypeScript 5 · Vite 7 · Phaser 3.90+ · React 19 · rot.js 2 (A* pathfinding) · mitt event bus · claude-haiku-4-5 via `/api/llm-proxy` · Kenney 1-bit Pack (CC0)
 
-### Koota ECS — when and how to revisit
-
-**Trigger:** ~20+ simultaneous goblins, or a measurable tick budget on entity iteration / React re-renders.
-ECS cache-coherency and archetype-query benefits don't appear at 5–10 entities; the simulation bottleneck
-at current scale is rot.js A* pathfinding, not entity iteration.
-
-**If migrating, do goblins first — never migrate tiles.**
-The `grid[y][x]` 2D array gives O(1) spatial lookup that ECS entity queries cannot match; replacing it
-would be a regression. Dwarves are the right candidate because:
-- Component split is clear: `Position`, `Vitals`, `Inventory`, `LLMState`, `AgentMemory`, `SocialGraph`, `SpatialMemory` (~7 components)
-- Koota's `useQuery` hooks would eliminate the current every-tick full-snapshot re-render in `ColonyGoalPanel` / `SelectedGoblinPanel`
-
-**Hard problems to resolve before starting:**
-1. `tickAgent` takes a mutable `Goblin` reference and mutates it in place (~200 lines of BT) — must become `world.set(entity, Component, value)` throughout.
-2. LLM async callbacks close over the `Goblin` object reference. With Koota they'd close over an entity ID and need `world.isAlive(entity)` checks before mutating (goblin may have died while the LLM call was in-flight).
-3. `Map<string, Phaser.Sprite>` keyed by `goblin.id` string → `Map<Entity, Phaser.Sprite>`; Koota recycles entity IDs by default, so sprite cleanup must be airtight.
-4. `Goblin` is trivially JSON-serializable today; Koota entities are not — write a serialization round-trip test before touching WorldScene if save/load is planned.
-
-**Suggested phases:** (A) Dwarves only, grid stays plain 2D array → (B) Goblins → (C) Tiles only if growback/overlay iteration becomes measurable at very high entity counts.
-
----
-
-## Actual architecture (as built)
-
-```
-Browser — single main thread
-│
-├── Phaser (game loop, ~150ms/tick via delta check)
-│   └── WorldScene.ts — terrain tilemap, goblin sprites, input
-│        ↕ mitt event bus
-├── React (HUD overlay, EventLog, GoblinPanel, TilePicker)
-│
-└── LLM calls (async, detached, never block the game loop)
-     └── fetch('/api/llm-proxy')  →  Anthropic API
-          Vite dev-server proxy injects ANTHROPIC_API_KEY
-```
-
-**No Web Worker.** Simulation runs on the main thread alongside Phaser.
-**No Comlink.** React receives game state via `bus.emit('gameState', state)` each tick.
-**No Cloudflare Worker in dev.** The Vite config handles the `/api/llm-proxy` route directly.
+Everything runs on **one main thread**: Phaser game loop (~150ms/tick) + React HUD overlay + simulation.
+React receives state via `bus.emit('gameState', state)` each tick. LLM calls are async/detached, never block the loop.
+Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare Worker in dev).
 
 ---
 
 ## Core design principles
 
-**1. Sugarscape-style resource mechanics drive emergent behavior.**
-Each goblin has `vision` (tiles), `metabolism` (hunger/tick), and `inventory`. The core movement rule: scan visible cells, move to richest resource tile, harvest, increment hunger. If health hits zero the goblin dies. Resource heterogeneity (food NW, ore SE, river barrier) creates natural migration, competition, and scarcity.
-
-**2. PIANO-inspired cognitive architecture with a Cognitive Controller bottleneck.**
-Short-term memory: last 5 decisions per goblin fed into each LLM prompt (~200 tokens). When a crisis triggers, goblin state + situation + memory compress into a single ~400-token context, and a single LLM call produces one coherent decision covering action, reasoning, intent, and expected outcome.
-
-**3. LLM is a crisis decision-maker, not a tick-by-tick driver.**
-~95% of agent behavior runs deterministically (Utility AI scored actions). LLM calls fire only at genuine decision points. Cooldown: 280 ticks (~40 s) between calls per goblin. LLM is off by default — toggle with 🤖 button.
-
-**4. Action awareness prevents hallucination cascades (VERIFY step).**
-After each LLM-directed action, the simulation snapshots state. 40 ticks later it checks whether the outcome matched the expectation. Discrepancies are backfilled into the memory entry so the next prompt sees what actually happened.
-
-**5. Always playable without LLM.**
-If a request times out (5 s) or LLM is disabled, agents fall back silently to the deterministic behavior tree. No visible freezing.
+1. **Sugarscape resource mechanics** — scan visible cells, move to richest tile, harvest. Scarcity drives emergent competition/migration.
+2. **PIANO cognitive architecture** — last 5 decisions + goblin state compress into ~400-token LLM prompt for crisis decisions.
+3. **LLM is crisis-only** — ~95% deterministic Utility AI. LLM fires at decision points only. Cooldown: 280 ticks/goblin. Off by default (🤖 toggle).
+4. **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
+5. **Always playable without LLM** — timeout (5 s) or disabled → silent fallback to deterministic AI.
 
 ---
 
-## Agent data model
+## Agent roles
 
-```typescript
-// src/shared/types.ts — plain interfaces, no ECS framework
-
-export type GoblinRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
-export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'socialize' | 'none';
-
-export interface MemoryEntry {
-  tick:     number;
-  crisis:   string;
-  action:   string;
-  outcome?: string;  // backfilled by VERIFY step if action failed/surprised
-}
-
-export interface Goblin {
-  id:              string;
-  name:            string;
-  x:               number;
-  y:               number;
-  health:          number;
-  maxHealth:       number;
-  hunger:          number;       // 0–100; starvation starts at 100
-  metabolism:      number;       // hunger added per tick (0.15–0.35)
-  vision:          number;       // tile scan radius
-  inventory:       Inventory;
-  morale:          number;       // 0–100
-  alive:           boolean;
-  task:            string;       // display label (shown in HUD)
-  role:            GoblinRole;    // permanent, assigned at spawn
-  commandTarget:   { x: number; y: number } | null;
-  llmReasoning:    string | null;
-  llmIntent:       LLMIntent | null;  // active BT override; clears at llmIntentExpiry
-  llmIntentExpiry: number;            // tick at which intent expires
-  memory:          MemoryEntry[];     // rolling decisions; last 5 used in LLM prompts
-  fatigue:         number;       // 0–100; rises with movement/work, decays when resting
-  social:          number;       // 0–100; rises when isolated from friendly goblins
-  lastSocialTick:  number;       // tick when goblin last had a friend within proximity
-  trait:           GoblinTrait;  // permanent personality trait
-  relations:       Record<string, number>;  // keyed by goblin.id; 0–100 (50 = neutral)
-  knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
-  knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
-  knownWoodSites:  ResourceSite[];   // remembered forest wood sites (cap: 5)
-  homeTile:        { x: number; y: number };  // colony center (stockpile location)
-  skillXp:         number;       // lifetime XP for role skill
-  skillLevel:      number;       // floor(sqrt(xp / 10)) — cached, recomputed on XP grant
-  wound?:          Wound;        // active wound (undefined = healthy); heals at wound.healTick
-}
-```
-
-**Role stats (assigned round-robin at spawn: forager, miner, scout, lumberjack, fighter):**
+Agent data model is in `src/shared/types.ts` (plain interfaces, no ECS). Roles assigned round-robin at spawn:
 | Role       | Vision | HP  | Behavior |
 |------------|--------|-----|----------|
 | forager    | 4–6    | 100 | harvests 2 food/tile (others: 1); main food collector |
@@ -181,477 +72,81 @@ export interface Goblin {
 
 ---
 
-## Utility AI (`tickAgentUtility`, scored action selection)
+## Utility AI (`tickAgentUtility` in `utilityAI.ts`, actions in `actions.ts`)
 
-Replaced the fixed-priority behavior tree (Iteration 10). Every tick each eligible
-action scores 0–1 via sigmoid/ramp response curves. Highest-scoring action wins.
-Traits shift sigmoid midpoints (not thresholds), creating organic personality-driven
-divergence. LLM intents add +0.5 to matching action scores (capped at 1.0).
+Every tick: `updateNeeds()` → starvation damage → expire LLM intent → stockpile
+deposit/withdraw → score all eligible actions (0–1 via sigmoid/ramp curves) → execute
+highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action scores.
+16 actions defined in `actions.ts`; see file for scoring formulas.
 
-```
-Flow:
-  1. updateNeeds()           — hunger, morale, fatigue, social, wound healing
-  2. starvation damage       — unconditional, not an action
-  3. expire stale LLM intent
-  4. stockpile deposit/withdraw (instant reactions when standing on stockpile)
-  5. score all eligible actions (+ LLM boost)
-  6. execute highest-scoring action
-
-Actions (scored, highest wins):
-  commandMove   — player override (always score 1.0)
-  eat           — sigmoid(hunger, eatThreshold=70); trait-shifted
-  rest          — sigmoid(fatigue, 60); resting accelerates wound healing ×3
-  share         — sigmoid(target.hunger, 70) × ramp(food, 6, 15); relation-gated
-  fight         — fighters only; inverseSigmoid(distance) × inverseSigmoid(hunger)
-  forage        — sigmoid(hunger, 40); scan vision for richest food; contest yield
-  depositFood   — ramp(food, 8, 20) × inverseSigmoid(hunger, 50)
-  withdrawFood  — sigmoid(hunger, 65); pathfind to stockpile
-  mine          — miners only; inverseSigmoid(hunger, 60); + remembered ore sites
-  chop          — lumberjacks only; inverseSigmoid(hunger, 60); + remembered wood sites
-  depositOre    — miners; ramp(materials, 6, 20)
-  depositWood   — lumberjacks; ramp(materials, 6, 20)
-  buildWall     — miners; ramp(totalOre, 3, 30); requires ore in stockpile
-  socialize     — sigmoid(social, 50); seeks nearby friendly goblin
-  avoidRival    — flee from low-relation neighbors (score 0.3)
-  wander        — fallback exploration (score 0.05); persistent waypoints
-```
-
-**Close-call logging:** When top two actions score within 0.03 and both > 0.45,
-the event log shows "⚖ agonizing over X vs Y" — creates emergent drama.
-
-**Fatigue system:** Movement/work generates fatigue (0.2–0.4/tick × trait modifier).
-Fatigue > 70 → 30% chance to skip action (exhaustion stumble). Fatigue > 90 → morale decay.
-Rest action recovers 1.5/tick and accelerates wound healing.
+**Close-call logging:** top two actions within 0.03 → "⚖ agonizing over X vs Y".
+**Fatigue:** 0–100; >70 → 30% skip action; >90 → morale decay. Rest recovers 1.5/tick.
 
 ---
 
-## Crisis detection (`detectCrisis`, runs every tick)
+## Game systems (see source files for exact values)
 
-Fires a crisis (and queues an LLM call) for the first matching condition:
-
-| Type | Condition |
-|---|---|
-| `low_supplies` | inventory.food ≤ 2 AND hunger ≥ 40 |
-| `hunger` | hunger ≥ 65 |
-| `morale` | morale ≤ 40 |
-| `resource_contest` | alive rival within 2 tiles (scouts: 4) also has food < 3 |
-| `resource_sharing` | own food ≥ 8 AND nearby rival hunger > 60 AND rival food < 3 |
-
-Morale dynamics: decays −0.4/tick when hunger > 60; recovers +0.2/tick when hunger < 30.
+- **Crisis detection** (`crisis.ts`): 5 crisis types trigger LLM calls. Morale decays when hungry, recovers when fed.
+- **Traits** (`agents.ts` `TRAIT_MODS`): 8 traits shift sigmoid midpoints via `traitMod()`. See table in source.
+- **Weather** (`weather.ts`): clear/rain/drought/cold modify growback + metabolism. Seasons cycle every 600 ticks.
+- **Skills** (`skills.ts`): one skill per role, level = `floor(sqrt(xp/10))`. XP on primary action, +0.3 yield or +3 dmg per level.
+- **Wounds** (`wounds.ts`): single slot, 60% chance on hit. 4 types (bruised/leg/arm/eye). `effectiveVision()` replaces raw vision everywhere.
+- **Factions** (`factions.ts`): cosmetic only — `getActiveFaction()` returns display config. Goblins (default) or Dwarves. Persists in save.
+- **Storyteller** (`events.ts`): tension-aware event distribution — struggling colonies get relief, thriving colonies get challenged.
 
 ---
 
-## Trait modifiers (`TRAIT_MODS` in `agents.ts`)
+## LLM integration
 
-Traits modify hardcoded BT thresholds via `traitMod()` helper:
-
-| Trait | Behavioral effect |
-|-------|-------------------|
-| `helpful` | Shares food at 6 (not 8), keeps only 3; shares even with low-trust neighbors |
-| `greedy` | Won't share until 12 food, keeps 8; won't share with rivals |
-| `brave` | Fights adventurers until 95 hunger (not 80) |
-| `paranoid` | Flees combat at 60 hunger; drifts home 50% of the time (not 25%) |
-| `lazy` | Eats at 55 hunger (not 70) — consumes food faster |
-| `cheerful` | Shares at 6 food; shares with more neighbors (low relation gate) |
-| `mean` | Won't share until 14 food; contest penalty doubled (−10 not −5); won't share with non-allies |
-| `forgetful` | No modifier (flavor only — could later affect memory size) |
-
----
-
-## Weather system (`src/simulation/weather.ts`)
-
-Global state modifying growback rates and goblin metabolism:
-
-| Weather | Growback | Metabolism | When |
-|---------|----------|------------|------|
-| Clear | 1.0× | 1.0× | Default |
-| Rain | 1.8× | 1.0× | Common in spring |
-| Drought | 0.25× | 1.0× | Common in summer |
-| Cold | 0.5× | 1.4× | Dominates winter |
-
-Seasons cycle every 600 ticks (~85 s). Weather shifts at season boundaries and
-randomly mid-season (0.2% per tick). Displayed in HUD top bar.
-Touches zero agent code — modifies `growback()` multiplier and `tickAgent()` metabolism
-multiplier; existing hunger/morale/sharing mechanics cascade from there.
-
----
-
-## Skills & XP system (`src/simulation/skills.ts`)
-
-One skill per role, XP accrues on primary actions:
-
-| Role       | XP trigger          | Bonus per level |
-|------------|---------------------|-----------------|
-| forager    | successful harvest  | +0.3 food yield |
-| miner      | ore extraction      | +0.3 ore yield  |
-| fighter    | combat engagement   | +3 damage       |
-| scout      | reaching wander target | +1 vision    |
-| lumberjack | wood chop           | +0.3 wood yield |
-
-Level formula: `floor(sqrt(xp / 10))` — Level 0 → 1 at 10 XP, 1 → 2 at 40 XP, 2 → 3 at 90 XP.
-Level-up logged in event log with ⭐ icon.
-
----
-
-## Wound system (`src/simulation/wounds.ts`)
-
-Single wound slot per goblin. 60% chance to roll a wound on adventurer hit:
-
-| Wound   | Chance | Duration | Effect |
-|---------|--------|----------|--------|
-| bruised | 30%    | 80 ticks | fatigue +0.3/tick extra |
-| leg     | 15%    | 150 ticks | 40% chance to skip movement each tick |
-| arm     | 10%    | 120 ticks | harvest/mine yield ×0.5, combat damage ×0.6 |
-| eye     | 5%     | 200 ticks | vision −3 tiles (min 1) |
-
-`effectiveVision(goblin)` replaces raw `goblin.vision` everywhere — combines base +
-skill bonus − wound penalty. Rest action accelerates healing ×3.
-
----
-
-## Faction system (`src/shared/factions.ts`)
-
-Cosmetic framework — game mechanics identical for both factions. All display-layer
-content reads from `getActiveFaction()` at runtime:
-
-| Field             | Goblins (default)          | Dwarves                    |
-|-------------------|----------------------------|----------------------------|
-| Title             | KOBOLD                     | IRONHOLD                   |
-| Unit noun         | goblin / goblins           | dwarf / dwarves            |
-| Enemy noun        | adventurers                | goblins                    |
-| Kill verb         | clobbered                  | slew                       |
-| Narrator tone     | darkly humorous, chaotic   | solemn, saga-like          |
-| Accent color      | #f0c040 (gold)             | #c0a060 (amber)            |
-
-`FactionConfig` interface has ~20 fields covering names, bios, goals, trait/role display
-labels, LLM prompt templates, goal descriptions, and event message flavor text.
-Faction persists in `SaveData.faction?` (defaults to 'goblins' for old saves).
-
----
-
-## Tension-aware storyteller (`src/simulation/events.ts`)
-
-Replaced flat 25/25/25/25 event distribution with colony-health-aware selection:
-
-| Colony tension | Event bias |
-|----------------|------------|
-| High (>70) | 45% bounty, 40% mushroom, 15% ore (help colony) |
-| Low (<30) | 50% blight, 25% ore, 25% mushroom (challenge colony) |
-| Medium | Uniform random (unpredictable) |
-
-Tension = f(avg hunger, avg morale, adventurer count, recent deaths). Creates dramatic
-pacing: a struggling colony gets relief, a thriving colony gets challenged.
-
----
-
-## LLM prompt format (actual, `buildPrompt`)
-
-```
-You are {name}, a {faction.llmSpecies} {faction.llmRoleLabels[role]}
-Role affects your priorities and decisions.
-Status — Health: {h}/{max}, Hunger: {hunger}/100, Morale: {morale}/100
-Food carried: {food} units. Current task: {task}.
-
-CRISIS: {situation.description}
-Colony context: {situation.colonyContext}
-
-RECENT DECISIONS:                        ← omitted if memory empty
-  [tick N] {crisisType}: "{action}" → OUTCOME: {outcome}   ← outcome only if VERIFY fired
-
-Respond ONLY as valid JSON (no markdown, no extra text):
-{
-  "action": "one short sentence — what you will do next",
-  "intent": "eat | forage | rest | avoid | none",
-  "reasoning": "internal monologue, 1-2 sentences",
-  "emotional_state": "3-5 words describing how you feel",
-  "expectedOutcome": "one short sentence — what you expect to happen"
-}
-```
-
+**Crisis LLM** (`crisis.ts`): `buildPrompt()` compresses goblin state + situation + last 5
+memories into ~400 tokens. Returns JSON `{action, intent, reasoning, emotional_state, expectedOutcome}`.
 Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/goblin.
 
-**Storyteller LLM** (`storyteller.ts`): fires once per goal completion. ~300 token prompt
-with colony roster, tension score, and 15 significant events. Returns 2-4 sentence chapter
-summary. Timeout: 8 s. Max tokens: 200. Falls back to deterministic text on failure.
+**Storyteller LLM** (`storyteller.ts`): fires once per goal completion. ~300 token prompt.
+Returns 2-4 sentence chapter. Timeout: 8 s. Falls back to deterministic text on failure.
 
 ---
 
 ## World design
 
-- **Grid:** 64×64 tiles, 16×16 px (Kenney 1-bit `colored_packed.png`)
-- **Tile types:** Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall
-- **Layout:** Dual-noise biome classification (Red Blob Games pattern).
-  `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`:
-  - **Noise fields:** Two independent Simplex noise fields (elevation + moisture) via
-    `simplex-noise` npm package, seeded with Mulberry32 PRNG. Fractal Brownian motion
-    (3 octaves, persistence 0.5, lacunarity 2.0) at each tile.
-  - **Biome lookup:** `classifyBiome(elevation, moisture) → TileType`:
-    - Water: elevation < 0.22 (natural lakes/ponds)
-    - LOW (0.22–0.38): Mushroom / Farmland / Grass / Dirt by moisture
-    - MED (0.38–0.58): Forest / Grass / Dirt by moisture
-    - HIGH (0.58–0.78): Forest / Dirt / Stone by moisture
-    - PEAK (≥ 0.78): Ore / Stone by moisture
-  - **Resource values** derived from noise position (not random): `tileResourceValues()`
-    maps tile type + elevation/moisture to food/material/growback using WORLD_CONFIG constants.
-  - **No explicit river** — water bodies emerge naturally from the elevation field.
-  - **Spawn zone:** 12×6 rectangle, best of 40 seeded random candidates + center fallback.
-    Scored by walkability (>80% non-water) and nearby food count (15-tile radius).
-    If < 20 food tiles nearby, a guaranteed mushroom patch is seeded ~6 tiles away.
-  - **Fully seeded:** same seed = identical world. Seed displayed in console.
-- **`FORAGEABLE_TILES`** (`src/simulation/agents.ts`): `Set<TileType>` listing harvestable
-  tile types. Currently `{ Mushroom }`. Add one line to unlock a new food source.
-- **Harvest split:** tile loses `depletionRate` (5–6) per visit but goblin only gains
-  `harvestYield` (1–2) — tiles exhaust fast, forcing goblins to explore.
-- **Growback rates:** Forest 0.04/tick · Farmland 0.02/tick · Mushroom 0.08/tick (slowest to refill)
-- **World events** (every 300–600 ticks, layout-agnostic grid scan):
-  - Blight: halves maxFood/foodValue in a 6-tile radius
-  - Bounty: boosts food ×1.5 (cap 20) in a 5-tile radius
-  - Ore discovery: spawns up to 5 new Ore tiles in a 3-tile cluster
+- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall
+- **World gen** (`world.ts`): dual Simplex noise (elevation + moisture) → biome classification.
+  `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`. Fully seeded — same seed = identical world.
+- **`FORAGEABLE_TILES`** (`agents.ts`): `Set<TileType>` — currently `{ Mushroom }`. Add one line to unlock new food source.
+- **Harvest split:** tiles deplete 5–6× per visit, goblins gain only 1–2 → forces exploration
+- **Growback:** Forest 0.04/tick · Farmland 0.02/tick · Mushroom 0.08/tick
+- **World events** (every 300–600 ticks): blight, bounty, ore discovery — tension-aware distribution
 
 ---
 
 ## Tile frame config
 
-Managed by `src/game/tileConfig.ts` (editable via in-game T-key tile picker):
-
-```typescript
-TILE_CONFIG = {
-  Dirt:     [0, 1, 2],              // noise-selected variation
-  Grass:    [5, 6, 7],
-  Forest:   [49,50,51,52,53,54,101,102],
-  Water:    [253],
-  Stone:    [103],
-  Farmland: [310],
-  Ore:      [522],
-  Mushroom: [554],
-}
-SPRITE_CONFIG = { goblin: 318 }
-```
-
+See `src/game/tileConfig.ts` (editable via in-game T-key tile picker).
 Frame index = `row * 49 + col` (0-based, 49 cols × 22 rows, 16 px, no spacing).
 Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ---
 
-## Actual file structure
+## Key directories
 
-```
-src/
-├── main.tsx                     # Vite entry — mounts React + Phaser
-├── App.tsx                      # React root: HUD + EventLog + TilePicker + ChroniclePanel
-├── game/
-│   ├── PhaserGame.tsx           # React component hosting Phaser canvas
-│   ├── scenes/
-│   │   ├── BootScene.ts         # Asset preload → starts WorldScene
-│   │   └── WorldScene.ts        # Main scene: tilemap, sprites, input, game loop
-│   └── tileConfig.ts            # Frame arrays per TileType; auto-saved by tile picker
-├── simulation/
-│   ├── world.ts                 # generateWorld(), growback(), isWalkable()
-│   ├── agents.ts                # spawnGoblins(), pathfinding helpers, TRAIT_MODS, FORAGEABLE_TILES
-│   ├── actions.ts               # Utility AI action definitions (16 scored actions)
-│   ├── utilityAI.ts             # tickAgentUtility() selector loop, response curves, needs update
-│   ├── skills.ts                # XP/level system — grantXp(), role-specific bonuses
-│   ├── wounds.ts                # Injury system — rollWound(), effectiveVision(), wound effects
-│   ├── adventurers.ts           # Adventurer (enemy) raid spawning, AI, combat
-│   ├── events.ts                # tickWorldEvents() — tension-aware storyteller
-│   └── weather.ts               # Weather state, season cycling, growback/metabolism multipliers
-├── ai/
-│   ├── crisis.ts                # detectCrisis(), LLMDecisionSystem, buildPrompt(), PROVIDERS
-│   ├── storyteller.ts           # Chronicle chapter generation — filterSignificantEvents(), callStorytellerLLM()
-│   └── types.ts                 # LLMDecision, CrisisSituation interfaces
-├── ui/
-│   ├── HUD.tsx                  # Top bar + GoblinPanel + ChroniclePanel + ColonyGoalPanel
-│   ├── StartMenu.tsx            # Faction picker + continue/new colony UI
-│   ├── EventLog.tsx             # Scrollable colored event feed
-│   ├── MiniMap.tsx              # Canvas-based minimap with goblin/adventurer dots
-│   ├── MobileControls.tsx       # Touch controls for mobile (overlay buttons)
-│   ├── MobileBottomSheet.tsx    # Mobile-friendly bottom sheet for goblin detail
-│   └── TilePicker.tsx           # In-game tile frame editor (T key)
-└── shared/
-    ├── types.ts                 # Goblin, Tile, GameState, Chapter, Wound, ResourceSite, …
-    ├── events.ts                # mitt bus type definitions (24 event types)
-    ├── factions.ts              # FactionConfig, GOBLIN_FACTION, DWARF_FACTION, getActiveFaction()
-    ├── save.ts                  # SaveData, saveGame(), loadGame(), peekSave()
-    ├── constants.ts             # GRID_SIZE, TILE_SIZE, TICK_RATE_MS, MAX_INVENTORY_FOOD
-    ├── platform.ts              # Device detection (isMobile, isTablet)
-    └── useViewport.ts           # React hook for responsive viewport dimensions
-public/
-└── assets/kenney-1-bit/Tilesheet/colored_packed.png
-vite.config.ts                   # assetsInclude, tileConfigWriterPlugin, llm-proxy
-```
+- `src/game/` — Phaser scenes (WorldScene.ts is the main game loop), tileConfig
+- `src/simulation/` — game logic: agents, actions, utilityAI, world, weather, skills, wounds, events, adventurers
+- `src/ai/` — LLM integration: crisis detection, storyteller chapters
+- `src/ui/` — React overlay: HUD, EventLog, MiniMap, StartMenu, TilePicker
+- `src/shared/` — types, constants, events bus, factions, save/load
 
 ---
 
 ## Implementation status
 
-### Iteration 1 ✅ — Procedural world + basic goblins
-- Procedural `generateWorld()` with dual-peak layout (NW food, SE ore, river, spawn zone)
-- 5 goblins spawning in cleared zone, Sugarscape foraging, starvation/death
-- React HUD (goblins, food, stone, tick)
-
-### Iteration 2 ✅ — Kenney tileset
-- `Phaser.Tilemaps.TilemapLayer` terrain with per-tile tinting for food density
-- Sprite-based goblins color-shifted green→red by hunger
-- Selection ring + cyan command ring graphics
-
-### Iteration 3 ✅ — Behavior tree, pathfinding, player commands, UI
-- rot.js A* pathfinding (`pathNextStep`) replacing greedy step
-- 6-priority behavior tree in `tickAgent()`
-- Right-click player commands with yellow flag marker
-- Resource overlay toggle (O key) — food/material density
-- Scrollable color-coded EventLog
-- LLM crisis detection fully working (model, proxy, JSON parsing)
-
-### Iteration 4 ✅ — Camera, LLM execution, short-term memory
-- WASD + drag pan, scroll-wheel zoom (0.5–5×, dynamic min = map-fill; cursor-anchored)
-- WASD speed divided by `cam.zoom` for consistent apparent pan speed
-- LLM `action` field drives `goblin.task` display
-- LLM `intent` field overrides behavior tree for 50 ticks
-- Short-term memory (last 5 decisions) injected into LLM prompts
-- LLM toggle (🤖/💤) — off by default
-
-### Iteration 5 ✅ — Roles, VERIFY, world events, social behaviors
-- Agent roles: forager/miner/scout (vision, harvest rate, ore targeting, contest radius)
-- HUD role badge colored by role
-- VERIFY step (PIANO §6): outcome snapshots backfilled into memory entries
-- World events: blight/bounty/ore discovery every 300–600 ticks
-- Food sharing (BT step 2.7): well-fed goblins gift food to nearby starving neighbors
-- Contest yield: hungrier goblin harvests first on contested tile
-- `resource_sharing` crisis type
-
-### Iteration 6 ✅ — Procedural world, scarcity, UI polish
-- **Fully procedural world generation:** river, forests, ore, mushrooms, farmland, and
-  spawn zone are all randomly placed each game — no hardcoded layout
-- **Sinusoidal river:** two overlapping sine waves produce an organic river shape
-- **Mushroom-only foraging via `FORAGEABLE_TILES` Set:** data-driven, one-line extensible
-- **Split depletion/yield:** tiles exhaust 5–6× faster than goblins receive food → forces
-  exploration and scarcity-driven crisis behaviour
-- **Growback rates slashed** (×5–7 slower) to sustain scarcity pressure
-- **Full-height EventLog** (360px right sidebar, top-to-bottom) with word-wrap
-- **Memory panel in GoblinPanel:** last 5 LLM decisions shown in HUD (red ✗ for bad outcomes)
-- **Dead-goblin ghost sprites:** deceased goblins persist as red, Y-flipped sprites
-- **`[` / `]` hotkeys:** cycle selected goblin through all alive goblins
-
-### Iteration 7 ✅ — Colony goal, depot, fighter role, succession
-- **Colony-wide shared goal** cycling through `stockpile_food → survive_ticks → defeat_adventurers → enclose_fort`; completion grants +15 morale, scales next target by `1 + generation × 0.5`
-- **Communal food depot** at spawn-zone center: goblins auto-deposit surplus (food ≥ 10) and withdraw when starving; gold border + `D:N` label renders above the tile
-- **Fighter role**: 130 HP, hunts adventurers within vision×2 (BT step 3.5), deals 18 hp/hit vs 8 for others — kills a 30 HP adventurer in 2 hits
-- **Death & succession**: `spawnSuccessor()` queues a replacement ~300 ticks after each death with inherited memory fragments, muted relations, and an optional LLM arrival thought (`callSuccessionLLM()`)
-- **`ColonyGoalPanel`** in right sidebar: gold progress bar for current goal + depot food level
-- **Phaser render-order fix**: all overlay Graphics/Text must be created after `createBlankLayer()`
-
-### Iteration 8 ✅ — Emergent behavior: traits, relations, morale, weather, storyteller
-Prior to this iteration, traits/relations/morale/personal goals were wired into the data
-model, rendered in UI, and sent to the LLM — but gated **zero** behavior tree decisions.
-Every goblin acted identically regardless of personality.
-
-- **Trait modifiers → BT thresholds:** `TRAIT_MODS` map + `traitMod()` helper make 8 traits
-  (helpful, greedy, brave, paranoid, lazy, cheerful, mean, forgetful) modify 6 hardcoded
-  thresholds (eat, share, keep, fight-flee, contest penalty, relation gate)
-- **Relations gate sharing and contests:** goblins refuse to share food with neighbors whose
-  relation score < `shareRelationGate` (30 default, 55 for mean). Allies (relation ≥ 60)
-  yield peacefully with cooperation bonus instead of contest penalty
-- **Morale affects BT:** stress metabolism (morale < 25 → +30% hunger/tick death spiral);
-  harvest yield scales 0.5×–1.0× with morale
-- **Weather system** (`src/simulation/weather.ts`): clear/rain/drought/cold modifies growback
-  and metabolism multipliers. Seasons cycle every 600 ticks. Touches zero agent code — cascades
-  through existing hunger/morale/sharing mechanics
-- **Tension-aware storyteller:** colony health score biases world events — struggling colonies
-  get bounty/mushroom relief, thriving colonies get blight challenges
-- **Emergent cascades:** winter cold → fast depletion + high metabolism → hunger → low morale →
-  reduced harvest + stress metabolism → greedy hoarding → relation grudges → sharing blocked →
-  starvation spiral → storyteller sends relief → spring rain → recovery
-
-### Iteration 9 ✅ — Dual-noise biome world generation
-- **Simplex noise biome classification** (Red Blob Games pattern): two independent noise fields
-  (elevation + moisture) with fractal Brownian motion → biome lookup table replaces hand-placed
-  cluster stampers. Each seed produces genuinely different world topology
-- **Seeded Mulberry32 PRNG** inline (~10 lines) instead of `alea` (CJS-only, incompatible with
-  `verbatimModuleSyntax: true`). `simplex-noise` v4 accepts any `() => number`
-- **Removed explicit sinusoidal river** — water bodies emerge naturally from elevation < 0.22
-- **Removed cluster stampers** (`placeForestCluster`, `placeOreCluster`, `placeMushroomCluster`,
-  `placeFarmland`) and 8-pass ordered placement system
-- **Noise-based spawn placement**: best of 40 seeded random candidates + center fallback,
-  scored by walkability (>80% non-water) and nearby food count (15-tile radius)
-- **World seed saved and restored** in `SaveData` (`worldSeed?: string`, backward compatible)
-- **Coherent biome regions**: forests cluster in moist midlands, mushroom bogs in wet lowlands,
-  ore/stone on dry peaks — 2-3 distinct biome regions on 64×64 map
-
-### Iteration 10 ✅ — Utility AI, skills & XP, wounds
-- **Utility AI replaces fixed-priority BT:** `tickAgentUtility()` in `utilityAI.ts` + 16 scored
-  actions in `actions.ts`. Every tick each eligible action scores 0–1 via sigmoid/ramp response
-  curves; highest score wins. Traits shift sigmoid midpoints (not thresholds). LLM intents add
-  +0.5 to matching action scores (capped at 1.0) instead of hard-overriding the BT
-- **Response curves:** `sigmoid(value, midpoint, steepness)`, `inverseSigmoid()`, `ramp(value, min, max)`
-  — smooth 0–1 scoring replaces hardcoded threshold checks
-- **Fatigue system:** 0–100; rises with movement/work (trait-modified rate), decays when resting.
-  Fatigue > 70 → 30% chance to skip action. Fatigue > 90 → morale decay. Bruised wound adds
-  extra +0.3 fatigue/tick
-- **Social need:** 0–100; rises when isolated from friendly goblins (> 3 tiles from relation ≥ 40
-  neighbor for > 30 ticks). High social need → morale decay + socialize action scores higher
-- **Skills & XP** (`skills.ts`): one skill per role. Level = floor(sqrt(xp / 10)). XP granted
-  on primary action (forager: harvest, miner: ore extraction, fighter: combat, scout: exploration,
-  lumberjack: wood chop). Bonuses: forager/lumberjack +0.3 yield/level, miner +0.3 ore/level,
-  fighter +3 damage/level, scout +1 vision/level
-- **Wound system** (`wounds.ts`): single wound slot per goblin. 60% chance on adventurer hit:
-  bruised (30%, 80 ticks, +fatigue), leg (15%, 150 ticks, 40% skip movement), arm (10%, 120 ticks,
-  yield ×0.5, damage ×0.6), eye (5%, 200 ticks, vision −3). Rest action accelerates healing ×3
-- **Close-call logging:** "⚖ agonizing over X vs Y" when top two actions score within 0.03
-- **Trait-flavored action logs:** each trait has unique flavor text for eat/rest/share actions
-- **Spatial memory:** goblins remember up to 5 food/ore/wood sites; pathfind to remembered
-  patches when nothing is visible — reduces wander time, creates emergent resource routes
-
-### Iteration 11 ✅ — Fort building, lumberjack role, ore/wood stockpiles
-- **Lumberjack role:** chops forest tiles for wood (materialValue), deposits to wood stockpile.
-  Same vision/HP as scout. Role order: forager, miner, scout, lumberjack, fighter
-- **Ore stockpile:** miners deposit materials; drawn from by miners building fort walls (3 ore
-  per wall). Placed adjacent to food stockpile
-- **Wood stockpile:** lumberjacks deposit materials. Placed adjacent to food stockpile on
-  opposite side from ore stockpile
-- **Wall building action:** miners pathfind to `fortWallSlots()` or `fortEnclosureSlots()`,
-  consume 3 ore from stockpile, place `TileType.Wall` — blocks movement
-- **`enclose_fort` colony goal:** 4th goal in the cycle. Progress = 1 when all fort enclosure
-  slots are filled with walls. Creates a walled perimeter around the stockpile area
-- **Colony goal cycle expanded:** `stockpile_food → survive_ticks → defeat_adventurers → enclose_fort`
-- **MiniMap** (`MiniMap.tsx`): canvas-based minimap showing tile types, goblin/adventurer dots,
-  and camera viewport rectangle
-- **Resource overlay expanded:** O key cycles through `off → food → material → wood` modes
-
-### Iteration 12 ✅ — Goblin migration & comedic tone shift
-- **Full rename: Dwarf → Goblin (player), Goblin → Adventurer (enemy)**
-  Two-phase automated rename across 20+ files, ~600 references
-- **Goblin-themed names**: Grix, Snot, Murg, Blix, Rak, Nub, Fizzle, Blort, Skritch, Gob
-- **Comedic bios**: "ate a rock once and liked it", "has a pet spider named Lord Bitington"
-- **Low-bar goals**: "survive until lunch", "learn what a plan is", "find something shiny"
-- **Goblin trait display names**: Surprisingly Generous, Shinies Hoarder, Too Dumb to Run,
-  Sensibly Cautious, Professional Napper, Annoyingly Cheerful, Bitey, What Was I Doing?
-- **Goblin role display names**: Scavenger, Rock Biter, Sneaky Git, Basher, Tree Puncher
-- **Colony goals reworded**: "Hoard X food (without eating it all)", "Don't all die for X ticks"
-- **Adventurers as enemies**: Heroic NPCs raiding from map edges — inverted fantasy trope
-- **Storyteller tone**: "darkly humorous, chaotic, told with affection for the hapless goblins"
-- **Save format v2**: Clean break from v1 (old saves ignored)
-- **File rename**: `goblins.ts` → `adventurers.ts`
-
-### Iteration 13 ✅ — Faction system + Chronicle chapters
-- **Cosmetic faction system** (`factions.ts`): `FactionConfig` interface with ~20 fields covering
-  all display-layer content. Two factions: Goblins (chaos, dark humor) and Dwarves (order, saga tone).
-  Game mechanics identical — only names, bios, goals, trait/role labels, LLM prompt tone, event
-  messages, and enemy nouns differ
-- **Faction picker in StartMenu:** two styled buttons (👺 Goblins / ⛏ Dwarves) with dynamic
-  title/subtitle/hint. Reads saved faction for "Continue Colony" display. Faction persists in
-  `SaveData.faction` (backward compatible, defaults to 'goblins')
-- **Module-level singleton:** `getActiveFaction()` / `setActiveFaction()` — all display code
-  reads from active faction config at runtime
-- **Proxy-based backward compat:** `GOBLIN_TRAIT_DISPLAY` and `GOBLIN_ROLE_DISPLAY` use ES6 Proxy
-  objects to dynamically delegate to active faction config, preserving existing import signatures
-- **LLM prompt flavor:** crisis prompts, succession prompts, and storyteller narrator all use
-  faction-specific species name, role labels, tone, and enemy nouns
-- **Chronicle chapters** (`storyteller.ts`): `filterSignificantEvents()` selects ~15 narratively
-  important log entries since last chapter. `callStorytellerLLM()` generates 2-4 sentence narrator
-  prose on goal completion. Deterministic fallback if LLM disabled/fails. Chapters persist in save
-  data and display in `ChroniclePanel` (parchment-themed, expandable)
-- **Dwarf faction content:** names (Brom, Durin, Thrain...), stoic bios, saga narrator tone,
-  kill verb "slew", enemies are "goblins", title "IRONHOLD", accent color amber
+**Current: Iteration 13.** See `git log` for full changelog. Key milestones:
+1–3: World gen, tileset, pathfinding, BT, LLM crisis detection.
+4–6: Camera, LLM execution, memory, roles, VERIFY, procedural world, scarcity.
+7–9: Colony goals, depot, fighter role, succession, traits/weather/storyteller, dual-noise biomes.
+10: Utility AI (replaced BT), skills/XP, wounds, fatigue, social need, spatial memory.
+11: Lumberjack role, ore/wood stockpiles, fort building (`fortWallSlots`), minimap.
+12: Goblin migration (dwarf→goblin rename), comedic tone, save v2.
+13: Faction system (goblins vs dwarves), chronicle chapters, storyteller LLM.
 
 ---
 
@@ -670,25 +165,14 @@ Every goblin acted identically regardless of personality.
 ## Upcoming / Phase 3
 
 **Gameplay depth**
-- [x] Ore/wood stockpiles; goblins build fortress walls from ore (Iteration 11)
-- [x] Seasons & weather: growback rate changes, winter food scarcity (Iteration 8)
-- [x] Faction system: goblins vs dwarves with full cosmetic switching (Iteration 13)
+- [ ] Emergent base building: shelved on `emergent-base-building` branch (diffusion fields, Floor/Hearth/Door tiles, ring-based wall scoring — produces blobs not rooms; needs different approach)
 - [ ] Mechanical faction differences: different starting stats, trait distributions, sigmoid shifts
 - [ ] Trade: merchant caravans, negotiation LLM calls
 
 **Intelligence depth**
-- [x] Utility AI: sigmoid-scored action selection replaces fixed-priority BT (Iteration 10)
-- [x] Skills & XP: role-specific leveling with gameplay bonuses (Iteration 10)
-- [x] Wounds: injury system with 4 wound types affecting gameplay (Iteration 10)
-- [x] Spatial memory: goblins remember food/ore/wood patch locations (Iteration 10)
 - [ ] Long-term goal generation per goblin (personal goals between crises)
 - [ ] Memory compression: summarize old entries via cheap LLM call
-- [x] Trait-driven behavior: personality traits modify BT thresholds (Iteration 8)
-- [x] Relation-gated social behavior: sharing/contests depend on relation scores (Iteration 8)
 - [ ] Factional behavior: relationship clusters → informal coordinated factions
-
-**Narrative**
-- [x] Chronicle chapters: LLM-generated narrator summaries on goal completion (Iteration 13)
 
 **Infrastructure**
 - [ ] Cloudflare Worker `/api/llm-proxy` (replaces Vite proxy for production)
@@ -702,20 +186,7 @@ Every goblin acted identically regardless of personality.
 
 ---
 
-## Reference links
+## References
 
-- Phaser 3 docs: https://newdocs.phaser.io/docs/3.90.0
-- rot.js docs: https://ondras.github.io/rot.js/manual/
-- Kenney 1-bit Pack: https://kenney.nl/assets/1-bit-pack
-- LLM Sugarscape survival study: https://arxiv.org/abs/2508.12920
-
----
-
-## Appendix: Game design references
-
-- [How RimWorld fleshes out the Dwarf Fortress formula](https://www.gamedeveloper.com/design/how-i-rimworld-i-fleshes-out-the-i-goblin-fortress-i-formula)
-- [Deep Emergent Play: RimWorld case study](https://steemit.com/gaming/@loreshapergames/deep-emergent-play-a-case-study)
-- [PIANO cognitive architecture (Project Sid)](https://arxiv.org/abs/2411.00114)
-- [Sugarscape model](https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html)
-- [Red Blob Games — Terrain from Noise](https://www.redblobgames.com/maps/terrain-from-noise/)
-- [Red Blob Games — Roguelike Dev](https://www.redblobgames.com/x/2327-roguelike-dev/)
+Phaser 3: https://newdocs.phaser.io/docs/3.90.0 · rot.js: https://ondras.github.io/rot.js/manual/ · Kenney: https://kenney.nl/assets/1-bit-pack
+Design influences: [PIANO architecture](https://arxiv.org/abs/2411.00114) · [Sugarscape](https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html) · [LLM Sugarscape study](https://arxiv.org/abs/2508.12920) · [Red Blob Games noise terrain](https://www.redblobgames.com/maps/terrain-from-noise/)
