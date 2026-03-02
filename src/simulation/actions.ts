@@ -11,7 +11,8 @@
  * matters as a tiebreaker for equal scores.
  */
 
-import { TileType, type Goblin, type Tile, type LLMIntent, type GoblinTrait, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type ResourceSite } from '../shared/types';
+import { TileType, type Goblin, type Tile, type LLMIntent, type GoblinTrait, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type ResourceSite, type WeatherType } from '../shared/types';
+import { getWarmth, getDanger } from './diffusion';
 import { getActiveFaction } from '../shared/factions';
 import { GRID_SIZE, MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
@@ -64,6 +65,9 @@ export interface ActionContext {
   oreStockpiles?:  OreStockpile[];
   woodStockpiles?: WoodStockpile[];
   colonyGoal?:     ColonyGoal;
+  warmthField?:    Float32Array;  // diffusion field: warmth 0–100 per tile
+  dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile
+  weatherType?:    WeatherType;
 }
 
 export interface Action {
@@ -172,18 +176,32 @@ const eat: Action = {
   },
 };
 
-// --- rest: stay still, recover fatigue ---
+// --- rest: stay still, recover fatigue; warmth tiers bonus ---
 const rest: Action = {
   name: 'rest',
   intentMatch: 'rest',
   eligible: ({ goblin }) => goblin.fatigue > 20,
   score: ({ goblin }) => sigmoid(goblin.fatigue, 60),
-  execute: ({ goblin }) => {
-    goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
-    // Resting accelerates wound healing (~3× faster)
-    accelerateHealing(goblin, 2);
-    goblin.task = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
-    // Rest is routine — no log entry (too noisy)
+  execute: ({ goblin, warmthField }) => {
+    const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;
+    if (warmth >= 40) {
+      // Sheltered by hearth — best recovery
+      goblin.fatigue = Math.max(0, goblin.fatigue - 2.5);
+      accelerateHealing(goblin, 3);
+      goblin.morale  = Math.min(100, goblin.morale + 0.3);
+      goblin.task    = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
+    } else if (warmth >= 20) {
+      // Mild warmth — small bonus
+      goblin.fatigue = Math.max(0, goblin.fatigue - 2.0);
+      accelerateHealing(goblin, 2);
+      goblin.morale  = Math.min(100, goblin.morale + 0.1);
+      goblin.task    = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
+    } else {
+      // Exposed — baseline
+      goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
+      accelerateHealing(goblin, 2);
+      goblin.task    = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
+    }
   },
 };
 
@@ -639,11 +657,10 @@ const depositWood: Action = {
   },
 };
 
-// --- buildWall: miners build fort walls ---
+// --- buildWall: any goblin can build fort walls ---
 const buildWall: Action = {
   name: 'buildWall',
   eligible: ({ goblin, foodStockpiles, oreStockpiles }) => {
-    if (goblin.role !== 'miner') return false;
     if (goblin.hunger >= 65) return false;
     if (!foodStockpiles?.length || !oreStockpiles?.length) return false;
     const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
@@ -821,14 +838,228 @@ const wander: Action = {
   },
 };
 
+// --- seekWarmth: comfort preference — pathfinds to nearest hearth, stops once warm ---
+const SEEK_WARMTH_RADIUS    = 15;
+// Longer cooldown: prevents re-triggering immediately after being satisfied
+const SEEK_WARMTH_COOLDOWN  = 150;
+const seekWarmth: Action = {
+  name: 'seekWarmth',
+  intentMatch: 'rest',
+  eligible: ({ goblin, warmthField, grid, currentTick }) => {
+    if (!warmthField) return false;
+    // Use smoothed goblin.warmth to avoid single-step threshold crossings.
+    // Hysteresis: if already en route (task from last tick), stay committed until comfortably warm (50);
+    // otherwise only start when actually cold (< 25).
+    const warmth = goblin.warmth ?? 100;
+    const exitThreshold = goblin.task === 'seeking warmth' ? 50 : 25;
+    if (warmth >= exitThreshold) return false;
+    // Cooldown: prevents re-triggering immediately after being warm
+    if (currentTick - (goblin.lastLoggedTicks['seekWarmthDone'] ?? 0) < SEEK_WARMTH_COOLDOWN) return false;
+    // Eligible if a hearth is visible in range OR remembered from a previous visit
+    for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
+      for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE
+            && grid[ny][nx].type === TileType.Hearth) return true;
+      }
+    }
+    return (goblin.knownHearthSites ?? []).length > 0;
+  },
+  score: ({ goblin, warmthField, weatherType }) => {
+    if (!warmthField) return 0;
+    const warmth = goblin.warmth ?? 100;
+    const maxScore = weatherType === 'cold' ? 0.28 : 0.08;
+    return inverseSigmoid(warmth, 20, 0.12) * maxScore;
+  },
+  execute: ({ goblin, grid, currentTick }) => {
+    // Scan visible range: record any spotted hearths, find nearest
+    let nearestHearth: { x: number; y: number } | null = null;
+    let nearestDist = Infinity;
+    for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
+      for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+        if (grid[ny][nx].type !== TileType.Hearth) continue;
+        recordSite(goblin.knownHearthSites ?? (goblin.knownHearthSites = []), nx, ny, 1, currentTick);
+        const dist = Math.abs(dx) + Math.abs(dy);
+        if (dist < nearestDist) { nearestDist = dist; nearestHearth = { x: nx, y: ny }; }
+      }
+    }
+
+    // Nothing in range — fall back to memory (navigate toward remembered hearth)
+    if (!nearestHearth) {
+      const sites = goblin.knownHearthSites ?? [];
+      // Pick closest remembered hearth; evict if it's no longer there
+      const sorted = [...sites].sort((a, b) =>
+        (Math.abs(a.x - goblin.x) + Math.abs(a.y - goblin.y)) -
+        (Math.abs(b.x - goblin.x) + Math.abs(b.y - goblin.y)),
+      );
+      for (const site of sorted) {
+        if (grid[site.y]?.[site.x]?.type === TileType.Hearth) {
+          nearestHearth = { x: site.x, y: site.y };
+          nearestDist   = Math.abs(site.x - goblin.x) + Math.abs(site.y - goblin.y);
+          break;
+        }
+        // Hearth is gone — evict
+        goblin.knownHearthSites = sites.filter(s => !(s.x === site.x && s.y === site.y));
+      }
+    }
+
+    if (!nearestHearth) return;  // no hearth known — skip silently
+
+    // Satisfied: close to hearth or smoothed warmth has risen enough — start cooldown
+    const warmth = goblin.warmth ?? 0;
+    if (nearestDist <= 2 || warmth >= 40) {
+      goblin.lastLoggedTicks['seekWarmthDone'] = currentTick;
+      return;
+    }
+
+    // Pathfind directly to the hearth (handles doorways and walls correctly)
+    moveTo(goblin, nearestHearth, grid);
+    goblin.task = 'seeking warmth';
+  },
+};
+
+// --- seekSafety: flee to lowest-danger tile when threatened ---
+const seekSafety: Action = {
+  name: 'seekSafety',
+  intentMatch: 'avoid',
+  eligible: ({ goblin, dangerField }) => {
+    if (!dangerField) return false;
+    return getDanger(dangerField, goblin.x, goblin.y) > 60;
+  },
+  score: ({ goblin, dangerField }) => {
+    if (!dangerField) return 0;
+    return sigmoid(getDanger(dangerField, goblin.x, goblin.y), 60, 0.12) * 0.65;
+  },
+  execute: ({ goblin, grid, dangerField }) => {
+    if (!dangerField) return;
+    const SCAN = Math.min(5, effectiveVision(goblin));
+    let bestDanger = getDanger(dangerField, goblin.x, goblin.y);
+    let bestTile: { x: number; y: number } | null = null;
+
+    for (let dy = -SCAN; dy <= SCAN; dy++) {
+      for (let dx = -SCAN; dx <= SCAN; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+        if (!isWalkable(grid, nx, ny)) continue;
+        const d = getDanger(dangerField, nx, ny);
+        if (d < bestDanger) { bestDanger = d; bestTile = { x: nx, y: ny }; }
+      }
+    }
+    if (bestTile) {
+      moveTo(goblin, bestTile, grid);
+      goblin.task = 'fleeing to safety';
+    }
+  },
+};
+
+// --- buildHearth: any goblin builds a hearth from 2 wood when they're cold ---
+// "Near base" clustering emerges naturally: goblins spend most time near home,
+// so the first fire gets built there. Once it warms that area, nearby goblins
+// stay warm and won't build another. Only goblins cold in a different location build elsewhere.
+const HEARTH_COVERAGE_RADIUS = 8;  // matches warmth BFS radius — if a hearth covers you, don't build
+const HEARTH_BUILD_COOLDOWN  = 300; // personal cooldown after placing, prevents back-to-back builds
+const buildHearth: Action = {
+  name: 'buildHearth',
+  eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick }) => {
+    if (goblin.hunger >= 70) return false;
+    const totalFood = foodStockpiles?.reduce((s, f) => s + f.food, 0) ?? 0;
+    if (totalFood < 20) return false;
+    const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
+    if (totalWood < 2) return false;
+    // Goblin must actually feel cold (uses smoothed warmth — single steps don't flip this)
+    if ((goblin.warmth ?? 100) >= 35) return false;
+    // Personal cooldown — prevents a goblin from placing one then immediately starting another
+    if (currentTick - (goblin.lastLoggedTicks['builtHearth'] ?? 0) < HEARTH_BUILD_COOLDOWN) return false;
+    // A hearth already within coverage radius means this area is served — building would be wasteful
+    for (let dy = -HEARTH_COVERAGE_RADIUS; dy <= HEARTH_COVERAGE_RADIUS; dy++) {
+      for (let dx = -HEARTH_COVERAGE_RADIUS; dx <= HEARTH_COVERAGE_RADIUS; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE
+            && grid[ny][nx].type === TileType.Hearth) return false;
+      }
+    }
+    return true;
+  },
+  score: ({ goblin, woodStockpiles }) => {
+    const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
+    const warmth    = goblin.warmth ?? 100;
+    const base      = inverseSigmoid(warmth, 25, 0.12)
+                    * ramp(totalWood, 2, 20)
+                    * inverseSigmoid(goblin.hunger, 60)
+                    * 0.5;
+    // Momentum: already en route → commit, but only while base conditions still hold
+    const momentum  = (goblin.task === '→ hearth site' && base > 0) ? 0.15 : 0;
+    return base + momentum;
+  },
+  execute: ({ goblin, grid, woodStockpiles, currentTick, onLog }) => {
+    if (!woodStockpiles) return;
+
+    // Find nearest wood stockpile with surplus
+    const buildStockpile = woodStockpiles
+      .filter(s => s.wood >= 2)
+      .reduce<typeof woodStockpiles[0] | null>((best, s) => {
+        const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+        const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
+        return dist < bestDist ? s : best;
+      }, null);
+    if (!buildStockpile) return;
+
+    // Find best buildable Dirt/Grass tile near goblin's current position.
+    // Soft home bias: score = distToGoblin + 0.2 × distToHome, so tiles toward home are preferred
+    // without being forced. When the goblin is already near home, fires cluster there naturally.
+    let buildTarget: { x: number; y: number } | null = null;
+    let bestScore = Infinity;
+    const RADIUS = 5;
+    for (let dy = -RADIUS; dy <= RADIUS; dy++) {
+      for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+        const t = grid[ny][nx];
+        if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+        const distToGoblin = Math.abs(dx) + Math.abs(dy);
+        const distToHome   = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
+        const siteScore    = distToGoblin + 0.2 * distToHome;
+        if (siteScore < bestScore) { bestScore = siteScore; buildTarget = { x: nx, y: ny }; }
+      }
+    }
+    if (!buildTarget) return;
+
+    // Move toward build site
+    if (goblin.x !== buildTarget.x || goblin.y !== buildTarget.y) {
+      moveTo(goblin, buildTarget, grid);
+      goblin.task = '→ hearth site';
+      return;
+    }
+
+    // Place the hearth
+    const t = grid[buildTarget.y][buildTarget.x];
+    grid[buildTarget.y][buildTarget.x] = {
+      ...t, type: TileType.Hearth,
+      foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
+    };
+    buildStockpile.wood -= 2;
+    addWorkFatigue(goblin);
+    goblin.lastLoggedTicks['builtHearth'] = currentTick;
+    recordSite(goblin.knownHearthSites ?? (goblin.knownHearthSites = []), buildTarget.x, buildTarget.y, 1, currentTick);
+    goblin.task = 'built a hearth!';
+    if (shouldLog(goblin, 'buildHearth', currentTick, 300)) {
+      onLog?.('🔥 built a hearth for warmth', 'info');
+    }
+  },
+};
+
 // ── Export all actions ──────────────────────────────────────────────────────────
 
 export const ALL_ACTIONS: Action[] = [
   commandMove,
   eat,
+  seekSafety,   // danger-driven flee — high urgency, runs before rest/work
   rest,
   share,
   fight,
+  buildHearth,
   forage,
   depositFood,
   withdrawFood,
@@ -838,6 +1069,7 @@ export const ALL_ACTIONS: Action[] = [
   depositWood,
   buildWall,
   socialize,
+  seekWarmth,   // comfort nudge — low score, loses to most work actions
   avoidRival,
   wander,
 ];

@@ -45,8 +45,9 @@ export function loadGame(): SaveData | null {
     const data = JSON.parse(s) as SaveData;
     // Backward compat: add skill/wound fields if missing (pre-Iteration 10 saves)
     for (const d of data.goblins) {
-      if (d.skillXp    === undefined) d.skillXp    = 0;
-      if (d.skillLevel === undefined) d.skillLevel = 0;
+      if (d.skillXp         === undefined) d.skillXp         = 0;
+      if (d.skillLevel      === undefined) d.skillLevel      = 0;
+      if (d.knownHearthSites === undefined) d.knownHearthSites = [];
       // wound is optional (undefined = healthy) — no migration needed
     }
     return data;

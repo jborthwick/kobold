@@ -14,7 +14,8 @@
  *   5. execute highest-scoring action
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType } from '../shared/types';
+import { getWarmth } from './diffusion';
 import { MAX_INVENTORY_FOOD } from '../shared/constants';
 import { isWalkable } from './world';
 import {
@@ -58,10 +59,25 @@ function updateNeeds(
   goblins: Goblin[] | undefined,
   currentTick: number,
   weatherMetabolismMod: number,
+  warmthField: Float32Array | undefined,
+  weatherType: WeatherType | undefined,
   onLog?: LogFn,
 ): void {
   // Hunger grows every tick (cold weather burns calories faster)
   goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * weatherMetabolismMod);
+
+  // Exposure penalty — freezing in the open during cold weather
+  if (weatherType === 'cold' && warmthField) {
+    const warmth = getWarmth(warmthField, goblin.x, goblin.y);
+    if (warmth < 25) {
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.25);
+      goblin.morale  = Math.max(0, goblin.morale - 0.2);
+      goblin.hunger  = Math.min(100, goblin.hunger + goblin.metabolism * 0.2);
+      if (shouldLog(goblin, 'freezing', currentTick, 150)) {
+        onLog?.('🥶 freezing in the open', 'warn');
+      }
+    }
+  }
 
   // Morale decays slowly when hungry, recovers when well-fed
   if (goblin.hunger > 60) {
@@ -136,6 +152,9 @@ const ACTION_DISPLAY_NAMES: Record<string, string> = {
   depositOre:   'hauling ore',
   depositWood:  'hauling wood',
   buildWall:    'building',
+  buildHearth:  'building a hearth',
+  seekWarmth:   'seeking warmth',
+  seekSafety:   'fleeing to safety',
   socialize:    'socializing',
   avoidRival:   'avoiding a rival',
   wander:       'exploring',
@@ -156,6 +175,9 @@ export function tickAgentUtility(
   colonyGoal?:        ColonyGoal,
   woodStockpiles?:    WoodStockpile[],
   weatherMetabolismMod?: number,
+  warmthField?:       Float32Array,
+  dangerField?:       Float32Array,
+  weatherType?:       WeatherType,
 ): void {
   if (!goblin.alive) return;
 
@@ -170,7 +192,7 @@ export function tickAgentUtility(
   }
 
   // 1. Update needs (hunger, morale, fatigue, social)
-  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, onLog);
+  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, onLog);
 
   // Fatigue > 70: 30% chance to skip action this tick (exhaustion stumble)
   if (goblin.fatigue > 70 && Math.random() < 0.3) {
@@ -248,6 +270,7 @@ export function tickAgentUtility(
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
+    warmthField, dangerField, weatherType,
   };
 
   // 5. Score all eligible actions (+ LLM boost)
@@ -284,9 +307,22 @@ export function tickAgentUtility(
   }
 
   // 6. Execute highest-scoring action
+  // Reset task to a descriptive idle string first — execute will override if it does real work
+  goblin.task = idleDescription(goblin);
   if (bestAction) {
     bestAction.execute(ctx);
-  } else {
-    goblin.task = 'idle';
   }
+}
+
+/** Describe why a goblin is between actions — shown when execute returns early or nothing wins. */
+function idleDescription(goblin: Goblin): string {
+  if (goblin.fatigue > 60)              return 'exhausted, catching breath';
+  if (goblin.fatigue > 20)              return 'catching breath';
+  if ((goblin.warmth ?? 100) < 20)      return 'looking for warmth';
+  if (goblin.morale < 25)               return 'brooding';
+  if (goblin.hunger > 70)               return 'desperately hungry';
+  if (goblin.hunger > 50)               return 'hungry, looking for food';
+  if (goblin.social > 65)               return 'feeling lonely';
+  if ((goblin.warmth ?? 100) < 35)      return 'a bit chilly';
+  return 'idle';
 }

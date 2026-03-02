@@ -8,6 +8,7 @@ export enum TileType {
   Ore      = 'ore',
   Mushroom = 'mushroom',
   Wall     = 'wall',     // player-built fortification; blocks movement
+  Hearth   = 'hearth',  // goblin-built warmth source; walkable
 }
 
 export interface Tile {
@@ -17,6 +18,7 @@ export interface Tile {
   maxFood: number;        // growback ceiling
   maxMaterial: number;
   growbackRate: number;   // food units restored per tick (0 = doesn't regrow)
+  trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
 }
 
 export interface Inventory {
@@ -90,9 +92,10 @@ export interface Goblin {
   memory:          MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
   wanderTarget:    { x: number; y: number } | null;  // persistent explore waypoint
   wanderExpiry:    number;           // tick at which to repick a new wander waypoint
-  knownFoodSites:  ResourceSite[];   // remembered food patches (cap: 5)
-  knownOreSites:   ResourceSite[];   // remembered ore veins (cap: 5)
-  knownWoodSites:  ResourceSite[];   // remembered forest wood sites (cap: 5)
+  knownFoodSites:   ResourceSite[];   // remembered food patches (cap: 5)
+  knownOreSites:    ResourceSite[];   // remembered ore veins (cap: 5)
+  knownWoodSites:   ResourceSite[];   // remembered forest wood sites (cap: 5)
+  knownHearthSites: ResourceSite[];   // remembered hearth locations (cap: 5)
   homeTile:        { x: number; y: number };  // fort/stockpile center — the colony's home base
   role:            GoblinRole;
   relations:       Record<string, number>;  // keyed by goblin.id; 0–100 (50 = neutral)
@@ -110,6 +113,7 @@ export interface Goblin {
   skillXp:         number;      // lifetime XP for role skill (0+)
   skillLevel:      number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
   wound?:          Wound;       // active wound (undefined = healthy); heals at wound.healTick
+  warmth?:         number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
 }
 
 export interface LogEntry {
@@ -120,7 +124,7 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error';
 }
 
-export type OverlayMode = 'off' | 'food' | 'material' | 'wood';
+export type OverlayMode = 'off' | 'food' | 'material' | 'wood' | 'warmth' | 'danger' | 'traffic';
 
 // Colony-wide shared goal — all goblins contribute; cycles on completion
 export type ColonyGoalType = 'stockpile_food' | 'survive_ticks' | 'defeat_adventurers' | 'enclose_fort';

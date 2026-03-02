@@ -476,12 +476,18 @@ const OVERLAY_LABEL: Record<OverlayMode, string> = {
   food:     '[O] food ▓',
   material: '[O] stone ▓',
   wood:     '[O] wood ▓',
+  warmth:   '[O] warmth ▓',
+  danger:   '[O] danger ▓',
+  traffic:  '[O] traffic ▓',
 };
 const OVERLAY_COLOR: Record<OverlayMode, string> = {
   off:      '#555',
   food:     '#00dd44',
   material: '#ff8800',
   wood:     '#56d973',
+  warmth:   '#ff6600',
+  danger:   '#ff2222',
+  traffic:  '#ffee00',
 };
 
 const WEATHER_ICONS: Record<WeatherType, string> = { clear: '☀', rain: '🌧', drought: '🏜', cold: '❄' };
@@ -557,6 +563,7 @@ function GoblinPanel({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Gobli
       <Bar label="morale" value={goblin.morale}  max={100}             color="#3498db" />
       <Bar label="fatigue" value={goblin.fatigue} max={100}            color="#9b59b6" />
       <Bar label="social" value={goblin.social}  max={100}             color="#f39c12" />
+      <Bar label="warmth" value={goblin.warmth ?? 0} max={100}         color="#ff7733" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {goblin.inventory.food.toFixed(1)}</span>
         {goblin.role === 'lumberjack'

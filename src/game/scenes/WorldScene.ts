@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
+import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../../simulation/diffusion';
 import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
 import { tickAgentUtility } from '../../simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../../simulation/adventurers';
@@ -63,6 +64,11 @@ export class WorldScene extends Phaser.Scene {
 
   // Weather system — affects growback rates and goblin metabolism
   private weather!: Weather;
+
+  // Diffusion fields — recomputed every tick, never saved
+  private warmthField = createWarmthField();
+  private dangerField = createDangerField();
+  private _dangerFieldPrev = createDangerField(); // double-buffer for decay
 
   // Event log noise reduction
   private combatHits = new Map<string, number>();  // goblin id → hit count this encounter
@@ -287,7 +293,7 @@ export class WorldScene extends Phaser.Scene {
       this.input.keyboard
         .addKey(Phaser.Input.Keyboard.KeyCodes.O)
         .on('down', () => {
-          const modes: OverlayMode[] = ['off', 'food', 'material', 'wood'];
+          const modes: OverlayMode[] = ['off', 'food', 'material', 'wood', 'warmth', 'danger', 'traffic'];
           const next = modes[(modes.indexOf(this.overlayMode) + 1) % modes.length];
           this.overlayMode = next;
           this.drawOverlay();
@@ -663,6 +669,22 @@ export class WorldScene extends Phaser.Scene {
       });
     }
 
+    // ── Diffusion fields ─────────────────────────────────────────────────
+    const hearths = findHearths(this.grid);
+    computeWarmth(this.grid, hearths, this.foodStockpiles, this.weather.type, this.warmthField);
+    computeDanger(this.grid, this.adventurers, this._dangerFieldPrev, this.dangerField);
+    this._dangerFieldPrev.set(this.dangerField);
+    updateTraffic(this.grid, this.goblins);
+    // Cache warmth on each goblin — smoothed (90% old / 10% new) so the bar decays gradually
+    // as goblins walk away from a hearth (~10 ticks to feel it) rather than snapping to 0
+    // the moment they step outside the 8-tile warmth radius.
+    for (const d of this.goblins) {
+      if (d.alive) {
+        const raw = this.warmthField[d.y * GRID_SIZE + d.x];
+        d.warmth = (d.warmth ?? raw) * 0.95 + raw * 0.05;
+      }
+    }
+
     // PIANO step 6 — check pending outcome verifications, log surprises
     const surprises = llmSystem.checkVerifications(this.goblins, this.tick);
     for (const msg of surprises) {
@@ -686,7 +708,7 @@ export class WorldScene extends Phaser.Scene {
           level,
         });
       }, this.foodStockpiles, this.adventurers, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
-      metabolismModifier(this.weather));
+      metabolismModifier(this.weather), this.warmthField, this.dangerField, this.weather.type);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -1265,6 +1287,8 @@ export class WorldScene extends Phaser.Scene {
           t.tint = (brightness << 16) | (brightness << 8) | brightness;
         } else if (tile.type === TileType.Wall) {
           t.tint = 0x88aacc;  // blue-gray: player-built fort wall
+        } else if (tile.type === TileType.Hearth) {
+          t.tint = 0xff8844;  // warm orange: hearth fire
         } else {
           t.tint = 0xffffff;
         }
@@ -1293,6 +1317,15 @@ export class WorldScene extends Phaser.Scene {
         } else if (this.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
           alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
           color = 0x56d973; // green
+        } else if (this.overlayMode === 'warmth') {
+          const w = this.warmthField[y * GRID_SIZE + x];
+          if (w > 0) { alpha = (w / 100) * 0.6; color = 0xff6600; } // orange-red
+        } else if (this.overlayMode === 'danger') {
+          const d = this.dangerField[y * GRID_SIZE + x];
+          if (d > 0) { alpha = (d / 100) * 0.6; color = 0xff2222; } // red
+        } else if (this.overlayMode === 'traffic') {
+          const tr = tile.trafficScore ?? 0;
+          if (tr > 0) { alpha = (tr / 100) * 0.6; color = 0xffee00; } // yellow
         }
 
         if (alpha > 0.02) {

@@ -81,6 +81,7 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 
 **Close-call logging:** top two actions within 0.03 → "⚖ agonizing over X vs Y".
 **Fatigue:** 0–100; >70 → 30% skip action; >90 → morale decay. Rest recovers 1.5/tick.
+**Stockpile instant actions:** deposit (inv≥10) and withdraw (hunger>60, inv<2) are early-returns in `tickAgentUtility` that bypass all action scoring — a goblin standing on a stockpile skips the scored pipeline that tick.
 
 ---
 
@@ -93,6 +94,7 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 - **Wounds** (`wounds.ts`): single slot, 60% chance on hit. 4 types (bruised/leg/arm/eye). `effectiveVision()` replaces raw vision everywhere.
 - **Factions** (`factions.ts`): cosmetic only — `getActiveFaction()` returns display config. Goblins (default) or Dwarves. Persists in save.
 - **Storyteller** (`events.ts`): tension-aware event distribution — struggling colonies get relief, thriving colonies get challenged.
+- **Warmth diffusion** (`diffusion.ts`): BFS from `TileType.Hearth` tiles; walls block propagation entirely; radius=8, decay 12.5/tile. Goblin `warmth` smoothed in WorldScene (0.95/0.05 blend — no Math.round or it fixed-points at 10%). Use entry/exit hysteresis in eligible checks (e.g. enter<25, exit>50) to prevent oscillation.
 
 ---
 
@@ -109,7 +111,7 @@ Returns 2-4 sentence chapter. Timeout: 8 s. Falls back to deterministic text on 
 
 ## World design
 
-- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall
+- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall, Hearth
 - **World gen** (`world.ts`): dual Simplex noise (elevation + moisture) → biome classification.
   `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`. Fully seeded — same seed = identical world.
 - **`FORAGEABLE_TILES`** (`agents.ts`): `Set<TileType>` — currently `{ Mushroom }`. Add one line to unlock new food source.
@@ -159,13 +161,15 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **One decision per crisis, not one per tick.** Cooldown: 280 ticks (~40 s) per goblin.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
+- **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
+- **Emergent over hardcoded:** when adding actions, base eligibility/scoring on the goblin's personal state (hunger, warmth, etc.) not fixed map locations. Clustering near home should emerge from where goblins spend time, not proximity-to-homeTile gates.
 
 ---
 
 ## Upcoming / Phase 3
 
 **Gameplay depth**
-- [ ] Emergent base building: shelved on `emergent-base-building` branch (diffusion fields, Floor/Hearth/Door tiles, ring-based wall scoring — produces blobs not rooms; needs different approach)
+- [ ] Emergent base building: `diffusion.ts` + `TileType.Hearth` now live (ported from `emergent-base-building`). Ring-based wall scoring produces blobs not rooms — wall placement algorithm still needs rethinking.
 - [ ] Mechanical faction differences: different starting stats, trait distributions, sigmoid shifts
 - [ ] Trade: merchant caravans, negotiation LLM calls
 
