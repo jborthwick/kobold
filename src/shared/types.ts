@@ -9,6 +9,7 @@ export enum TileType {
   Mushroom = 'mushroom',
   Wall     = 'wall',     // player-built fortification; blocks movement
   Hearth   = 'hearth',  // goblin-built warmth source; walkable
+  TreeStump = 'treestump',
 }
 
 export interface Tile {

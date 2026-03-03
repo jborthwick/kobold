@@ -16,7 +16,7 @@
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType } from '../shared/types';
 import { getWarmth } from './diffusion';
-import { MAX_INVENTORY_FOOD } from '../shared/constants';
+import { MAX_INVENTORY_CAPACITY } from '../shared/constants';
 import { isWalkable } from './world';
 import {
   traitMod,
@@ -95,8 +95,9 @@ function updateNeeds(
   // High morale is the default state — not worth logging individually
   // (colony-wide morale shifts are reported by world events instead)
 
-  // Fatigue — tiny idle decay; traits via fatigueRate applied at action sites
-  goblin.fatigue = Math.max(0, goblin.fatigue - 0.05);
+  // Fatigue — passive decay; traits via fatigueRate applied at action sites.
+  // We use a larger decay (0.5) so they actually recover even when cold (0.25) and bruised (0.3).
+  goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
   // Bruised wound: extra fatigue drain (+0.3/tick)
   if (goblin.wound?.type === 'bruised') {
     goblin.fatigue = Math.min(100, goblin.fatigue + 0.3);
@@ -194,10 +195,13 @@ export function tickAgentUtility(
   // 1. Update needs (hunger, morale, fatigue, social)
   updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, onLog);
 
-  // Fatigue > 70: 30% chance to skip action this tick (exhaustion stumble)
-  if (goblin.fatigue > 70 && Math.random() < 0.3) {
+  // Fatigue > 70: chance to skip action this tick (exhaustion stumble).
+  // Chance rises from 20% at 70 to 80% at 100 fatigue.
+  const stumbleChance = ramp(goblin.fatigue, 70, 100) * 0.6 + 0.2;
+  if (goblin.fatigue > 70 && Math.random() < stumbleChance) {
     goblin.task = 'exhausted…';
-    goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
+    // Forced rest recovers same as "Exposed" rest action (1.5)
+    goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
     return;
   }
 
@@ -238,7 +242,7 @@ export function tickAgentUtility(
     if (goblin.hunger > 60 && goblin.inventory.food < 2 && standingFoodStockpile.food > 0) {
       const amount                = Math.min(4, standingFoodStockpile.food);
       standingFoodStockpile.food -= amount;
-      goblin.inventory.food        = Math.min(MAX_INVENTORY_FOOD, goblin.inventory.food + amount);
+      goblin.inventory.food        = Math.min(MAX_INVENTORY_CAPACITY, goblin.inventory.food + amount);
       goblin.task                  = `withdrew ${amount.toFixed(0)} from stockpile`;
       return;
     }

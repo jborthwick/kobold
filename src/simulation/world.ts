@@ -27,8 +27,8 @@ const WORLD_CONFIG = {
   farmFoodMax:    3,
   farmGrowback:   0.02,
 
-  oreMatMin:      8,
-  oreMatMax:      12,
+  oreMatMin:      30,
+  oreMatMax:      50,
   oreGrowback:    0,
 
   grassMeadowFoodMin:  2,
@@ -139,11 +139,11 @@ function classifyBiome(elevation: number, moisture: number): TileType {
   if (elevation < 0.78) {
     if (moisture > 0.55) return TileType.Forest;
     if (moisture > 0.35) return TileType.Dirt;
-    return TileType.Stone;
+    return TileType.Stone; // Ore -> Stone
   }
 
   // PEAK
-  if (moisture > 0.60) return TileType.Ore;
+  if (moisture > 0.50) return TileType.Ore; // 0.60 -> 0.50
   if (moisture > 0.35) return TileType.Stone;
   return TileType.Ore;
 }
@@ -189,7 +189,9 @@ function tileResourceValues(
       };
     }
     case TileType.Ore: {
-      const richness = Math.max(0, (elevation - 0.78) / 0.22);
+      const richness = elevation > 0.78
+        ? Math.max(0, (elevation - 0.78) / 0.22) // PEAK richness
+        : Math.max(0, (elevation - 0.58) / 0.20); // HIGH richness
       const matMax = lerp(WORLD_CONFIG.oreMatMin, WORLD_CONFIG.oreMatMax, richness);
       return {
         foodValue: 0, materialValue: matMax * (0.7 + rng() * 0.3),

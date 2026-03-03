@@ -14,7 +14,7 @@
 import { TileType, type Goblin, type Tile, type LLMIntent, type GoblinTrait, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type ResourceSite, type WeatherType } from '../shared/types';
 import { getWarmth, getDanger } from './diffusion';
 import { getActiveFaction } from '../shared/factions';
-import { GRID_SIZE, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { GRID_SIZE, MAX_INVENTORY_CAPACITY } from '../shared/constants';
 import { isWalkable } from './world';
 import { sigmoid, inverseSigmoid, ramp } from './utilityAI';
 import {
@@ -180,8 +180,14 @@ const eat: Action = {
 const rest: Action = {
   name: 'rest',
   intentMatch: 'rest',
-  eligible: ({ goblin }) => goblin.fatigue > 20,
-  score: ({ goblin }) => sigmoid(goblin.fatigue, 60),
+  eligible: ({ goblin }) => goblin.fatigue > 20 && goblin.hunger < 95,
+  score: ({ goblin }) => {
+    // Lower midpoint (50 instead of 60) makes resting more attractive earlier
+    const base = sigmoid(goblin.fatigue, 50);
+    // Momentum: once resting, stay committed until fatigue < 30 (hysteresis)
+    const momentum = (goblin.task.includes('resting') && goblin.fatigue > 30) ? 0.15 : 0;
+    return Math.min(1.0, base + momentum);
+  },
   execute: ({ goblin, warmthField }) => {
     const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;
     if (warmth >= 40) {
@@ -250,7 +256,7 @@ const share: Action = {
     if (!target) return;
     const give = Math.min(3, goblin.inventory.food - donorKeeps);
     if (give <= 0) return;
-    const headroom = MAX_INVENTORY_FOOD - target.inventory.food;
+    const headroom = MAX_INVENTORY_CAPACITY - target.inventory.food;
     const actual   = Math.min(give, headroom);
     if (actual <= 0) return;
     goblin.inventory.food  -= actual;
@@ -320,7 +326,7 @@ const forage: Action = {
   name: 'forage',
   intentMatch: 'forage',
   eligible: ({ goblin }) => {
-    const inventoryFull = goblin.inventory.food >= MAX_INVENTORY_FOOD;
+    const inventoryFull = goblin.inventory.food >= MAX_INVENTORY_CAPACITY;
     if (inventoryFull) return false;
     // Miners/lumberjacks skip food when not hungry
     if ((goblin.role === 'miner' || goblin.role === 'lumberjack') && goblin.hunger < 50) return false;
@@ -394,7 +400,7 @@ const forage: Action = {
       }
 
       // Harvest
-      const headroom = MAX_INVENTORY_FOOD - goblin.inventory.food;
+      const headroom = MAX_INVENTORY_CAPACITY - goblin.inventory.food;
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
         const depletionRate = goblin.role === 'forager' ? 6 : 5;
         const baseYield     = (goblin.role === 'forager' ? 2 : 1) + skillYieldBonus(goblin);
@@ -496,7 +502,10 @@ const withdrawFood: Action = {
 // --- mine: miners target ore tiles ---
 const mine: Action = {
   name: 'mine',
-  eligible: ({ goblin }) => goblin.role === 'miner',
+  eligible: ({ goblin }) => {
+    if (goblin.role !== 'miner') return false;
+    return goblin.inventory.materials < MAX_INVENTORY_CAPACITY;
+  },
   score: ({ goblin, grid }) => {
     const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
@@ -530,7 +539,7 @@ const mine: Action = {
         const mined        = Math.min(hadMat, oreYield);
         here.materialValue = Math.max(0, hadMat - mined);
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        goblin.inventory.materials = Math.min(goblin.inventory.materials + mined, MAX_INVENTORY_FOOD);
+        goblin.inventory.materials = Math.min(goblin.inventory.materials + mined, MAX_INVENTORY_CAPACITY);
         addWorkFatigue(goblin);
         // Miner XP — grant on successful ore extraction
         grantXp(goblin, currentTick, onLog);
@@ -562,7 +571,10 @@ const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 const chop: Action = {
   name: 'chop',
-  eligible: ({ goblin }) => goblin.role === 'lumberjack',
+  eligible: ({ goblin }) => {
+    if (goblin.role !== 'lumberjack') return false;
+    return goblin.inventory.materials < MAX_INVENTORY_CAPACITY;
+  },
   score: ({ goblin, grid }) => {
     const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
@@ -590,11 +602,13 @@ const chop: Action = {
       const here = grid[goblin.y][goblin.x];
       if (here.type === TileType.Forest && here.materialValue >= 1) {
         const hadWood      = here.materialValue;
-        const baseChop     = 2 + skillYieldBonus(goblin);
+        const baseChop     = 20 + skillYieldBonus(goblin);
         const chopYield    = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
         const chopped      = Math.min(hadWood, chopYield);
         here.materialValue = Math.max(0, hadWood - chopped);
-        goblin.inventory.materials = Math.min(goblin.inventory.materials + chopped, MAX_INVENTORY_FOOD);
+        // Depleted forest reverts to a tree stump
+        if (here.materialValue === 0) { here.type = TileType.TreeStump; here.maxMaterial = 0; }
+        goblin.inventory.materials = Math.min(goblin.inventory.materials + chopped, MAX_INVENTORY_CAPACITY);
         addWorkFatigue(goblin);
         // Lumberjack XP — grant on successful wood chop
         grantXp(goblin, currentTick, onLog);
@@ -666,8 +680,18 @@ const buildWall: Action = {
     const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
     return buildStockpile !== null && buildStockpile !== undefined;
   },
-  score: ({ goblin, oreStockpiles }) => {
+  score: ({ goblin, oreStockpiles, foodStockpiles, grid, goblins, adventurers }) => {
     const totalOre = oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0;
+    if (totalOre < 3) return 0; // Not enough ore, can't score
+
+    // Check for available wall slots BEFORE scoring
+    if (!foodStockpiles || !oreStockpiles) return 0;
+    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
+    if (wallSlots.length === 0) {
+      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
+    }
+    if (wallSlots.length === 0) return 0; // No available slots, do not score
+
     return ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
   },
   execute: ({ goblin, grid, foodStockpiles, oreStockpiles, goblins, adventurers }) => {
@@ -865,8 +889,25 @@ const seekWarmth: Action = {
     }
     return (goblin.knownHearthSites ?? []).length > 0;
   },
-  score: ({ goblin, warmthField, weatherType }) => {
+  score: ({ goblin, grid, warmthField, weatherType }) => {
     if (!warmthField) return 0;
+
+    // Check if a hearth is visible or known BEFORE scoring
+    let hearthExists = (goblin.knownHearthSites ?? []).length > 0;
+    if (!hearthExists) {
+      for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
+        for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
+          const nx = goblin.x + dx, ny = goblin.y + dy;
+          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[ny][nx].type === TileType.Hearth) {
+            hearthExists = true;
+            break;
+          }
+        }
+        if (hearthExists) break;
+      }
+    }
+    if (!hearthExists) return 0; // No hearth visible or known, do not score
+
     const warmth = goblin.warmth ?? 100;
     const maxScore = weatherType === 'cold' ? 0.28 : 0.08;
     return inverseSigmoid(warmth, 20, 0.12) * maxScore;
@@ -928,9 +969,26 @@ const seekSafety: Action = {
     if (!dangerField) return false;
     return getDanger(dangerField, goblin.x, goblin.y) > 60;
   },
-  score: ({ goblin, dangerField }) => {
+  score: ({ goblin, grid, dangerField }) => {
     if (!dangerField) return 0;
-    return sigmoid(getDanger(dangerField, goblin.x, goblin.y), 60, 0.12) * 0.65;
+    const currentDanger = getDanger(dangerField, goblin.x, goblin.y);
+    if (currentDanger <= 60) return 0;
+
+    // Scan for better tile: only score if we actually have somewhere safer to go
+    let bestDanger = currentDanger;
+    const SCAN = Math.min(5, effectiveVision(goblin));
+    for (let dy = -SCAN; dy <= SCAN; dy++) {
+      for (let dx = -SCAN; dx <= SCAN; dx++) {
+        const nx = goblin.x + dx, ny = goblin.y + dy;
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+        if (!isWalkable(grid, nx, ny)) continue;
+        const d = getDanger(dangerField, nx, ny);
+        if (d < bestDanger) bestDanger = d;
+      }
+    }
+    if (bestDanger >= currentDanger) return 0; // no safer tile visible
+
+    return sigmoid(currentDanger, 60, 0.12) * 0.65;
   },
   execute: ({ goblin, grid, dangerField }) => {
     if (!dangerField) return;

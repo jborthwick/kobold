@@ -1,6 +1,6 @@
 import * as ROT from 'rot-js';
 import { TileType, type Goblin, type Tile, type GoblinRole, type MemoryEntry, type GoblinTrait, type FoodStockpile, type OreStockpile, type WoodStockpile, type Adventurer, type ResourceSite, type ColonyGoal } from '../shared/types';
-import { GRID_SIZE, INITIAL_GOBLINS, MAX_INVENTORY_FOOD } from '../shared/constants';
+import { GRID_SIZE, INITIAL_GOBLINS, MAX_INVENTORY_CAPACITY } from '../shared/constants';
 import { getActiveFaction } from '../shared/factions';
 import { isWalkable } from './world';
 import { xpToLevel } from './skills';
@@ -769,7 +769,7 @@ export function tickAgent(
       if (gift <= 0) { /* trait keeps too much — skip sharing */ }
       else {
       goblin.inventory.food -= gift;
-      needy.inventory.food  = Math.min(MAX_INVENTORY_FOOD, needy.inventory.food + gift);
+      needy.inventory.food  = Math.min(MAX_INVENTORY_CAPACITY, needy.inventory.food + gift);
       // Sharing builds positive ties: giver +10, recipient +15
       goblin.relations[needy.id] = Math.min(100, (goblin.relations[needy.id] ?? 50) + 10);
       needy.relations[goblin.id] = Math.min(100, (needy.relations[goblin.id] ?? 50) + 15);
@@ -799,7 +799,7 @@ export function tickAgent(
     if (goblin.hunger > 60 && goblin.inventory.food < 2 && standingFoodStockpile.food > 0) {
       const amount                = Math.min(4, standingFoodStockpile.food);
       standingFoodStockpile.food -= amount;
-      goblin.inventory.food        = Math.min(MAX_INVENTORY_FOOD, goblin.inventory.food + amount);
+      goblin.inventory.food        = Math.min(MAX_INVENTORY_CAPACITY, goblin.inventory.food + amount);
       goblin.task                  = `withdrew ${amount.toFixed(0)} from stockpile`;
       return;
     }
@@ -906,7 +906,7 @@ export function tickAgent(
   // Dwarves with a full inventory also skip — step 4.2 handles depot routing,
   // and step 5 wander (with its 25% home-drift) handles the depot-full case.
   // This prevents the fill-up → rush-to-food → fill-up loop.
-  const inventoryFull  = goblin.inventory.food >= MAX_INVENTORY_FOOD;
+  const inventoryFull  = goblin.inventory.food >= MAX_INVENTORY_CAPACITY;
   const skipFoodForage = inventoryFull
     || ((goblin.role === 'miner' || goblin.role === 'lumberjack') && goblin.hunger < 50 && goblin.llmIntent !== 'forage');
   const radius = goblin.llmIntent === 'forage' ? 15
@@ -966,7 +966,7 @@ export function tickAgent(
 
     // inventoryFull → skipFoodForage → foodTarget=null, so we only reach this
     // point when there IS headroom.  Re-compute here for the harvest cap.
-    const headroom = MAX_INVENTORY_FOOD - goblin.inventory.food;
+    const headroom = MAX_INVENTORY_CAPACITY - goblin.inventory.food;
     if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
       // Deplete tile aggressively, but yield less to inventory — encourages exploration
       const depletionRate   = goblin.role === 'forager' ? 6 : 5;
@@ -1307,7 +1307,7 @@ export function tickAgent(
         // Exhausted ore vein reverts to bare stone — miners must find new veins
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
         goblin.inventory.materials = Math.min(
-          goblin.inventory.materials + mined, MAX_INVENTORY_FOOD,
+          goblin.inventory.materials + mined, MAX_INVENTORY_CAPACITY,
         );
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
         goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
@@ -1342,7 +1342,7 @@ export function tickAgent(
         here.materialValue = Math.max(0, hadWood - chopped);
         // Forest tile stays as Forest even when wood is depleted — it regrows
         goblin.inventory.materials = Math.min(
-          goblin.inventory.materials + chopped, MAX_INVENTORY_FOOD,
+          goblin.inventory.materials + chopped, MAX_INVENTORY_CAPACITY,
         );
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
         goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
