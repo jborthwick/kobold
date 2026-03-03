@@ -1,12 +1,6 @@
 # Goblin Colony Sim — Agent Instructions
 
-A browser-based colony survival game inspired by RimWorld and Dwarf Fortress. Small colony of LLM-driven goblin agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is a crisis decision-maker, not a chatbot. The tone is darkly humorous — goblins take themselves very seriously despite constant chaos.
-
----
-
-## Further reading
-See `docs/RESEARCH.md` for detailed rationale behind stack decisions,
-library comparisons, and agent architecture research.
+A browser-based colony survival game inspired by RimWorld and Dwarf Fortress. Small colony of LLM-driven goblin agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is a crisis decision-maker, not a chatbot. The tone is darkly humorous — goblins take themselves seriously despite constant chaos.
 
 ---
 
@@ -20,7 +14,7 @@ npm run lint         # eslint
 python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame index
 ```
 
-**Required:** `ANTHROPIC_API_KEY=sk-...` in `.env.local` (gitignored) — LLM proxy won't work without it.
+**Required:** At least one API Key in `.env.local` (gitignored) — LLM proxy won't work without it.
 LLM is off by default in-game (🤖 toggle). HMR works for most changes; full reload needed for `crisis.ts` singleton.
 
 ## Phaser 3 camera gotcha
@@ -32,10 +26,6 @@ const f = 1 / oldZoom - 1 / newZoom;
 cam.scrollX += (ptr.x - cam.x - cam.width / 2) * f;
 cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
 ```
-
-## Phaser 3 display-list render order
-
-`this.add.graphics()` and `this.add.text()` are inserted into the scene's display list at call-time. Objects created **before** `map.createBlankLayer()` render underneath the terrain and will be invisible. Always create overlay Graphics/Text objects **after** the tilemap layer.
 
 ---
 
@@ -53,9 +43,9 @@ Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare 
 
 1. **Sugarscape resource mechanics** — scan visible cells, move to richest tile, harvest. Scarcity drives emergent competition/migration.
 2. **PIANO cognitive architecture** — last 5 decisions + goblin state compress into ~400-token LLM prompt for crisis decisions.
-3. **LLM is crisis-only** — ~95% deterministic Utility AI. LLM fires at decision points only. Cooldown: 280 ticks/goblin. Off by default (🤖 toggle).
-4. **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
-5. **Always playable without LLM** — timeout (5 s) or disabled → silent fallback to deterministic AI.
+3. **LLM is crisis-only** — ~95% deterministic Utility AI. LLM fires at decision points only. Cooldown. Off by default (🤖 toggle).
+4. **Always playable without LLM** — timeout (5 s) or disabled → silent fallback to deterministic AI.
+5. **Emergent over hardcoded:** – when adding actions, base eligibility/scoring on the goblin's personal state (hunger, warmth, etc.) not fixed map locations. Clustering near home should emerge from where goblins spend time, not proximity-to-homeTile gates.
 
 ---
 
@@ -162,14 +152,14 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
 - **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
-- **Emergent over hardcoded:** when adding actions, base eligibility/scoring on the goblin's personal state (hunger, warmth, etc.) not fixed map locations. Clustering near home should emerge from where goblins spend time, not proximity-to-homeTile gates.
+4. **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
+
 
 ---
 
-## Upcoming / Phase 3
+## Upcoming
 
 **Gameplay depth**
-- [ ] Emergent base building: `diffusion.ts` + `TileType.Hearth` now live (ported from `emergent-base-building`). Ring-based wall scoring produces blobs not rooms — wall placement algorithm still needs rethinking.
 - [ ] Mechanical faction differences: different starting stats, trait distributions, sigmoid shifts
 - [ ] Trade: merchant caravans, negotiation LLM calls
 
@@ -192,5 +182,10 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## References
 
-Phaser 3: https://newdocs.phaser.io/docs/3.90.0 · rot.js: https://ondras.github.io/rot.js/manual/ · Kenney: https://kenney.nl/assets/1-bit-pack
-Design influences: [PIANO architecture](https://arxiv.org/abs/2411.00114) · [Sugarscape](https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html) · [LLM Sugarscape study](https://arxiv.org/abs/2508.12920) · [Red Blob Games noise terrain](https://www.redblobgames.com/maps/terrain-from-noise/)
+Phaser 3: https://newdocs.phaser.io/docs/3.90.0 
+rot.js: https://ondras.github.io/rot.js/manual/ 
+Design influences:
+[PIANO architecture](https://arxiv.org/abs/2411.00114)
+[Sugarscape](https://jasss.soc.surrey.ac.uk/12/1/6/appendixB/EpsteinAxtell1996.html)
+[LLM Sugarscape study](https://arxiv.org/abs/2508.12920)
+[Red Blob Games noise terrain](https://www.redblobgames.com/maps/terrain-from-noise/)
