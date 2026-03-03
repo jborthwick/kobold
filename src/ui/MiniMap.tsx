@@ -18,6 +18,7 @@ const TILE_RGB: Record<TileType, [number, number, number]> = {
   [TileType.Ore]:      [ 90,  75,  20],
   [TileType.Mushroom]: [ 70,  40,  80],
   [TileType.Wall]:     [110, 100,  75],
+  [TileType.Hearth]:   [150,  75,   0],
 };
 
 export function MiniMap() {

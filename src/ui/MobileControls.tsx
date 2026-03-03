@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { bus } from '../shared/events';
 import type { GameState, OverlayMode } from '../shared/types';
 
-const OVERLAY_MODES: OverlayMode[] = ['off', 'food', 'material', 'wood'];
+const OVERLAY_MODES: OverlayMode[] = ['off', 'food', 'material', 'wood', 'warmth', 'danger', 'traffic'];
 const OVERLAY_ICONS: Record<OverlayMode, string> = {
   off:      '◇',
-  food:     '◈',
-  material: '◈',
-  wood:     '◈',
+  food:     '🥩',
+  material: '🪨',
+  wood:     '🌳',
+  warmth:   '🔥',
+  danger:   '💀',
+  traffic:  '🚶',
 };
 
 export function MobileControls() {
