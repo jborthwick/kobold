@@ -237,6 +237,16 @@ function seedMushroomPatch(grid: Tile[][], cx: number, cy: number, rng: () => nu
 
 // ── Main generator ───────────────────────────────────────────────────────────
 
+/** Dual-layer Simplex noise parameters for terrain generation.
+ *  elevation: low frequency → broad continents; high persistence → rugged hills
+ *  moisture:  slightly lower frequency → large climate bands
+ *  Increasing octaves adds detail but slows generation.
+ */
+const NOISE_PARAMS = {
+  elevation: { frequency: 0.04,  octaves: 3, persistence: 0.5, lacunarity: 2.0 },
+  moisture:  { frequency: 0.035, octaves: 3, persistence: 0.5, lacunarity: 2.0 },
+} as const;
+
 export function generateWorld(seed?: string): WorldGenResult {
   const worldSeed = seed ?? Date.now().toString();
   const rng = mulberry32(hashSeed(worldSeed));
@@ -245,20 +255,13 @@ export function generateWorld(seed?: string): WorldGenResult {
   const elevNoise  = createNoise2D(mulberry32(hashSeed(worldSeed + '_elev')));
   const moistNoise = createNoise2D(mulberry32(hashSeed(worldSeed + '_moist')));
 
-  // Noise parameters
-  const ELEV_FREQ  = 0.04;
-  const MOIST_FREQ = 0.035;
-  const OCTAVES    = 3;
-  const PERSIST    = 0.5;
-  const LACUN      = 2.0;
-
   // ── Step 1: Generate noise fields + Step 2: Biome assignment ───────────────
   const grid: Tile[][] = [];
   for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
     for (let x = 0; x < GRID_SIZE; x++) {
-      const elev  = norm01(fbm(elevNoise,  x, y, OCTAVES, ELEV_FREQ,  PERSIST, LACUN));
-      const moist = norm01(fbm(moistNoise, x, y, OCTAVES, MOIST_FREQ, PERSIST, LACUN));
+      const elev  = norm01(fbm(elevNoise,  x, y, NOISE_PARAMS.elevation.octaves, NOISE_PARAMS.elevation.frequency,  NOISE_PARAMS.elevation.persistence, NOISE_PARAMS.elevation.lacunarity));
+      const moist = norm01(fbm(moistNoise, x, y, NOISE_PARAMS.moisture.octaves, NOISE_PARAMS.moisture.frequency, NOISE_PARAMS.moisture.persistence, NOISE_PARAMS.moisture.lacunarity));
 
       const type = classifyBiome(elev, moist);
       const resources = tileResourceValues(type, elev, moist, rng);

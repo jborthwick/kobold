@@ -71,25 +71,33 @@ const ROLE_ORDER: GoblinRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fi
 // Traits modify BT thresholds so personality drives behavioral divergence.
 // Missing keys fall back to defaults in traitMod() below.
 export interface TraitMods {
-  shareThreshold?: number;    // food >= X to trigger sharing (default 8)
-  shareDonorKeeps?: number;   // keep >= X after sharing (default 5)
-  eatThreshold?: number;      // hunger > X to eat (default 70)
-  fleeThreshold?: number;     // hunger >= X to skip fighting (default 80)
-  wanderHomeDrift?: number;   // probability of drifting home (default 0.25)
-  contestPenalty?: number;    // relation penalty on losing contest (default -5)
-  shareRelationGate?: number; // min relation to share food (default 30)
-  fatigueRate?: number;       // fatigue gain multiplier (default 1.0; lazy: 1.3)
-  socialDecayBonus?: number;  // extra social decay near friends (default 0; cheerful: 0.15)
+  shareThreshold?: number;           // food >= X to trigger sharing (default 8)
+  shareDonorKeeps?: number;          // keep >= X after sharing (default 5)
+  eatThreshold?: number;             // hunger > X to eat (default 70)
+  fleeThreshold?: number;            // hunger >= X to skip fighting (default 80)
+  wanderHomeDrift?: number;          // probability of drifting home (default 0.25)
+  contestPenalty?: number;           // relation penalty on losing contest (default -5)
+  shareRelationGate?: number;        // min relation to share food (default 30)
+  fatigueRate?: number;              // fatigue gain multiplier (default 1.0; lazy: 1.3)
+  socialDecayBonus?: number;         // extra social decay near friends (default 0; cheerful: 0.15)
+  // Crisis detection thresholds — personality shifts when the LLM gets called
+  hungerCrisisThreshold?: number;    // hunger >= X triggers hunger crisis (default 65)
+  moraleCrisisThreshold?: number;    // morale <= X triggers morale crisis (default 40)
+  exhaustionThreshold?: number;      // fatigue >= X triggers exhaustion crisis (default 80)
+  lonelinessCrisisThreshold?: number;// social >= X triggers loneliness crisis (default 70)
+  perceptiveness?: number;           // bonus tiles added to contest detection radius (default 0)
+  // Gathering / work output
+  gatheringPower?: number;           // bonus to harvest yield and depletion rate (default 0)
 }
 
 export const TRAIT_MODS: Record<GoblinTrait, TraitMods> = {
-  helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15 },
+  helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15, lonelinessCrisisThreshold: 55 },
   greedy:    { shareThreshold: 12, shareDonorKeeps: 8 },
-  brave:     { fleeThreshold: 95 },
-  paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5 },
-  lazy:      { eatThreshold: 55, fatigueRate: 1.3 },
+  brave:     { fleeThreshold: 95, moraleCrisisThreshold: 30 },
+  paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5, moraleCrisisThreshold: 50, hungerCrisisThreshold: 55, perceptiveness: 2 },
+  lazy:      { eatThreshold: 55, fatigueRate: 1.3, exhaustionThreshold: 65, hungerCrisisThreshold: 58 },
   cheerful:  { shareThreshold: 6, shareRelationGate: 20, socialDecayBonus: 0.15 },
-  mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55 },
+  mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55, lonelinessCrisisThreshold: 85 },
   forgetful: {},  // personality-flavor only for now
 };
 

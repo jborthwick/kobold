@@ -16,9 +16,16 @@ import { woundDamageMultiplier } from './wounds';
 
 // ── Raid scheduler ────────────────────────────────────────────────────────────
 
-const RAID_INTERVAL_MIN = 500;   // ticks between raids (~70 s at 7 tps)
-const RAID_INTERVAL_MAX = 900;
-const WANDER_RANGE      = 15;   // tiles — adventurers wander when no goblin is within range
+const RAID_INTERVAL_MIN    = 500;   // ticks between raids (min)
+const RAID_INTERVAL_MAX    = 900;   // ticks between raids (max)
+const WANDER_RANGE         = 15;    // tiles adventurers roam between raids
+const RAID_MIN_SIZE        = 2;     // min adventurers per raid
+const RAID_MAX_SIZE        = 4;     // max adventurers per raid (= min + rand spread)
+const ADVENTURER_ATTACK_DAMAGE = 5; // damage adventurer deals to goblin per hit
+const GOBLIN_FIGHT_BACK    = 8;     // damage non-fighter goblin deals per hit
+const FIGHTER_FIGHT_BACK   = 18;    // damage fighter goblin deals per hit
+const STAGGER_TICKS        = 12;    // ticks a goblin is staggered after being hit
+const ADVENTURER_MOVE_SKIP = 4;     // adventurers skip movement every Nth tick (speed ratio)
 
 // Module-level state — reset when a new world is generated
 let nextRaidAt  = RAID_INTERVAL_MIN + Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
@@ -56,7 +63,7 @@ export function maybeSpawnRaid(
   nextRaidAt = tick + RAID_INTERVAL_MIN +
     Math.floor(Math.random() * (RAID_INTERVAL_MAX - RAID_INTERVAL_MIN));
 
-  const count = 2 + Math.floor(Math.random() * 3); // 2–4 adventurers
+  const count = RAID_MIN_SIZE + Math.floor(Math.random() * (RAID_MAX_SIZE - RAID_MIN_SIZE));
   const edge  = Math.floor(Math.random() * 4);      // 0=N, 1=E, 2=S, 3=W
   const newGoblins: Adventurer[] = [];
 
@@ -101,10 +108,6 @@ export interface AdventurerTickResult {
   logs: Array<{ message: string; level: 'info' | 'warn' | 'error' }>;
 }
 
-const ADVENTURER_ATTACK_DAMAGE = 5;   // hp per hit to goblin
-const GOBLIN_FIGHT_BACK     = 8;   // hp per hit to adventurer (normal goblins)
-const FIGHTER_FIGHT_BACK   = 18;  // fighters deal ~2× damage — kills adventurer in 2 hits
-
 /**
  * Move all adventurers one step toward their target, or attack on contact.
  * Goblins move at ~75% speed (staggered skip every 4th tick per adventurer)
@@ -131,9 +134,9 @@ export function tickAdventurers(
     }
     // Skip movement if staggered from a recent hit
     if (g.staggeredUntil !== undefined && tick < g.staggeredUntil) continue;
-    // Staggered 75%-speed: each adventurer skips its move on a different tick
+    // Staggered speed: each adventurer skips its move on a different tick
     // so they don't all pause simultaneously (gi offsets the skip cycle).
-    if ((tick + gi) % 4 === 0) continue;
+    if ((tick + gi) % ADVENTURER_MOVE_SKIP === 0) continue;
     // Re-target if current target is dead or unset
     let target = g.targetId ? alive.find(d => d.id === g.targetId) ?? null : null;
     if (!target) {
@@ -161,8 +164,8 @@ export function tickAdventurers(
       const baseDmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : GOBLIN_FIGHT_BACK;
       const dmg     = Math.round((baseDmg + skillDamageBonus(target)) * woundDamageMultiplier(target));
       g.health -= dmg;
-      // Stagger: adventurer can't move for 12 ticks after being hit (~1.7 s at 7 tps)
-      g.staggeredUntil = tick + 12;
+      // Stagger: adventurer can't move after being hit
+      g.staggeredUntil = tick + STAGGER_TICKS;
       if (g.health <= 0) {
         result.adventurerDeaths.push(g.id);
         result.kills.push({ goblinId: target.id });

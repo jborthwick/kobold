@@ -69,25 +69,27 @@ function updateNeeds(
   // Exposure penalty — freezing in the open during cold weather
   if (weatherType === 'cold' && warmthField) {
     const warmth = getWarmth(warmthField, goblin.x, goblin.y);
-    if (warmth < 25) {
-      goblin.fatigue = Math.min(100, goblin.fatigue + 0.25);
-      goblin.morale  = Math.max(0, goblin.morale - 0.2);
-      goblin.hunger  = Math.min(100, goblin.hunger + goblin.metabolism * 0.2);
+    const coldPenalty = inverseSigmoid(warmth, 30, 0.12);
+    if (coldPenalty > 0.05) {
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
+      goblin.morale  = Math.max(0, goblin.morale - 0.25 * coldPenalty);
+      goblin.hunger  = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
       if (shouldLog(goblin, 'freezing', currentTick, 150)) {
         onLog?.('🥶 freezing in the open', 'warn');
       }
     }
   }
 
-  // Morale decays slowly when hungry, recovers when well-fed
-  if (goblin.hunger > 60) {
-    goblin.morale = Math.max(0, goblin.morale - 0.4);
-  } else if (goblin.hunger < 30) {
-    goblin.morale = Math.min(100, goblin.morale + 0.2);
-  }
-  // Stress metabolism — demoralized goblins burn calories faster
-  if (goblin.morale < 25) {
-    goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.3);
+  // Morale decays continuously with hunger above 60, recovers below 30
+  goblin.morale = Math.max(0, Math.min(100,
+    goblin.morale
+    - sigmoid(goblin.hunger, 60) * 0.5
+    + inverseSigmoid(goblin.hunger, 30) * 0.25,
+  ));
+  // Stress metabolism: low morale burns calories faster, scales continuously
+  const stressMod = inverseSigmoid(goblin.morale, 35) * 0.4;
+  if (stressMod > 0.05) {
+    goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * stressMod);
     if (shouldLog(goblin, 'morale_low', currentTick, 200)) {
       onLog?.('😤 morale is dangerously low', 'warn');
     }
@@ -98,13 +100,19 @@ function updateNeeds(
   // Fatigue — passive decay; traits via fatigueRate applied at action sites.
   // We use a larger decay (0.5) so they actually recover even when cold (0.25) and bruised (0.3).
   goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
-  // Bruised wound: extra fatigue drain (+0.3/tick)
-  if (goblin.wound?.type === 'bruised') {
-    goblin.fatigue = Math.min(100, goblin.fatigue + 0.3);
+  // Wound fatigue penalties by type
+  const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
+    bruised: 0.30,
+    leg:     0.15,
+    arm:     0.10,
+    eye:     0.05,
+  };
+  const woundDrain = goblin.wound ? (WOUND_FATIGUE_DRAIN[goblin.wound.type] ?? 0) : 0;
+  if (woundDrain > 0) {
+    goblin.fatigue = Math.min(100, goblin.fatigue + woundDrain);
   }
-  if (goblin.fatigue > 90) {
-    goblin.morale = Math.max(0, goblin.morale - 0.2);
-  }
+  // Exhaustion drains morale continuously above 80
+  goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.fatigue, 80) * 0.25);
   if (goblin.fatigue > 80 && shouldLog(goblin, 'exhausted', currentTick, 150)) {
     onLog?.('😩 exhausted', 'warn');
   }
@@ -126,13 +134,14 @@ function updateNeeds(
       const socialBonus = traitMod(goblin, 'socialDecayBonus', 0);
       goblin.social = Math.max(0, goblin.social - (0.3 + socialBonus));
       goblin.lastSocialTick = currentTick;
-    } else if (currentTick - goblin.lastSocialTick > 30) {
-      goblin.social = Math.min(100, goblin.social + 0.15);
+    } else {
+      const isolationTicks = currentTick - goblin.lastSocialTick;
+      goblin.social = Math.min(100, goblin.social + Math.min(0.5, isolationTicks / 400));
     }
   }
-  if (goblin.social > 60) {
-    goblin.morale = Math.max(0, goblin.morale - 0.15);
-    if (shouldLog(goblin, 'lonely', currentTick, 200)) {
+  if (goblin.social > 40) {
+    goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.social, 60) * 0.2);
+    if (goblin.social > 60 && shouldLog(goblin, 'lonely', currentTick, 200)) {
       onLog?.('😔 feeling lonely', 'warn');
     }
   }
@@ -223,51 +232,6 @@ export function tickAgentUtility(
   // 3. Expire stale LLM intent
   if (goblin.llmIntent && currentTick > goblin.llmIntentExpiry) {
     goblin.llmIntent = null;
-  }
-
-  // ── 2.8-style deposit/withdraw when standing on stockpile ──────────────
-  // These fire as instant reactions (not scored), same as original BT.
-  const standingFoodStockpile = foodStockpiles?.find(d => d.x === goblin.x && d.y === goblin.y) ?? null;
-  if (standingFoodStockpile) {
-    if (goblin.inventory.food >= 10) {
-      const amount = goblin.inventory.food - 6;
-      const stored = Math.min(amount, standingFoodStockpile.maxFood - standingFoodStockpile.food);
-      if (stored > 0) {
-        standingFoodStockpile.food += stored;
-        goblin.inventory.food       -= stored;
-        goblin.task                  = `deposited ${stored.toFixed(0)} → stockpile`;
-        return;
-      }
-    }
-    if (goblin.hunger > 60 && goblin.inventory.food < 2 && standingFoodStockpile.food > 0) {
-      const amount                = Math.min(4, standingFoodStockpile.food);
-      standingFoodStockpile.food -= amount;
-      goblin.inventory.food        = Math.min(MAX_INVENTORY_CAPACITY, goblin.inventory.food + amount);
-      goblin.task                  = `withdrew ${amount.toFixed(0)} from stockpile`;
-      return;
-    }
-  }
-  // Ore deposit (miners on stockpile)
-  const standingOreStockpile = oreStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
-  if (goblin.role === 'miner' && standingOreStockpile && goblin.inventory.materials > 0) {
-    const stored = Math.min(goblin.inventory.materials, standingOreStockpile.maxOre - standingOreStockpile.ore);
-    if (stored > 0) {
-      standingOreStockpile.ore  += stored;
-      goblin.inventory.materials -= stored;
-      goblin.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
-      return;
-    }
-  }
-  // Wood deposit (lumberjacks on stockpile)
-  const standingWoodStockpile = woodStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
-  if (goblin.role === 'lumberjack' && standingWoodStockpile && goblin.inventory.materials > 0) {
-    const stored = Math.min(goblin.inventory.materials, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
-    if (stored > 0) {
-      standingWoodStockpile.wood  += stored;
-      goblin.inventory.materials   -= stored;
-      goblin.task                   = `deposited ${stored.toFixed(0)} wood → stockpile`;
-      return;
-    }
   }
 
   // 4. Build action context — shared state that actions read from

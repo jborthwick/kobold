@@ -158,7 +158,7 @@ const commandMove: Action = {
 const eat: Action = {
   name: 'eat',
   intentMatch: 'eat',
-  eligible: ({ goblin }) => goblin.inventory.food > 0 && goblin.hunger > 20,
+  eligible: ({ goblin }) => goblin.inventory.food > 0,
   score: ({ goblin }) => {
     const mid = traitMod(goblin, 'eatThreshold', 70);
     return sigmoid(goblin.hunger, mid);
@@ -180,7 +180,7 @@ const eat: Action = {
 const rest: Action = {
   name: 'rest',
   intentMatch: 'rest',
-  eligible: ({ goblin }) => goblin.fatigue > 20 && goblin.hunger < 95,
+  eligible: ({ goblin }) => goblin.hunger < 95,
   score: ({ goblin }) => {
     // Lower midpoint (50 instead of 60) makes resting more attractive earlier
     const base = sigmoid(goblin.fatigue, 50);
@@ -238,8 +238,8 @@ const share: Action = {
       )
       .sort((a, b) => b.hunger - a.hunger)[0];
     if (!target) return 0;
-    // Higher score when target is hungrier and we have more surplus
-    return sigmoid(target.hunger, 70) * ramp(goblin.inventory.food, 6, 15) * 0.7;
+    // Higher score when target is hungrier and we have more surplus; less likely when donor is also getting hungry
+    return sigmoid(target.hunger, 70) * ramp(goblin.inventory.food, 6, 15) * inverseSigmoid(goblin.hunger, 50) * 0.8;
   },
   execute: ({ goblin, goblins, currentTick, onLog }) => {
     if (!goblins) return;
@@ -325,16 +325,11 @@ const fight: Action = {
 const forage: Action = {
   name: 'forage',
   intentMatch: 'forage',
-  eligible: ({ goblin }) => {
-    const inventoryFull = goblin.inventory.food >= MAX_INVENTORY_CAPACITY;
-    if (inventoryFull) return false;
-    // Miners/lumberjacks skip food when not hungry
-    if ((goblin.role === 'miner' || goblin.role === 'lumberjack') && goblin.hunger < 50) return false;
-    return true;
-  },
+  eligible: ({ goblin }) => goblin.inventory.food < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
-    const radius = goblin.hunger > 65 ? Math.min(vision * 2, 15) : vision;
+    const hungerDrive = sigmoid(goblin.hunger, 60);
+    const radius = Math.round(Math.min(vision * (1 + hungerDrive * 0.8), 15));
     const target = bestFoodTile(goblin, grid, radius);
     if (!target) {
       // Check remembered food sites
@@ -346,9 +341,7 @@ const forage: Action = {
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
     const vision = effectiveVision(goblin);
-    const radius = goblin.llmIntent === 'forage' ? 15
-      : goblin.hunger > 65 ? Math.min(vision * 2, 15)
-      : vision;
+    const radius = goblin.llmIntent === 'forage' ? 15 : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), 15));
     const foodTarget = bestFoodTile(goblin, grid, radius);
 
     // Record visible food sites in memory
@@ -402,10 +395,13 @@ const forage: Action = {
       // Harvest
       const headroom = MAX_INVENTORY_CAPACITY - goblin.inventory.food;
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
-        const depletionRate = goblin.role === 'forager' ? 6 : 5;
-        const baseYield     = (goblin.role === 'forager' ? 2 : 1) + skillYieldBonus(goblin);
+        // Role provides base gathering bonus; trait can further augment it
+        const roleBonus     = goblin.role === 'forager' ? 1 : 0;
+        const gatherBonus   = roleBonus + traitMod(goblin, 'gatheringPower', 0);
+        const depletionRate = 5 + gatherBonus;
+        const baseYield     = 1 + gatherBonus + skillYieldBonus(goblin);
         const moraleScale   = 0.5 + (goblin.morale / 100) * 0.5;
-        const fatigueScale  = goblin.fatigue > 70 ? 0.5 : 1.0;
+        const fatigueScale  = 1.0 - inverseSigmoid(goblin.fatigue, 70, 0.12) * 0.5;
         const woundScale    = woundYieldMultiplier(goblin);
         const harvestYield  = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
         const hadFood       = here.foodValue;
@@ -466,36 +462,58 @@ const forage: Action = {
 };
 
 // --- depositFood: carry surplus food to stockpile ---
+const DEPOSIT_KEEP_FOOD = 6; // food kept after deposit (prevents depositing everything)
 const depositFood: Action = {
   name: 'depositFood',
   eligible: ({ goblin, foodStockpiles }) => {
-    if (goblin.inventory.food < 10 || goblin.hunger >= 55) return false;
-    const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
-    return target !== null && !(goblin.x === target.x && goblin.y === target.y);
+    if (goblin.inventory.food <= 0) return false;
+    return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
-  score: ({ goblin }) => ramp(goblin.inventory.food, 8, 20) * inverseSigmoid(goblin.hunger, 50) * 0.6,
+  score: ({ goblin, foodStockpiles }) => {
+    const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
+    return ramp(goblin.inventory.food, 6, 20) * inverseSigmoid(goblin.hunger, 50) * 0.6 * (onStockpile ? 2.5 : 1.0);
+  },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
     if (!target) return;
-    moveTo(goblin, target, grid);
-    goblin.task = '→ home (deposit)';
+    if (goblin.x === target.x && goblin.y === target.y) {
+      const amount = goblin.inventory.food - DEPOSIT_KEEP_FOOD;
+      const stored = Math.min(amount, target.maxFood - target.food);
+      if (stored > 0) {
+        target.food           += stored;
+        goblin.inventory.food -= stored;
+        goblin.task            = `deposited ${stored.toFixed(0)} → stockpile`;
+      }
+    } else {
+      moveTo(goblin, target, grid);
+      goblin.task = '→ home (deposit)';
+    }
   },
 };
 
-// --- withdrawFood: run to stockpile when hungry and empty ---
+// --- withdrawFood: run to stockpile when hungry and low on food ---
 const withdrawFood: Action = {
   name: 'withdrawFood',
   eligible: ({ goblin, foodStockpiles }) => {
-    if (goblin.hunger <= 65 || goblin.inventory.food > 0) return false;
-    const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);
-    return target !== null && !(goblin.x === target.x && goblin.y === target.y);
+    if (goblin.inventory.food >= 4) return false; // already have enough
+    return nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
   },
-  score: ({ goblin }) => sigmoid(goblin.hunger, 65) * 0.55,
+  score: ({ goblin, foodStockpiles }) => {
+    const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
+    return sigmoid(goblin.hunger, 60) * 0.55 * (onStockpile ? 2.5 : 1.0);
+  },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);
     if (!target) return;
-    moveTo(goblin, target, grid);
-    goblin.task = `→ stockpile (${target.food.toFixed(0)} food)`;
+    if (goblin.x === target.x && goblin.y === target.y) {
+      const amount = Math.min(4, target.food);
+      target.food -= amount;
+      goblin.inventory.food = Math.min(MAX_INVENTORY_CAPACITY, goblin.inventory.food + amount);
+      goblin.task = `withdrew ${amount.toFixed(0)} from stockpile`;
+    } else {
+      moveTo(goblin, target, grid);
+      goblin.task = `→ stockpile (${target.food.toFixed(0)} food)`;
+    }
   },
 };
 
@@ -641,16 +659,27 @@ const chop: Action = {
 const depositOre: Action = {
   name: 'depositOre',
   eligible: ({ goblin, oreStockpiles }) => {
-    if (goblin.role !== 'miner' || goblin.inventory.materials < 8) return false;
-    const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
-    return target !== null && !(goblin.x === target.x && goblin.y === target.y);
+    if (goblin.role !== 'miner' || goblin.inventory.materials <= 0) return false;
+    return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
-  score: ({ goblin }) => ramp(goblin.inventory.materials, 6, 20) * 0.5,
+  score: ({ goblin, oreStockpiles }) => {
+    const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
+    return ramp(goblin.inventory.materials, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+  },
   execute: ({ goblin, grid, oreStockpiles }) => {
     const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
     if (!target) return;
-    moveTo(goblin, target, grid);
-    goblin.task = `→ ore stockpile (${goblin.inventory.materials.toFixed(0)} ore)`;
+    if (goblin.x === target.x && goblin.y === target.y) {
+      const stored = Math.min(goblin.inventory.materials, target.maxOre - target.ore);
+      if (stored > 0) {
+        target.ore                 += stored;
+        goblin.inventory.materials -= stored;
+        goblin.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
+      }
+    } else {
+      moveTo(goblin, target, grid);
+      goblin.task = `→ ore stockpile (${goblin.inventory.materials.toFixed(0)} ore)`;
+    }
   },
 };
 
@@ -658,16 +687,27 @@ const depositOre: Action = {
 const depositWood: Action = {
   name: 'depositWood',
   eligible: ({ goblin, woodStockpiles }) => {
-    if (goblin.role !== 'lumberjack' || goblin.inventory.materials < 8) return false;
-    const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
-    return target !== null && !(goblin.x === target.x && goblin.y === target.y);
+    if (goblin.role !== 'lumberjack' || goblin.inventory.materials <= 0) return false;
+    return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
-  score: ({ goblin }) => ramp(goblin.inventory.materials, 6, 20) * 0.5,
+  score: ({ goblin, woodStockpiles }) => {
+    const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
+    return ramp(goblin.inventory.materials, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+  },
   execute: ({ goblin, grid, woodStockpiles }) => {
     const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
     if (!target) return;
-    moveTo(goblin, target, grid);
-    goblin.task = `→ wood stockpile (${goblin.inventory.materials.toFixed(0)} wood)`;
+    if (goblin.x === target.x && goblin.y === target.y) {
+      const stored = Math.min(goblin.inventory.materials, target.maxWood - target.wood);
+      if (stored > 0) {
+        target.wood                += stored;
+        goblin.inventory.materials -= stored;
+        goblin.task                 = `deposited ${stored.toFixed(0)} wood → stockpile`;
+      }
+    } else {
+      moveTo(goblin, target, grid);
+      goblin.task = `→ wood stockpile (${goblin.inventory.materials.toFixed(0)} wood)`;
+    }
   },
 };
 
@@ -675,7 +715,6 @@ const depositWood: Action = {
 const buildWall: Action = {
   name: 'buildWall',
   eligible: ({ goblin, foodStockpiles, oreStockpiles }) => {
-    if (goblin.hunger >= 65) return false;
     if (!foodStockpiles?.length || !oreStockpiles?.length) return false;
     const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
     return buildStockpile !== null && buildStockpile !== undefined;
@@ -863,9 +902,10 @@ const wander: Action = {
 };
 
 // --- seekWarmth: comfort preference — pathfinds to nearest hearth, stops once warm ---
-const SEEK_WARMTH_RADIUS    = 15;
-// Longer cooldown: prevents re-triggering immediately after being satisfied
-const SEEK_WARMTH_COOLDOWN  = 150;
+const SEEK_WARMTH_RADIUS              = 15;
+const SEEK_WARMTH_COOLDOWN            = 150;
+const SEEK_WARMTH_SCORE_COLD          = 0.28;
+const SEEK_WARMTH_SCORE_DEFAULT       = 0.08;
 const seekWarmth: Action = {
   name: 'seekWarmth',
   intentMatch: 'rest',
@@ -909,7 +949,7 @@ const seekWarmth: Action = {
     if (!hearthExists) return 0; // No hearth visible or known, do not score
 
     const warmth = goblin.warmth ?? 100;
-    const maxScore = weatherType === 'cold' ? 0.28 : 0.08;
+    const maxScore = weatherType === 'cold' ? SEEK_WARMTH_SCORE_COLD : SEEK_WARMTH_SCORE_DEFAULT;
     return inverseSigmoid(warmth, 20, 0.12) * maxScore;
   },
   execute: ({ goblin, grid, currentTick }) => {
@@ -1021,13 +1061,10 @@ const HEARTH_BUILD_COOLDOWN  = 300; // personal cooldown after placing, prevents
 const buildHearth: Action = {
   name: 'buildHearth',
   eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick }) => {
-    if (goblin.hunger >= 70) return false;
     const totalFood = foodStockpiles?.reduce((s, f) => s + f.food, 0) ?? 0;
     if (totalFood < 20) return false;
     const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
     if (totalWood < 2) return false;
-    // Goblin must actually feel cold (uses smoothed warmth — single steps don't flip this)
-    if ((goblin.warmth ?? 100) >= 35) return false;
     // Personal cooldown — prevents a goblin from placing one then immediately starting another
     if (currentTick - (goblin.lastLoggedTicks['builtHearth'] ?? 0) < HEARTH_BUILD_COOLDOWN) return false;
     // A hearth already within coverage radius means this area is served — building would be wasteful

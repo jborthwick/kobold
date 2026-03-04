@@ -14,6 +14,7 @@ import type { Goblin, Tile, LLMIntent, Adventurer, ColonyGoal } from '../shared/
 import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
 import { getActiveFaction } from '../shared/factions';
+import { traitMod } from '../simulation/agents';
 
 // ── LLM provider abstraction ─────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export function detectCrisis(
   }
 
   // Hunger crisis — fires when hungry, regardless of whether they still have some food
-  if (goblin.hunger >= HUNGER_CRISIS_THRESHOLD) {
+  if (goblin.hunger >= traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD)) {
     return {
       type:        'hunger',
       description: `You are very hungry (hunger ${goblin.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${goblin.inventory.food.toFixed(0)} units).`,
@@ -141,7 +142,7 @@ export function detectCrisis(
   }
 
   // Morale breaking point (morale decays in tickAgent when hungry)
-  if (goblin.morale <= MORALE_CRISIS_THRESHOLD) {
+  if (goblin.morale <= traitMod(goblin, 'moraleCrisisThreshold', MORALE_CRISIS_THRESHOLD)) {
     return {
       type:        'morale',
       description: `Your morale has fallen to ${goblin.morale.toFixed(0)}/100. You are struggling to keep going.`,
@@ -150,7 +151,7 @@ export function detectCrisis(
   }
 
   // Exhaustion — fires when fatigue is critically high
-  if (goblin.fatigue >= EXHAUSTION_THRESHOLD) {
+  if (goblin.fatigue >= traitMod(goblin, 'exhaustionThreshold', EXHAUSTION_THRESHOLD)) {
     return {
       type:        'exhaustion',
       description: `You are exhausted (fatigue ${goblin.fatigue.toFixed(0)}/100). Your body aches and you can barely keep moving.`,
@@ -159,7 +160,7 @@ export function detectCrisis(
   }
 
   // Loneliness — fires when social need is critically high
-  if (goblin.social >= LONELINESS_THRESHOLD) {
+  if (goblin.social >= traitMod(goblin, 'lonelinessCrisisThreshold', LONELINESS_THRESHOLD)) {
     return {
       type:        'loneliness',
       description: `You feel lonely and isolated (social need ${goblin.social.toFixed(0)}/100). You haven't been near a friend in a long time.`,
@@ -167,9 +168,11 @@ export function detectCrisis(
     };
   }
 
-  // Resource contest — rival within CONTEST_RADIUS tiles targeting the same area
-  // Scouts have wider situational awareness
-  const contestRadius = goblin.role === 'scout' ? 4 : CONTEST_RADIUS;
+  // Resource contest — rival within detection radius targeting the same area.
+  // Base radius + role bonus (scouts naturally perceptive) + trait bonus.
+  const contestRadius = CONTEST_RADIUS
+    + (goblin.role === 'scout' ? 2 : 0)
+    + traitMod(goblin, 'perceptiveness', 0);
   const rival = alive.find(d =>
     d.id !== goblin.id &&
     Math.abs(d.x - goblin.x) <= contestRadius &&
