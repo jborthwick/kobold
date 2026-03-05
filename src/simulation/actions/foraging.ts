@@ -18,8 +18,12 @@ export const forage: Action = {
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
-    const hungerDrive = sigmoid(goblin.hunger, 60);
-    const radius = Math.round(Math.min(vision * (1 + hungerDrive * 0.8), traitMod(goblin, 'maxSearchRadius', 15)));
+    const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
+    // Search at full range when meaningfully hungry — the distance penalty in bestFoodTile
+    // already filters out patches that aren't worth traveling to.
+    const radius = goblin.hunger > 20
+      ? maxSearch
+      : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const target = bestFoodTile(goblin, grid, radius);
     if (!target) {
       // Check remembered food sites
@@ -32,7 +36,9 @@ export const forage: Action = {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
-    const radius = goblin.llmIntent === 'forage' ? maxSearch : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
+    const radius = (goblin.llmIntent === 'forage' || goblin.hunger > 20)
+      ? maxSearch
+      : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const foodTarget = bestFoodTile(goblin, grid, radius);
 
     // Record visible food sites in memory
@@ -194,7 +200,9 @@ export const withdrawFood: Action = {
   },
   score: ({ goblin, foodStockpiles }) => {
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return sigmoid(goblin.hunger, 60) * 0.55 * (onStockpile ? 2.5 : 1.0);
+    // Midpoint 45 (was 60) so goblins head to the depot when moderately hungry (≈35+),
+    // not just when desperate. Stockpile remains secondary to foraging.
+    return sigmoid(goblin.hunger, 45) * 0.55 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);
