@@ -10,10 +10,11 @@
  * mid-season (WEATHER_SHIFT_CHANCE per tick).
  */
 
+import type { WeatherType, Season } from '../shared/types';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
-export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold' | 'storm';
+export type { WeatherType, Season };
 
 export interface Weather {
   type:     WeatherType;
