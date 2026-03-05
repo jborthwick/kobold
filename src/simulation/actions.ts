@@ -529,7 +529,12 @@ const withdrawFood: Action = {
 // --- mine: miners target ore tiles ---
 const mine: Action = {
   name: 'mine',
-  eligible: ({ goblin }) => goblin.inventory.materials < MAX_INVENTORY_CAPACITY,
+  eligible: ({ goblin, goblins }) => {
+    if (goblin.inventory.materials >= MAX_INVENTORY_CAPACITY) return false;
+    if (goblin.role === 'miner') return true;
+    // Non-miners only mine when no alive miner exists (emergency fallback)
+    return !(goblins?.some(g => g.alive && g.role === 'miner') ?? false);
+  },
   score: ({ goblin, grid }) => {
     const apt = ROLE_MINING_APT[goblin.role];
     const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
@@ -596,7 +601,12 @@ const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 const chop: Action = {
   name: 'chop',
-  eligible: ({ goblin }) => goblin.inventory.materials < MAX_INVENTORY_CAPACITY,
+  eligible: ({ goblin, goblins }) => {
+    if (goblin.inventory.materials >= MAX_INVENTORY_CAPACITY) return false;
+    if (goblin.role === 'lumberjack') return true;
+    // Non-lumberjacks only chop when no alive lumberjack exists (emergency fallback)
+    return !(goblins?.some(g => g.alive && g.role === 'lumberjack') ?? false);
+  },
   score: ({ goblin, grid }) => {
     const apt = ROLE_CHOP_APT[goblin.role];
     const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
@@ -664,8 +674,9 @@ const chop: Action = {
 // --- depositOre: miners carry ore to stockpile ---
 const depositOre: Action = {
   name: 'depositOre',
-  eligible: ({ goblin, oreStockpiles }) => {
+  eligible: ({ goblin, goblins, oreStockpiles }) => {
     if (goblin.inventory.materials <= 0) return false;
+    if (goblin.role !== 'miner' && (goblins?.some(g => g.alive && g.role === 'miner') ?? false)) return false;
     return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
   score: ({ goblin, oreStockpiles }) => {
@@ -692,8 +703,9 @@ const depositOre: Action = {
 // --- depositWood: lumberjacks carry wood to stockpile ---
 const depositWood: Action = {
   name: 'depositWood',
-  eligible: ({ goblin, woodStockpiles }) => {
+  eligible: ({ goblin, goblins, woodStockpiles }) => {
     if (goblin.inventory.materials <= 0) return false;
+    if (goblin.role !== 'lumberjack' && (goblins?.some(g => g.alive && g.role === 'lumberjack') ?? false)) return false;
     return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
   score: ({ goblin, woodStockpiles }) => {
