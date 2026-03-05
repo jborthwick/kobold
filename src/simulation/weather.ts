@@ -13,7 +13,7 @@
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
-export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold';
+export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold' | 'storm';
 
 export interface Weather {
   type:     WeatherType;
