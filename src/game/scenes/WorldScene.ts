@@ -11,7 +11,7 @@ import { TileType, type OverlayMode, type Tile, type Goblin, type Adventurer, ty
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
-import { tickFire } from '../../simulation/fire';
+import { tickFire, tickBurningGoblins } from '../../simulation/fire';
 import { tickPooling } from '../../simulation/pooling';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { rollWound, woundLabel } from '../../simulation/wounds';
@@ -743,6 +743,9 @@ export class WorldScene extends Phaser.Scene {
     }
 
     growback(this.grid, growbackModifier(this.weather), this.tick);
+    tickBurningGoblins(this.grid, this.tick, this.goblins, (msg, level) => {
+      bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
+    });
     tickPooling(this.grid, this.tick, this.weather.type);
     tickFire(this.grid, this.tick, this.goblins, this.weather.type, (msg, level) => {
       bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
@@ -1444,11 +1447,16 @@ export class WorldScene extends Phaser.Scene {
         spr.setPosition(px, py);
       }
 
-      // Colour shifts green → red as hunger rises
-      const hr = d.hunger / 100;
-      const r  = Math.floor(60 + hr * 195);
-      const g  = Math.floor(200 - hr * 150);
-      spr.setTint((r << 16) | (g << 8) | 60);
+      // Burning goblins flicker fire colours; otherwise shift green → red with hunger
+      if (d.onFire) {
+        const phase = (this.tick + parseInt(d.id, 36)) % 3;
+        spr.setTint(phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400);
+      } else {
+        const hr = d.hunger / 100;
+        const r  = Math.floor(60 + hr * 195);
+        const g  = Math.floor(200 - hr * 150);
+        spr.setTint((r << 16) | (g << 8) | 60);
+      }
 
       // Yellow selection ring
       if (d.id === this.selectedGoblinId) {

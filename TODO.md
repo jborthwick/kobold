@@ -1,0 +1,1 @@
+[ ] goblins sometimes get stuck in 2 tile loops, pivoting between "foraging" and "hearthsite" and doing neither until another need forces a redirection

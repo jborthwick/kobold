@@ -20,7 +20,6 @@ const FIRE_SCAN_RADIUS   = 18;   // tiles — how far to look for fire
 const WATER_SCAN_RADIUS  = 24;   // tiles — how far to look for water (lakes can be far)
 const DOUSE_CHANCE       = 0.80; // probability of extinguishing the fire tile
 const SINGE_CHANCE       = 0.20; // probability of taking a light wound while dousing
-const SINGE_DAMAGE       = 8;    // hp damage on singe
 const SINGE_MOR_LOSS     = 5;    // morale loss on singe
 
 /** Find the nearest Fire tile within radius. Returns null if none. */
@@ -142,14 +141,12 @@ export const fightFire: Action = {
           goblin.task = 'missed the fire!';
         }
 
-        // Singe risk — being this close to fire has consequences
-        if (Math.random() < SINGE_CHANCE && !goblin.wound) {
-          goblin.health = Math.max(1, goblin.health - SINGE_DAMAGE);
-          goblin.morale = Math.max(0, goblin.morale - SINGE_MOR_LOSS);
-          goblin.wound  = { type: 'bruised', healTick: currentTick + 80 };
-          if (shouldLog(goblin, 'singed', currentTick, 60)) {
-            onLog?.(`🔥 ${goblin.name} got singed fighting the fire!`, 'warn');
-          }
+        // Singe risk — being this close to fire can set the goblin alight
+        if (Math.random() < SINGE_CHANCE && !goblin.onFire) {
+          goblin.onFire     = true;
+          goblin.onFireTick = currentTick;
+          goblin.morale     = Math.max(0, goblin.morale - SINGE_MOR_LOSS);
+          onLog?.(`🔥 ${goblin.name} caught fire while fighting the flames!`, 'warn');
         }
 
       } else {

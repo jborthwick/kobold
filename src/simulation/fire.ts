@@ -20,9 +20,18 @@ const SPREAD_INTERVAL     = 25;    // ticks between spread attempts per fire til
 const BASE_IGNITION       = 0.0003; // per hearth × per adjacent flammable tile/tick
 const BASE_SPREAD         = 0.80;  // probability per neighbor per spread attempt
 const RAIN_EXTINGUISH     = 0.25;  // probability per fire tile per tick during rain
-const FIRE_DAMAGE_HP      = 5;     // hp lost per tick while on a fire tile
-const FIRE_DAMAGE_MOR     = 3;     // morale lost per tick while on a fire tile
-const FIRE_LOG_COOLDOWN   = 30;    // ticks between "on fire!" log messages per goblin
+const FIRE_DAMAGE_HP           = 5;     // hp lost per tick while standing on a fire tile
+const FIRE_DAMAGE_MOR          = 3;     // morale lost per tick while standing on a fire tile
+const FIRE_LOG_COOLDOWN        = 30;    // ticks between "on fire!" log messages per goblin
+const GOBLIN_CATCH_FIRE_CHANCE = 0.15;  // chance to catch fire per tick while standing on a fire tile
+
+// Burning goblin constants
+const ON_FIRE_DAMAGE_HP        = 2;     // hp DoT per tick while burning
+const ON_FIRE_DURATION         = 50;    // ticks before flames burn out naturally
+const ON_FIRE_TERRAIN_CHANCE   = 0.04;  // burning goblin ignites the tile they're standing on
+const FRIENDLY_EXTINGUISH      = 0.20;  // per-tick chance adjacent goblin smothers the flames
+
+const EXTINGUISH_TILES = new Set([TileType.Water, TileType.Pool]);
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -121,7 +130,7 @@ export function tickFire(
     grid[y][x] = { type: TileType.Dirt, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0, trafficScore: t.trafficScore };
   }
 
-  // Goblin fire damage
+  // Goblin standing on fire tile: direct damage + chance to catch fire
   for (const g of goblins) {
     if (!g.alive) continue;
     const tile = grid[g.y]?.[g.x];
@@ -136,14 +145,80 @@ export function tickFire(
       g.task         = 'dead';
       g.causeOfDeath = 'burned alive';
       onLog?.(`💀 ${g.name} burned alive!`, 'error');
-    } else {
-      const lastLogged = g.lastLoggedTicks['fire'] ?? 0;
-      if (currentTick - lastLogged >= FIRE_LOG_COOLDOWN) {
-        g.lastLoggedTicks['fire'] = currentTick;
-        onLog?.(`🔥 ${g.name} is on fire!`, 'warn');
-      }
+    } else if (!g.onFire && Math.random() < GOBLIN_CATCH_FIRE_CHANCE) {
+      g.onFire     = true;
+      g.onFireTick = currentTick;
+      onLog?.(`🔥 ${g.name} caught fire!`, 'warn');
     }
   }
 
   return { burnouts: burnouts.length + extinguished.length, extinguished: extinguished.length };
+}
+
+/**
+ * Tick burning goblins — DoT, terrain spread, friendly extinguish, water extinguish.
+ * Call this AFTER tickAgentUtility (so flee-to-water movement has already happened)
+ * and BEFORE tickFire (fire tile damage is separate from goblin-on-fire DoT).
+ */
+export function tickBurningGoblins(
+  grid:        Tile[][],
+  currentTick: number,
+  goblins:     Goblin[],
+  onLog?:      LogFn,
+): void {
+  for (const g of goblins) {
+    if (!g.alive || !g.onFire) continue;
+
+    // DoT damage
+    g.health -= ON_FIRE_DAMAGE_HP;
+    g.morale  = Math.max(0, g.morale - 1);
+
+    if (g.health <= 0) {
+      g.alive        = false;
+      g.health       = 0;
+      g.task         = 'dead';
+      g.causeOfDeath = 'burned alive';
+      g.onFire       = false;
+      onLog?.(`💀 ${g.name} burned to a crisp!`, 'error');
+      continue;
+    }
+
+    // Natural burnout after duration
+    const age = currentTick - (g.onFireTick ?? currentTick);
+    if (age >= ON_FIRE_DURATION) {
+      g.onFire = false;
+      onLog?.(`${g.name}'s flames finally went out.`, 'info');
+      continue;
+    }
+
+    // Extinguish if standing on water or a rain pool
+    const tile = grid[g.y]?.[g.x];
+    if (tile && EXTINGUISH_TILES.has(tile.type)) {
+      g.onFire = false;
+      g.morale = Math.max(0, g.morale - 5);
+      onLog?.(`💧 ${g.name} dove into the water and put themselves out!`, 'warn');
+      continue;
+    }
+
+    // Spread fire to the tile the goblin is standing on
+    if (tile && FLAMMABLE.has(tile.type) && Math.random() < ON_FIRE_TERRAIN_CHANCE) {
+      grid[g.y][g.x] = {
+        ...tile,
+        type: TileType.Fire, foodValue: 0, maxFood: 0,
+        materialValue: 0, maxMaterial: 0, growbackRate: 0,
+        fireTick: currentTick,
+      };
+    }
+
+    // Adjacent friendly goblins can smother the flames
+    const helpers = goblins.filter(o =>
+      o.alive && !o.onFire && o.id !== g.id &&
+      Math.abs(o.x - g.x) <= 1 && Math.abs(o.y - g.y) <= 1,
+    );
+    if (helpers.length > 0 && Math.random() < FRIENDLY_EXTINGUISH) {
+      const helper = helpers[Math.floor(Math.random() * helpers.length)];
+      g.onFire = false;
+      onLog?.(`🤝 ${helper.name} beat the flames off ${g.name}!`, 'warn');
+    }
+  }
 }

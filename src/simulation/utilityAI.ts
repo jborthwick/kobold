@@ -18,9 +18,8 @@ import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreSt
 import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
-import {
-  traitMod,
-} from './agents';
+import { traitMod, pathNextStep } from './agents';
+import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
 import { tickWoundHealing } from './wounds';
 
@@ -262,6 +261,35 @@ export function tickAgentUtility(
       onLog?.('has died of starvation!', 'error');
       return;
     }
+  }
+
+  // ── Step 2b: Burning goblin override ─────────────────────────────────────────
+  // A goblin on fire overrides ALL action scoring — they sprint to the nearest
+  // water or rain pool. carryingWater is cleared so they don't waste time dousing.
+  if (goblin.onFire) {
+    goblin.carryingWater = false;
+    const WATER_SEARCH = 30;
+    let waterTarget: { x: number; y: number } | null = null;
+    let bestDist = Infinity;
+    const x0 = Math.max(0, goblin.x - WATER_SEARCH), x1 = Math.min(grid[0].length - 1, goblin.x + WATER_SEARCH);
+    const y0 = Math.max(0, goblin.y - WATER_SEARCH), y1 = Math.min(grid.length - 1, goblin.y + WATER_SEARCH);
+    for (let wy = y0; wy <= y1; wy++) {
+      for (let wx = x0; wx <= x1; wx++) {
+        const tt = grid[wy][wx].type;
+        if (tt !== TileType.Water && tt !== TileType.Pool) continue;
+        const d = Math.abs(wx - goblin.x) + Math.abs(wy - goblin.y);
+        if (d < bestDist) { bestDist = d; waterTarget = { x: wx, y: wy }; }
+      }
+    }
+    if (waterTarget) {
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, waterTarget, grid);
+      goblin.x = next.x;
+      goblin.y = next.y;
+      goblin.task = `🔥 ON FIRE! → water (${bestDist} tiles)`;
+    } else {
+      goblin.task = '🔥 ON FIRE! (no water nearby!)';
+    }
+    return;
   }
 
   // ── Step 3: Expire stale LLM intent ──────────────────────────────────────────

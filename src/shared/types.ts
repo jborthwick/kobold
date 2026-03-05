@@ -118,6 +118,8 @@ export interface Goblin {
   lastSocialTick:  number;      // tick when goblin last had a friend within proximity
   lastLoggedTicks: Record<string, number>;  // cooldown tracking for event log (key = event type, value = tick)
   carryingWater?:  boolean;                 // true when goblin has fetched water and is heading to douse fire
+  onFire?:         boolean;                 // goblin is currently burning
+  onFireTick?:     number;                  // tick when they caught fire
   skillXp:         number;      // lifetime XP for role skill (0+)
   skillLevel:      number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
   wound?:          Wound;       // active wound (undefined = healthy); heals at wound.healTick
