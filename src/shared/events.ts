@@ -1,5 +1,5 @@
 import mitt from 'mitt';
-import type { GameState, LogEntry, TileInfo, MiniMapData, Adventurer, OverlayMode, Chapter } from './types';
+import type { GameState, LogEntry, TileInfo, MiniMapData, Adventurer, OverlayMode, Chapter, RoomType } from './types';
 
 type Events = {
   gameState:      GameState;
@@ -21,6 +21,8 @@ type Events = {
   chronicleChapter: Chapter;
   /** Restore all chapters from save data (on load). */
   restoreChronicle: Chapter[];
+  /** Player enters/exits build mode for room placement. */
+  buildMode: { roomType: RoomType } | null;
 };
 
 export const bus = mitt<Events>();

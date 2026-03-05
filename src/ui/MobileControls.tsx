@@ -15,6 +15,7 @@ const OVERLAY_ICONS: Record<OverlayMode, string> = {
 
 export function MobileControls() {
   const [state, setState] = useState<GameState | null>(null);
+  const [buildActive, setBuildActive] = useState(false);
 
   useEffect(() => {
     bus.on('gameState', setState);
@@ -26,6 +27,12 @@ export function MobileControls() {
   const cycleOverlay = () => {
     const next = OVERLAY_MODES[(OVERLAY_MODES.indexOf(overlayMode) + 1) % OVERLAY_MODES.length];
     bus.emit('overlayChange', { mode: next });
+  };
+
+  const toggleBuild = () => {
+    const next = !buildActive;
+    setBuildActive(next);
+    bus.emit('buildMode', next ? { roomType: 'storage' as const } : null);
   };
 
   return (
@@ -48,6 +55,12 @@ export function MobileControls() {
         onTap={() => bus.emit('controlChange', { action: 'speedUp' })}
       />
       <div style={styles.divider} />
+      <MobileBtn
+        icon={buildActive ? '✕' : '🔨'}
+        label={buildActive ? 'cancel' : 'build'}
+        active={buildActive}
+        onTap={toggleBuild}
+      />
       <MobileBtn
         icon={OVERLAY_ICONS[overlayMode]}
         label={overlayMode === 'off' ? 'overlay' : overlayMode}

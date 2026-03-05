@@ -206,6 +206,19 @@ export interface Chapter {
   tick:           number;
 }
 
+export type RoomType = 'storage';
+export type StorageSpecialization = 'food' | 'ore' | 'wood';
+
+export interface Room {
+  id:              string;
+  type:            RoomType;
+  x:               number;          // top-left tile X of the 5×5 zone
+  y:               number;          // top-left tile Y
+  w:               number;          // always 5
+  h:               number;          // always 5
+  specialization?: StorageSpecialization;
+}
+
 export interface GameState {
   tick: number;
   goblins: Goblin[];
@@ -223,4 +236,5 @@ export interface GameState {
   /** Current weather / season (affects growback & metabolism). */
   weatherSeason?: Season;
   weatherType?:   WeatherType;
+  rooms:          Room[];
 }

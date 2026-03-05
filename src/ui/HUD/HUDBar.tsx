@@ -91,11 +91,18 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [provider,   setProvider]   = useState<LLMProvider>('groq');
   const [confirmNew, setConfirmNew] = useState(false);
+  const [buildActive, setBuildActive] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
 
   useEffect(() => {
     bus.on('gameState', setState);
     return () => bus.off('gameState', setState);
   }, []);
+
+  // Dismiss hint when first room is placed
+  useEffect(() => {
+    if (state && state.rooms.length > 0 && !hintDismissed) setHintDismissed(true);
+  }, [state?.rooms.length, hintDismissed]);
 
   const toggleLLM = () => {
     const next = !llmEnabled;
@@ -107,6 +114,12 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     const next: LLMProvider = provider === 'anthropic' ? 'groq' : 'anthropic';
     setProvider(next);
     bus.emit('settingsChange', { llmProvider: next });
+  };
+
+  const toggleBuild = () => {
+    const next = !buildActive;
+    setBuildActive(next);
+    bus.emit('buildMode', next ? { roomType: 'storage' as const } : null);
   };
 
   if (!state) return null;
@@ -140,6 +153,20 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
       {/* Desktop: inline pause/speed/overlay controls */}
       {isDesktop && <PauseSpeed paused={state.paused} speed={state.speed} />}
       {isDesktop && <OverlayIndicator mode={state.overlayMode} />}
+      {/* Build button */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <button
+          onClick={toggleBuild}
+          style={{ ...styles.llmToggle, ...(buildActive ? styles.buildBtnActive : styles.llmToggleOff) }}
+        >
+          {buildActive ? 'Cancel' : 'Build'}
+        </button>
+        {!hintDismissed && state.rooms.length === 0 && state.tick > 200 && !buildActive && (
+          <span style={styles.buildHint} onClick={() => setHintDismissed(true)}>
+            Place a storage room!
+          </span>
+        )}
+      </div>
       {/* LLM toggle: desktop only (LLM disabled on mobile) */}
       {isDesktop && (
         <button
@@ -302,5 +329,25 @@ const styles: Record<string, React.CSSProperties> = {
   newColonyBtnNo: {
     background: 'rgba(120,120,120,0.2)',
     color:      '#aaa',
+  },
+  buildBtnActive: {
+    background: 'rgba(220,60,60,0.25)',
+    color:      '#e74c3c',
+  },
+  buildHint: {
+    position:      'absolute' as const,
+    top:           -22,
+    left:          '50%',
+    transform:     'translateX(-50%)',
+    whiteSpace:    'nowrap' as const,
+    fontSize:      9,
+    fontWeight:    'bold' as const,
+    color:         '#f0c040',
+    background:    'rgba(0,0,0,0.7)',
+    padding:       '2px 6px',
+    borderRadius:  4,
+    cursor:        'pointer',
+    animation:     'pulse 1.5s infinite',
+    pointerEvents: 'auto' as const,
   },
 };

@@ -1,41 +1,38 @@
 import { TileType } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { fortWallSlots, fortEnclosureSlots, recordSite, pathNextStep } from '../agents';
+import { roomWallSlots, recordSite, pathNextStep } from '../agents';
 import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile } from './helpers';
 import type { Action } from './types';
 
-// --- buildWall: any goblin can build fort walls ---
+// --- buildWall: any goblin can build walls around rooms ---
 export const buildWall: Action = {
   name: 'buildWall',
-  eligible: ({ foodStockpiles, oreStockpiles }) => {
-    if (!foodStockpiles?.length || !oreStockpiles?.length) return false;
-    const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
-    return buildStockpile !== null && buildStockpile !== undefined;
+  eligible: ({ rooms, oreStockpiles, goblin }) => {
+    if (!rooms || rooms.length === 0) return false;
+    // Need ore to build — either in stockpile or inventory
+    const stockpileOre = oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0;
+    return (stockpileOre >= 3) || (goblin.inventory.ore >= 3);
   },
-  score: ({ goblin, oreStockpiles, foodStockpiles, grid, goblins, adventurers }) => {
-    const totalOre = oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0;
-    if (totalOre < 3) return 0; // Not enough ore, can't score
+  score: ({ goblin, oreStockpiles, rooms, grid, goblins, adventurers }) => {
+    const totalOre = (oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0) + goblin.inventory.ore;
+    if (totalOre < 3) return 0;
 
-    // Check for available wall slots BEFORE scoring
-    if (!foodStockpiles || !oreStockpiles) return 0;
-    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
-    if (wallSlots.length === 0) {
-      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
-    }
-    if (wallSlots.length === 0) return 0; // No available slots, do not score
+    if (!rooms || rooms.length === 0) return 0;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    if (wallSlots.length === 0) return 0;
 
     return ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
   },
-  execute: ({ goblin, grid, foodStockpiles, oreStockpiles, goblins, adventurers }) => {
-    if (!foodStockpiles || !oreStockpiles) return;
-    const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
-    if (!buildStockpile) return;
+  execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers }) => {
+    if (!rooms || rooms.length === 0) return;
 
-    let wallSlots = fortWallSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
-    if (wallSlots.length === 0) {
-      wallSlots = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, goblins, goblin.id, adventurers);
-    }
+    // Prefer stockpile ore, fall back to inventory
+    const buildStockpile = oreStockpiles?.find(s => s.ore >= 3);
+    const useInventory = !buildStockpile && goblin.inventory.ore >= 3;
+    if (!buildStockpile && !useInventory) return;
+
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
 
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
@@ -52,13 +49,17 @@ export const buildWall: Action = {
           ...t, type: TileType.Wall,
           foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
         };
-        buildStockpile.ore -= 3;
+        if (buildStockpile) {
+          buildStockpile.ore -= 3;
+        } else {
+          goblin.inventory.ore -= 3;
+        }
         addWorkFatigue(goblin);
-        goblin.task = 'built fort wall!';
+        goblin.task = 'built room wall!';
       } else {
         goblin.x = next.x; goblin.y = next.y;
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
-        goblin.task = '→ fort wall';
+        goblin.task = '→ room wall';
       }
     }
   },

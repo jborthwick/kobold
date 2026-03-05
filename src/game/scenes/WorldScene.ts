@@ -2,12 +2,12 @@ import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { generateWorld, growback, isWalkable } from '../../simulation/world';
 import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../../simulation/diffusion';
-import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../../simulation/agents';
+import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, roomWallSlots } from '../../simulation/agents';
 import { tickAgentUtility } from '../../simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../../simulation/adventurers';
 import { bus } from '../../shared/events';
 import { GRID_SIZE, TILE_SIZE, TICK_RATE_MS } from '../../shared/constants';
-import { TileType, type OverlayMode, type Tile, type Goblin, type Adventurer, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter } from '../../shared/types';
+import { TileType, type OverlayMode, type Tile, type Goblin, type Adventurer, type TileInfo, type MiniMapData, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
@@ -98,6 +98,14 @@ export class WorldScene extends Phaser.Scene {
   // World seed — stored for save/load and display
   private worldSeed = '';
 
+  // Player-placed rooms
+  private rooms: Room[] = [];
+
+  // Build mode state
+  private buildMode: RoomType | null = null;
+  private buildPreview: { x: number; y: number } | null = null;
+  private buildPreviewGfx!: Phaser.GameObjects.Graphics;
+
   // WASD keys (null when keyboard unavailable on touch devices)
   private wasd: {
     W: Phaser.Input.Keyboard.Key;
@@ -174,6 +182,7 @@ export class WorldScene extends Phaser.Scene {
       this.lastChapterTick = this.chapters.length > 0
         ? this.chapters[this.chapters.length - 1].tick : 0;
       if (this.chapters.length > 0) bus.emit('restoreChronicle', this.chapters);
+      this.rooms = save.rooms ?? [];
     } else {
       bus.emit('clearLog', undefined);
       this.logHistory = [];
@@ -191,14 +200,20 @@ export class WorldScene extends Phaser.Scene {
 
       const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
       const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
-      this.foodStockpiles  = [{ x: depotX,     y: depotY, food: 0,   maxFood: 200 }];
-      this.oreStockpiles   = [{ x: depotX + 8, y: depotY, ore:  150, maxOre: 200 }];
-      this.woodStockpiles  = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
+      this.foodStockpiles  = [];
+      this.oreStockpiles   = [];
+      this.woodStockpiles  = [];
+      this.rooms           = [];
       this.adventurerKillCount = 0;
       this.goalStartTick   = 0;
       this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
       this.weather         = createWeather(0);
-      for (const d of this.goblins) d.homeTile = { x: depotX, y: depotY };
+      for (const d of this.goblins) {
+        d.homeTile = { x: depotX, y: depotY };
+      }
+      // Distribute starting ore across goblins (replaces hardcoded ore stockpile)
+      const orePerGoblin = Math.floor(150 / this.goblins.length);
+      for (const d of this.goblins) d.inventory.ore = orePerGoblin;
     }
 
     // ── Reset graphics tracking arrays (always fresh per scene) ─────────
@@ -229,6 +244,9 @@ export class WorldScene extends Phaser.Scene {
     for (const sp of this.foodStockpiles) this.addFoodStockpileGraphics(sp);
     for (const sp of this.oreStockpiles)  this.addOreStockpileGraphics(sp);
     for (const sp of this.woodStockpiles) this.addWoodStockpileGraphics(sp);
+
+    // Build-mode room preview overlay
+    this.buildPreviewGfx = this.add.graphics().setDepth(50);
 
     // Fixed to screen (scroll factor 0) so coords are in screen-space pixels
     this.offScreenGfx = this.add.graphics().setScrollFactor(0).setDepth(100);
@@ -356,11 +374,23 @@ export class WorldScene extends Phaser.Scene {
     const cycleHandler = ({ direction }: { direction: 1 | -1 }) => {
       this.cycleSelected(direction);
     };
+    const buildModeHandler = (ev: { roomType: RoomType } | null) => {
+      if (ev && this.buildMode === ev.roomType) {
+        this.buildMode = null;
+        this.buildPreview = null;
+        this.buildPreviewGfx.clear();
+      } else {
+        this.buildMode = ev?.roomType ?? null;
+        this.buildPreview = null;
+        this.buildPreviewGfx.clear();
+      }
+    };
     bus.on('controlChange', controlHandler);
     bus.on('settingsChange', settingsHandler);
     bus.on('logEntry', logCaptureHandler);
     bus.on('overlayChange', overlayHandler);
     bus.on('cycleSelected', cycleHandler);
+    bus.on('buildMode', buildModeHandler);
 
     // Remove bus listeners when this scene is destroyed (new-colony flow)
     this.events.once('destroy', () => {
@@ -369,6 +399,7 @@ export class WorldScene extends Phaser.Scene {
       bus.off('logEntry', logCaptureHandler);
       bus.off('overlayChange', overlayHandler);
       bus.off('cycleSelected', cycleHandler);
+      bus.off('buildMode', buildModeHandler);
     });
 
     this.setupInput();
@@ -399,6 +430,7 @@ export class WorldScene extends Phaser.Scene {
       chapters:           [...this.chapters],
       goalStartTick:      this.goalStartTick,
       faction:            getActiveFaction().id,
+      rooms:              this.rooms.map(r => ({ ...r })),
     };
   }
 
@@ -507,6 +539,14 @@ export class WorldScene extends Phaser.Scene {
         bus.emit('tileHover', info);
       }
 
+      // Update build preview when in build mode
+      if (this.buildMode) {
+        const bx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE) - 2, 0, GRID_SIZE - 5);
+        const by = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE) - 2, 0, GRID_SIZE - 5);
+        this.buildPreview = { x: bx, y: by };
+        this.drawBuildPreview();
+      }
+
       if (!p.isDown || p.rightButtonDown()) return;
       const panDx = (dragStartX - p.x) / cam.zoom;
       const panDy = (dragStartY - p.y) / cam.zoom;
@@ -530,6 +570,13 @@ export class WorldScene extends Phaser.Scene {
       }
 
       if (didDrag || p.rightButtonReleased() || this.longPressFired) return;
+
+      // Build mode: place room on click
+      if (this.buildMode) {
+        this.placeRoom();
+        return;
+      }
+
       const tx = Math.floor(p.worldX / TILE_SIZE);
       const ty = Math.floor(p.worldY / TILE_SIZE);
 
@@ -645,6 +692,72 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  /** Check if a room can be placed at (rx,ry) with size (w,h). */
+  private canPlaceRoom(rx: number, ry: number, w: number, h: number): boolean {
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const tx = rx + dx, ty = ry + dy;
+        if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return false;
+        const t = this.grid[ty][tx];
+        if (t.type === TileType.Water || t.type === TileType.Wall
+          || t.type === TileType.Stone || t.type === TileType.Ore) return false;
+      }
+    }
+    // Check overlap with existing rooms
+    for (const r of this.rooms) {
+      if (rx < r.x + r.w && rx + w > r.x && ry < r.y + r.h && ry + h > r.y) return false;
+    }
+    return true;
+  }
+
+  /** Draw the build-mode preview overlay. */
+  private drawBuildPreview() {
+    this.buildPreviewGfx.clear();
+    if (!this.buildMode || !this.buildPreview) return;
+    const { x, y } = this.buildPreview;
+    const w = 5, h = 5;
+    const valid = this.canPlaceRoom(x, y, w, h);
+    const color = valid ? 0x00ff00 : 0xff0000;
+    const alpha = 0.3;
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        this.buildPreviewGfx.fillStyle(color, alpha);
+        this.buildPreviewGfx.fillRect((x + dx) * TILE_SIZE, (y + dy) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      }
+    }
+    // Outline
+    this.buildPreviewGfx.lineStyle(1, color, 0.7);
+    this.buildPreviewGfx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, w * TILE_SIZE, h * TILE_SIZE);
+  }
+
+  /** Place a room at the current build preview location. */
+  private placeRoom() {
+    if (!this.buildMode || !this.buildPreview) return;
+    const { x, y } = this.buildPreview;
+    const w = 5, h = 5;
+    if (!this.canPlaceRoom(x, y, w, h)) return;
+
+    const room: Room = {
+      id: `room-${Date.now()}`,
+      type: this.buildMode,
+      x, y, w, h,
+    };
+    this.rooms.push(room);
+
+    bus.emit('logEntry', {
+      tick:       this.tick,
+      goblinId:    'world',
+      goblinName:  'COLONY',
+      message:    `Storage zone designated at (${x},${y})!`,
+      level:      'info',
+    });
+
+    this.buildMode = null;
+    this.buildPreview = null;
+    this.buildPreviewGfx.clear();
+    this.terrainDirty = true;
+  }
+
   /** Yellow flag marker on the active command tile. */
   private drawFlag() {
     this.flagGfx.clear();
@@ -715,7 +828,7 @@ export class WorldScene extends Phaser.Scene {
           level,
         });
       }, this.foodStockpiles, this.adventurers, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
-      metabolismModifier(this.weather), this.warmthField, this.dangerField, this.weather.type);
+      metabolismModifier(this.weather), this.warmthField, this.dangerField, this.weather.type, this.rooms);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -899,7 +1012,9 @@ export class WorldScene extends Phaser.Scene {
       if (!dead) continue;
 
       const successor = spawnSuccessor(dead, this.grid, this.spawnZone, this.goblins, this.tick);
-      successor.homeTile = { x: this.foodStockpiles[0].x, y: this.foodStockpiles[0].y };
+      const depotCenter = this.foodStockpiles[0]
+        ?? { x: Math.floor(this.spawnZone.x + this.spawnZone.w / 2), y: Math.floor(this.spawnZone.y + this.spawnZone.h / 2) };
+      successor.homeTile = { x: depotCenter.x, y: depotCenter.y };
       this.goblins.push(successor);
 
       bus.emit('logEntry', {
@@ -924,45 +1039,19 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // ── Storage expansion — spawn a new unit when the last one fills ────────
-    // New units spawn on the nearest open adjacent tile (BFS), so they
-    // naturally fill existing room interior before pushing the walls out.
-    const lastFoodStockpile = this.foodStockpiles[this.foodStockpiles.length - 1];
-    if (lastFoodStockpile.food >= lastFoodStockpile.maxFood) {
-      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
-      const pos = this.findNextStockpileSlot(this.foodStockpiles, allOccupied, this.oreStockpiles);
-      if (pos) {
-        const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
-        this.foodStockpiles.push(nd);
-        this.addFoodStockpileGraphics(nd);
-        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
-          message: `New food stockpile established (${this.foodStockpiles.length} total)!`, level: 'info' });
-      }
+    // ── Sync stockpile graphics (actions may have added new stockpiles) ─────
+    while (this.foodStockpileGfxList.length < this.foodStockpiles.length) {
+      this.addFoodStockpileGraphics(this.foodStockpiles[this.foodStockpileGfxList.length]);
     }
-    const lastOreStockpile = this.oreStockpiles[this.oreStockpiles.length - 1];
-    if (lastOreStockpile.ore >= lastOreStockpile.maxOre) {
-      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
-      const pos = this.findNextStockpileSlot(this.oreStockpiles, allOccupied, this.foodStockpiles);
-      if (pos) {
-        const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
-        this.oreStockpiles.push(ns);
-        this.addOreStockpileGraphics(ns);
-        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
-          message: `New ore stockpile established (${this.oreStockpiles.length} total)!`, level: 'info' });
-      }
+    while (this.oreStockpileGfxList.length < this.oreStockpiles.length) {
+      this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpileGfxList.length]);
     }
-    const lastWoodStockpile = this.woodStockpiles[this.woodStockpiles.length - 1];
-    if (lastWoodStockpile && lastWoodStockpile.wood >= lastWoodStockpile.maxWood) {
-      const allOccupied = [...this.foodStockpiles, ...this.oreStockpiles, ...this.woodStockpiles];
-      const pos = this.findNextStockpileSlot(this.woodStockpiles, allOccupied);
-      if (pos) {
-        const nw: WoodStockpile = { ...pos, wood: 0, maxWood: 200 };
-        this.woodStockpiles.push(nw);
-        this.addWoodStockpileGraphics(nw);
-        bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'COLONY',
-          message: `New wood stockpile established (${this.woodStockpiles.length} total)!`, level: 'info' });
-      }
+    while (this.woodStockpileGfxList.length < this.woodStockpiles.length) {
+      this.addWoodStockpileGraphics(this.woodStockpiles[this.woodStockpileGfxList.length]);
     }
+
+    // ── Storage expansion — new stockpile within owning room when last fills ──
+    this.expandStockpilesInRooms();
 
     this.terrainDirty = true;
 
@@ -1049,6 +1138,7 @@ export class WorldScene extends Phaser.Scene {
       woodStockpiles:  this.woodStockpiles.map(s => ({ ...s })),
       weatherSeason:   this.weather.season,
       weatherType:     this.weather.type,
+      rooms:           this.rooms.map(r => ({ ...r })),
     });
   }
 
@@ -1067,10 +1157,8 @@ export class WorldScene extends Phaser.Scene {
         this.colonyGoal.progress = this.adventurerKillCount;
         break;
       case 'enclose_fort': {
-        const remaining = fortEnclosureSlots(
-          this.foodStockpiles, this.oreStockpiles, this.grid, this.goblins, '', this.adventurers,
-        );
-        this.colonyGoal.progress = remaining.length === 0 ? 1 : 0;
+        const remaining = roomWallSlots(this.rooms, this.grid, this.goblins, '', this.adventurers);
+        this.colonyGoal.progress = (this.rooms.length > 0 && remaining.length === 0) ? 1 : 0;
         break;
       }
     }
@@ -1121,105 +1209,82 @@ export class WorldScene extends Phaser.Scene {
       });
   }
 
-  /**
-   * BFS from all `anchors` to find the nearest walkable tile that isn't in
-   * `occupied` or the grid. Traverses through walls and occupied tiles so it
-   * can escape a full room, but never crosses water.
-   * Direction priority: E → W → N → S, giving a natural left-to-right fill
-   * before spilling southward.
-   */
-  private findNearestOpenTile(
-    anchors:  Array<{ x: number; y: number }>,
-    occupied: Array<{ x: number; y: number }>,
+  /** Find the next stockpile slot within a room, spiraling from center. */
+  private findRoomStockpileSlot(
+    room: Room,
+    occupied: Set<string>,
   ): { x: number; y: number } | null {
-    const occupiedSet = new Set(occupied.map(p => `${p.x},${p.y}`));
-    const visited     = new Set<string>();
-    const queue: Array<{ x: number; y: number }> = [];
-    for (const a of anchors) {
-      const key = `${a.x},${a.y}`;
-      if (!visited.has(key)) { visited.add(key); queue.push(a); }
-    }
-    const DIRS = [[1,0],[-1,0],[0,-1],[0,1]] as const;   // E W N S
-    while (queue.length > 0) {
-      const { x, y } = queue.shift()!;
-      for (const [dx, dy] of DIRS) {
-        const nx = x + dx, ny = y + dy;
-        const key = `${nx},${ny}`;
-        if (visited.has(key)) continue;
-        visited.add(key);
-        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-        const t = this.grid[ny][nx];
-        if (t.type === TileType.Water) continue;              // hard impassable
-        if (occupiedSet.has(key) || t.type === TileType.Wall) {
-          queue.push({ x: nx, y: ny });                       // traverse but don't stop
-          continue;
+    const cx = room.x + 2, cy = room.y + 2;
+    // Spiral outward from center within room bounds
+    for (let r = 0; r < 3; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // perimeter only
+          const tx = cx + dx, ty = cy + dy;
+          if (tx < room.x || tx >= room.x + room.w) continue;
+          if (ty < room.y || ty >= room.y + room.h) continue;
+          const key = `${tx},${ty}`;
+          if (occupied.has(key)) continue;
+          if (this.grid[ty][tx].type === TileType.Water || this.grid[ty][tx].type === TileType.Wall) continue;
+          return { x: tx, y: ty };
         }
-        return { x: nx, y: ny };                              // open tile found
       }
     }
     return null;
   }
 
-  /**
-   * Returns the next slot in a 3-column × N-row grid for the growing stockpile room.
-   *
-   * Fills all 3 columns within a row before starting the next row — so the walls
-   * (built in fortWallSlots for the full 3×3 target size) never need to be rebuilt
-   * and no interior dividers form as the room fills up.
-   *
-   * Rooms expand AWAY from each other to keep the corridor gap intact:
-   *   food room  → expands left  (cols: anchor, anchor-3, anchor-6)
-   *   ore room   → expands right (cols: anchor, anchor+3, anchor+6)
-   *
-   *   [U₁][U₂][U₃]  ← row 0 fills left-to-right first
-   *   [U₄][U₅][U₆]  ← row 1 starts only after row 0 is full
-   *   [U₇][U₈][U₉]  ← row 2, etc.
-   *
-   * @param otherGroup  The other room's stockpiles — used to determine which
-   *                    direction is safe to expand (away from that room).
-   */
-  private findNextStockpileSlot(
-    existing:     Array<{ x: number; y: number }>,
-    allOccupied:  Array<{ x: number; y: number }>,
-    otherGroup?:  Array<{ x: number; y: number }>,
-  ): { x: number; y: number } | null {
-    const anchor      = existing[0];
-    const occupiedSet = new Set(allOccupied.map(p => `${p.x},${p.y}`));
+  /** Expand stockpiles within their owning rooms when the last unit fills up. */
+  private expandStockpilesInRooms() {
+    const allOccupied = new Set([
+      ...this.foodStockpiles.map(s => `${s.x},${s.y}`),
+      ...this.oreStockpiles.map(s => `${s.x},${s.y}`),
+      ...this.woodStockpiles.map(s => `${s.x},${s.y}`),
+    ]);
 
-    // Expand away from the other room so the corridor-side wall never moves
-    const expandDir = (!otherGroup || otherGroup.length === 0)
-      ? -1  // default: expand left
-      : (otherGroup[0].x > anchor.x ? -1 : 1);
+    for (const room of this.rooms) {
+      if (!room.specialization) continue;
 
-    // 3-column offsets: center first, then safe direction (adjacent, no gaps)
-    const colOffsets = [0, expandDir * 1, expandDir * 2];
-
-    const isValid = (x: number, y: number): boolean =>
-      x >= 0 && x < GRID_SIZE
-      && y >= 0 && y < GRID_SIZE
-      && !occupiedSet.has(`${x},${y}`)
-      && this.grid[y][x].type !== TileType.Water
-      && this.grid[y][x].type !== TileType.Wall;
-
-    // Distinct rows currently in use, sorted top→bottom
-    const rows = [...new Set(existing.map(p => p.y))].sort((a, b) => a - b);
-
-    // Fill all 3 columns in each existing row before starting a new row
-    for (const row of rows) {
-      for (const off of colOffsets) {
-        const x = anchor.x + off;
-        if (isValid(x, row)) return { x, y: row };
+      if (room.specialization === 'food') {
+        const roomPiles = this.foodStockpiles.filter(s =>
+          s.x >= room.x && s.x < room.x + room.w && s.y >= room.y && s.y < room.y + room.h);
+        const last = roomPiles[roomPiles.length - 1];
+        if (last && last.food >= last.maxFood) {
+          const pos = this.findRoomStockpileSlot(room, allOccupied);
+          if (pos) {
+            const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
+            this.foodStockpiles.push(nd);
+            this.addFoodStockpileGraphics(nd);
+            allOccupied.add(`${pos.x},${pos.y}`);
+          }
+        }
+      } else if (room.specialization === 'ore') {
+        const roomPiles = this.oreStockpiles.filter(s =>
+          s.x >= room.x && s.x < room.x + room.w && s.y >= room.y && s.y < room.y + room.h);
+        const last = roomPiles[roomPiles.length - 1];
+        if (last && last.ore >= last.maxOre) {
+          const pos = this.findRoomStockpileSlot(room, allOccupied);
+          if (pos) {
+            const ns: OreStockpile = { ...pos, ore: 0, maxOre: 200 };
+            this.oreStockpiles.push(ns);
+            this.addOreStockpileGraphics(ns);
+            allOccupied.add(`${pos.x},${pos.y}`);
+          }
+        }
+      } else if (room.specialization === 'wood') {
+        const roomPiles = this.woodStockpiles.filter(s =>
+          s.x >= room.x && s.x < room.x + room.w && s.y >= room.y && s.y < room.y + room.h);
+        const last = roomPiles[roomPiles.length - 1];
+        if (last && last.wood >= last.maxWood) {
+          const pos = this.findRoomStockpileSlot(room, allOccupied);
+          if (pos) {
+            const nw: WoodStockpile = { ...pos, wood: 0, maxWood: 200 };
+            this.woodStockpiles.push(nw);
+            this.addWoodStockpileGraphics(nw);
+            allOccupied.add(`${pos.x},${pos.y}`);
+          }
+        }
       }
     }
-
-    // All existing rows are full — open a new row 1 tile south (adjacent)
-    const nextRow = (rows[rows.length - 1] ?? anchor.y) + 1;
-    for (const off of colOffsets) {
-      const x = anchor.x + off;
-      if (isValid(x, nextRow)) return { x, y: nextRow };
-    }
-
-    return this.findNearestOpenTile(existing, allOccupied);
   }
 
   /** Create Phaser graphics + sprite objects for a newly added food stockpile. */
@@ -1314,6 +1379,21 @@ export class WorldScene extends Phaser.Scene {
           t.tint = 0x44bbaa;  // teal-green — murky shallow puddle, distinct from deep Water
         } else {
           t.tint = 0xffffff;
+        }
+
+        // Room tint overlay — blend a color based on specialization
+        for (const room of this.rooms) {
+          if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
+            const roomTint = room.specialization === 'food' ? 0xccffcc
+              : room.specialization === 'ore' ? 0xffddaa
+              : room.specialization === 'wood' ? 0xddffcc
+              : 0xccccff;
+            // Multiply tint: ((t.tint_channel * roomTint_channel) >> 8) per channel
+            const tr = (t.tint >> 16) & 0xff, tg = (t.tint >> 8) & 0xff, tb = t.tint & 0xff;
+            const rr = (roomTint >> 16) & 0xff, rg = (roomTint >> 8) & 0xff, rb = roomTint & 0xff;
+            t.tint = (((tr * rr) >> 8) << 16) | (((tg * rg) >> 8) << 8) | ((tb * rb) >> 8);
+            break;
+          }
         }
       }
     }

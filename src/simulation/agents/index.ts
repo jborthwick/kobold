@@ -36,7 +36,7 @@ export {
   bestWoodTile,
 } from './pathfinding';
 
-export { fortWallSlots, fortEnclosureSlots } from './fort';
+export { fortWallSlots, fortEnclosureSlots, roomWallSlots } from './fort';
 
 export { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY } from './spawn';
 

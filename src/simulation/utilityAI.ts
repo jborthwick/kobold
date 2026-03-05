@@ -14,7 +14,7 @@
  *   5. execute highest-scoring action
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
 import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
@@ -215,6 +215,7 @@ export function tickAgentUtility(
   warmthField?:       Float32Array,
   dangerField?:       Float32Array,
   weatherType?:       WeatherType,
+  rooms?:             Room[],
 ): void {
   if (!goblin.alive) return;
 
@@ -305,7 +306,7 @@ export function tickAgentUtility(
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
-    warmthField, dangerField, weatherType,
+    warmthField, dangerField, weatherType, rooms,
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────

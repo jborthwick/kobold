@@ -17,7 +17,7 @@ import { generateWorld, growback } from '../src/simulation/world';
 import { tickFire, tickBurningGoblins } from '../src/simulation/fire';
 import { tickLightning } from '../src/simulation/lightning';
 import { tickPooling } from '../src/simulation/pooling';
-import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../src/simulation/agents';
+import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, roomWallSlots } from '../src/simulation/agents';
 import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
 import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../src/simulation/diffusion';
@@ -26,7 +26,7 @@ import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout
 import { rollWound } from '../src/simulation/wounds';
 import { getActiveFaction } from '../src/shared/factions';
 import { GRID_SIZE } from '../src/shared/constants';
-import type { Goblin, Tile, FoodStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer } from '../src/shared/types';
+import type { Goblin, Tile, FoodStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
 import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
@@ -149,6 +149,13 @@ resetAdventurers();
 const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
 const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
 
+// Auto-place 3 rooms with pre-set specializations for headless sim
+const rooms: Room[] = [
+  { id: 'room-food', type: 'storage', x: depotX - 2, y: depotY - 2, w: 5, h: 5, specialization: 'food' },
+  { id: 'room-ore',  type: 'storage', x: depotX + 6, y: depotY - 2, w: 5, h: 5, specialization: 'ore' },
+  { id: 'room-wood', type: 'storage', x: depotX - 10, y: depotY - 2, w: 5, h: 5, specialization: 'wood' },
+];
+
 let foodStockpiles: FoodStockpile[] = [{ x: depotX,     y: depotY, food: 0,   maxFood: 200 }];
 let oreStockpiles:  OreStockpile[]  = [{ x: depotX + 8, y: depotY, ore:  150, maxOre:  200 }];
 let woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
@@ -201,7 +208,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
         }
       },
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
-      metabolismModifier(weather), warmthField, dangerField, weather.type,
+      metabolismModifier(weather), warmthField, dangerField, weather.type, rooms,
     );
     if (g.alive) recordAction(g.task);
     if (wasAlive && !g.alive) {
@@ -278,7 +285,8 @@ for (let tick = 1; tick <= TICKS; tick++) {
     const dead = goblins.find(g => g.id === s.deadGoblinId);
     if (!dead) continue;
     const successor = spawnSuccessor(dead, grid, spawnZone, goblins, tick);
-    successor.homeTile = { x: foodStockpiles[0].x, y: foodStockpiles[0].y };
+    const home = foodStockpiles[0] ?? { x: depotX, y: depotY };
+    successor.homeTile = { x: home.x, y: home.y };
     goblins.push(successor);
     successor.llmReasoning = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
     successor.memory.push({ tick, crisis: 'arrival', action: `arrived to replace ${dead.name}` });
@@ -311,8 +319,8 @@ for (let tick = 1; tick <= TICKS; tick++) {
     case 'survive_ticks':      colonyGoal.progress = tick - goalStartTick; break;
     case 'defeat_adventurers': colonyGoal.progress = adventurerKills; break;
     case 'enclose_fort': {
-      const rem = fortEnclosureSlots(foodStockpiles, oreStockpiles, grid, goblins, '', adventurers);
-      colonyGoal.progress = rem.length === 0 ? 1 : 0;
+      const rem = roomWallSlots(rooms, grid, goblins, '', adventurers);
+      colonyGoal.progress = (rooms.length > 0 && rem.length === 0) ? 1 : 0;
       break;
     }
   }

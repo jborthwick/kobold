@@ -1,4 +1,4 @@
-import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter } from './types';
+import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
 import type { FactionId } from './factions';
 
@@ -30,6 +30,8 @@ export interface SaveData {
   goalStartTick?: number;
   /** Selected faction — optional for backward compat (defaults to 'goblins'). */
   faction?: FactionId;
+  /** Player-placed rooms — optional for backward compat. */
+  rooms?: Room[];
 }
 
 const KEY = 'kobold_save_v2';
@@ -62,6 +64,7 @@ export function loadGame(): SaveData | null {
       if (d.inventory.ore  === undefined) d.inventory.ore  = 0;
       if (d.inventory.wood === undefined) d.inventory.wood = 0;
     }
+    data.rooms ??= [];
     return data;
   } catch {
     return null;

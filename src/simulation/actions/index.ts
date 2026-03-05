@@ -8,6 +8,7 @@ import { mine, chop, depositOre, depositWood } from './materials';
 import { buildWall, buildHearth } from './building';
 import { seekWarmth, wander } from './exploration';
 import { fightFire } from './firefighting';
+import { establishStockpile } from './stockpiling';
 import type { Action } from './types';
 
 export const ALL_ACTIONS: Action[] = [
@@ -19,6 +20,7 @@ export const ALL_ACTIONS: Action[] = [
   share,
   fight,
   buildHearth,
+  establishStockpile,
   forage,
   depositFood,
   withdrawFood,
