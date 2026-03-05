@@ -253,29 +253,33 @@ export class WorldScene extends Phaser.Scene {
     const worldPx = GRID_SIZE * TILE_SIZE;
     // Extend bounds so the player can pan far enough to bring map edges out from
     // behind the HUD/sidebar. On phone there's no sidebar so less offset needed.
+    // Add 200 to width / 100 to height to compensate for the negative origin offsets
+    // (-200 x, -100 y) so the full right/bottom edge of the map remains reachable.
     const sidebarOffset = isMobileViewport() ? 100 : isTabletViewport() ? 380 : 700;
-    this.cameras.main.setBounds(-200, -100, worldPx + sidebarOffset, worldPx + 300);
+    this.cameras.main.setBounds(-200, -100, worldPx + 200 + sidebarOffset, worldPx + 400);
 
-    // Phone starts more zoomed out to show more context on the small screen
-    const initialZoom = isMobileViewport() ? 0.8 : 1.2;
+    // Phone starts zoomed to show ~40% of world width; desktop starts at 1.2×
+    const screenW = this.cameras.main.width;
+    const screenH = this.cameras.main.height;
+    const initialZoom = isMobileViewport()
+      ? Math.min(0.8, (screenW / worldPx) * 2.5)
+      : 1.2;
     this.cameras.main.setZoom(initialZoom);
     this.cameras.main.centerOn(
       (this.spawnZone.x + this.spawnZone.w / 2) * TILE_SIZE,
       (this.spawnZone.y + this.spawnZone.h / 2) * TILE_SIZE,
     );
 
-    // Dynamic minimum zoom — world fills the screen
-    const screenW = this.cameras.main.width;
-    const screenH = this.cameras.main.height;
-    this.minZoom = Math.max(0.4, Math.min(screenW / worldPx, screenH / worldPx));
+    // Dynamic minimum zoom — allow zooming out to see the whole world
+    this.minZoom = Math.max(0.15, Math.min(screenW / worldPx, screenH / worldPx));
 
     // Recalculate camera bounds and min zoom on viewport resize (device rotation, etc.)
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       const w = gameSize.width;
       const h = gameSize.height;
-      this.minZoom = Math.max(0.4, Math.min(w / worldPx, h / worldPx));
+      this.minZoom = Math.max(0.15, Math.min(w / worldPx, h / worldPx));
       const offset = w < 768 ? 100 : w < 1200 ? 380 : 700;
-      this.cameras.main.setBounds(-200, -100, worldPx + offset, worldPx + 300);
+      this.cameras.main.setBounds(-200, -100, worldPx + 200 + offset, worldPx + 400);
       // Clamp current zoom to new min
       if (this.cameras.main.zoom < this.minZoom) {
         this.cameras.main.zoom = this.minZoom;
