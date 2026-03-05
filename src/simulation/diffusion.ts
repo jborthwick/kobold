@@ -63,6 +63,12 @@ export function computeWarmth(
   const queue: [number, number, number][] = [];
   for (const h of hearths)       queue.push([h.x, h.y, 100]);
   for (const s of foodStockpiles) queue.push([s.x, s.y, 60]);
+  // Fire tiles radiate heat — visible in warmth overlay, shorter range than hearths
+  for (let fy = 0; fy < GRID_SIZE; fy++) {
+    for (let fx = 0; fx < GRID_SIZE; fx++) {
+      if (grid[fy][fx].type === TileType.Fire) queue.push([fx, fy, 70]);
+    }
+  }
 
   const STEP = 100 / WARMTH_RADIUS;
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
@@ -136,6 +142,13 @@ export function computeDanger(
   const queue: [number, number, number][] = [];
 
   for (const a of adventurers) queue.push([a.x, a.y, 100]);
+
+  // Fire tiles as danger sources — goblins flee when fire is ~3 tiles away
+  for (let fy = 0; fy < GRID_SIZE; fy++) {
+    for (let fx = 0; fx < GRID_SIZE; fx++) {
+      if (grid[fy][fx].type === TileType.Fire) queue.push([fx, fy, 80]);
+    }
+  }
 
   for (let x = 0; x < GRID_SIZE; x++) {
     queue.push([x, 0,             40]);

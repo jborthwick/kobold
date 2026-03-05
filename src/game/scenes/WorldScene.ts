@@ -11,6 +11,7 @@ import { TileType, type OverlayMode, type Tile, type Goblin, type Adventurer, ty
 import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
+import { tickFire } from '../../simulation/fire';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { rollWound, woundLabel } from '../../simulation/wounds';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -741,6 +742,9 @@ export class WorldScene extends Phaser.Scene {
     }
 
     growback(this.grid, growbackModifier(this.weather), this.tick);
+    tickFire(this.grid, this.tick, this.goblins, this.weather.type, (msg, level) => {
+      bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
+    });
 
     // ── Adventurer raids ───────────────────────────────────────────────────────
     const raid = maybeSpawnRaid(this.grid, this.goblins, this.tick);
@@ -1290,6 +1294,9 @@ export class WorldScene extends Phaser.Scene {
           t.tint = 0x88aacc;  // blue-gray: player-built fort wall
         } else if (tile.type === TileType.Hearth) {
           t.tint = 0xff8844;  // warm orange: hearth fire
+        } else if (tile.type === TileType.Fire) {
+          const phase = (this.tick + x * 3 + y * 7) % 3;
+          t.tint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
         } else {
           t.tint = 0xffffff;
         }

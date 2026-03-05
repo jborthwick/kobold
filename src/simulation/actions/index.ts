@@ -7,12 +7,14 @@ import { forage, depositFood, withdrawFood } from './foraging';
 import { mine, chop, depositOre, depositWood } from './materials';
 import { buildWall, buildHearth } from './building';
 import { seekWarmth, wander } from './exploration';
+import { fightFire } from './firefighting';
 import type { Action } from './types';
 
 export const ALL_ACTIONS: Action[] = [
   commandMove,
   eat,
   seekSafety,   // danger-driven flee — high urgency, runs before rest/work
+  fightFire,    // fetch water → douse nearby fire; scores 0.75 when fire is in vision
   rest,
   share,
   fight,

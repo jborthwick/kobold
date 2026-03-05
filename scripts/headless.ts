@@ -14,6 +14,7 @@
  */
 
 import { generateWorld, growback } from '../src/simulation/world';
+import { tickFire } from '../src/simulation/fire';
 import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../src/simulation/agents';
 import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
@@ -53,6 +54,10 @@ const deathLog:      { tick: number; name: string; cause: string }[] = [];
 const raidLog:       { tick: number; count: number }[] = [];
 const goalLog:       { tick: number; type: string; generation: number }[] = [];
 const warnLog:       { tick: number; name: string; message: string }[] = [];
+const fireLog:       { tick: number; message: string }[] = [];
+let   fireTilesMax   = 0;  // peak simultaneous fire tile count
+let   fireTilesTotal     = 0;  // cumulative tiles that burned or were extinguished
+let   fireTilesRainedOut = 0;  // tiles extinguished by rain
 
 function recordAction(task: string) {
   // Normalise task string to a bare action label.
@@ -203,8 +208,20 @@ for (let tick = 1; tick <= TICKS; tick++) {
     }
   }
 
-  // Growback
+  // Growback + Fire
   growback(grid, growbackModifier(weather), tick);
+  const fireResult = tickFire(grid, tick, goblins, weather.type, (msg, level) => {
+    if (level === 'warn' || level === 'error') fireLog.push({ tick, message: msg });
+  });
+  fireTilesTotal     += fireResult.burnouts;
+  fireTilesRainedOut += fireResult.extinguished;
+
+  // Track peak fire tile count
+  let fireTileCount = 0;
+  for (let fy = 0; fy < GRID_SIZE; fy++)
+    for (let fx = 0; fx < GRID_SIZE; fx++)
+      if (grid[fy][fx].type === TileType.Fire) fireTileCount++;
+  if (fireTileCount > fireTilesMax) fireTilesMax = fireTileCount;
 
   // Raids
   const raid = maybeSpawnRaid(grid, goblins, tick);
@@ -337,6 +354,14 @@ console.log(` Wood stored: ${last?.totalWood.toFixed(0) ?? 0}`);
 console.log(` Avg hunger:  ${last?.avgHunger.toFixed(1) ?? '?'}`);
 console.log(` Avg morale:  ${last?.avgMorale.toFixed(1) ?? '?'}`);
 console.log(` Avg fatigue: ${last?.avgFatigue.toFixed(1) ?? '?'}`);
+console.log(` Fire events: ${fireLog.length} ignitions · ${fireTilesTotal} tiles burned · ${fireTilesRainedOut} rained out · peak ${fireTilesMax} simultaneous`);
+
+if (fireLog.length > 0) {
+  console.log(`\n Fire events:`);
+  for (const f of fireLog) {
+    console.log(`   [${f.tick}] ${f.message}`);
+  }
+}
 
 if (deathLog.length > 0) {
   console.log(`\n Deaths:`);
@@ -365,7 +390,7 @@ for (const [action, count] of sorted) {
 if (DUMP_JSON) {
   const outPath = `headless-${seed}-${TICKS}.json`;
   const fs = await import('node:fs/promises');
-  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, warnLog }, null, 2));
+  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, warnLog, fireLog, fireTilesMax, fireTilesTotal }, null, 2));
   console.log(`\n JSON dumped → ${outPath}`);
 }
 

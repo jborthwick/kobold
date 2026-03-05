@@ -10,6 +10,7 @@ export enum TileType {
   Wall     = 'wall',     // player-built fortification; blocks movement
   Hearth   = 'hearth',  // goblin-built warmth source; walkable
   TreeStump = 'treestump',
+  Fire = 'fire',
 }
 
 export interface Tile {
@@ -19,6 +20,7 @@ export interface Tile {
   maxFood: number;        // growback ceiling
   maxMaterial: number;
   growbackRate: number;   // food units restored per tick (0 = doesn't regrow)
+  fireTick?: number;      // tick when fire started; undefined means tile is not burning
   trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
 }
 
@@ -112,6 +114,7 @@ export interface Goblin {
   social:          number;      // 0–100; rises when isolated from friendly goblins
   lastSocialTick:  number;      // tick when goblin last had a friend within proximity
   lastLoggedTicks: Record<string, number>;  // cooldown tracking for event log (key = event type, value = tick)
+  carryingWater?:  boolean;                 // true when goblin has fetched water and is heading to douse fire
   skillXp:         number;      // lifetime XP for role skill (0+)
   skillLevel:      number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
   wound?:          Wound;       // active wound (undefined = healthy); heals at wound.healTick

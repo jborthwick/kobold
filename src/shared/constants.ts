@@ -7,4 +7,8 @@ export const MAX_INVENTORY_CAPACITY = 20; // cap — goblins stop harvesting whe
 export const GOBLIN_NAMES = [
   'Grix', 'Snot', 'Murg', 'Blix', 'Rak',
   'Nub', 'Fizzle', 'Blort', 'Skritch', 'Gob',
+  'Zog', 'Warts', 'Grub', 'Snag', 'Bleg',
+  'Throk', 'Vix', 'Krimp', 'Durn', 'Fungus',
+  'Pox', 'Moldy', 'Slimer', 'Gloom', 'Blight',
+  'Nox', 'Spros', 'Krul', 'Zib', 'Gronk',
 ];

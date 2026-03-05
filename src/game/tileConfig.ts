@@ -21,6 +21,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Wall]: [637, 843, 844, 845, 892, 893],
   [TileType.Hearth]: [504],
   [TileType.TreeStump]: [104],
+  [TileType.Fire]: [505],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
