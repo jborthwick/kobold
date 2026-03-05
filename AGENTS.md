@@ -11,11 +11,57 @@ npm run dev          # dev server + LLM proxy at http://localhost:5173
 npm run build        # tsc -b && vite build
 npx tsc --noEmit     # type-check only (preferred before commits)
 npm run lint         # eslint
+npm run headless     # headless sim (2000 ticks, random seed) — see below
 python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame index
 ```
 
 **Required:** At least one API Key in `.env.local` (gitignored) — LLM proxy won't work without it.
 LLM is off by default in-game (🤖 toggle). HMR works for most changes; full reload needed for `crisis.ts` singleton.
+
+## Headless simulation (`scripts/headless.ts`)
+
+Runs the full simulation (world gen, utility AI, weather, raids, diffusion, events) without
+Phaser or React at ~1600 ticks/sec — about 240× real-time. No LLM calls (deterministic only).
+**Use this whenever tuning action scores, eligibility thresholds, or need curves.**
+
+```bash
+npm run headless                      # 2000 ticks, random seed
+npx tsx scripts/headless.ts 5000      # 5000 ticks
+npx tsx scripts/headless.ts 3000 42   # reproducible run (same seed = same world)
+DUMP_JSON=1 npx tsx scripts/headless.ts 1000   # full per-tick JSON to stdout
+```
+
+Output includes a **summary table** (survivors, deaths, goals, stockpile levels, avg needs)
+and an **action frequency bar chart** that shows the percentage of goblin-ticks spent in each
+task bucket. This is the primary tool for catching:
+
+- **Score imbalances** — an action dominating (>20%) that shouldn't, or never firing (<0.5%) when it should
+- **Need drift** — avg hunger/morale/fatigue trending wrong over time
+- **Starvation cascades** — deaths clustered in specific tick ranges
+- **Goal throughput** — how many goals complete in N ticks (regression test for difficulty)
+
+**Interpreting the action frequency table:**
+
+| Label | Source | Healthy range |
+|-------|--------|---------------|
+| `traveling` | `→ target` movement tasks | 40–55% (goblins move a lot) |
+| `exploring` | `wander` action | 15–30% (fallback when no urgent need) |
+| `harvesting` | `forage` on tile | >1% (forager role present) |
+| `mining` / `logging` | `mine` / `chop` | scales with need; drops to ~0.2 when stockpile full |
+| `socializing` | `socialize` | <8% (spikes mean social need isn't being met) |
+| `fleeing to safety` | `seekSafety` | <5% (spikes mean raid pressure too high) |
+| `idle` | execute returned early, no task set | <2% (any spike = action bug) |
+
+**Action frequency normalization:** task strings are bucketed by stripping everything after
+`(` or `→`. Navigation tasks starting with `→` are labeled `traveling`. Bare strings like
+`'idle'`, `'socializing'`, `'brooding'` pass through unchanged. If `idle` spikes, check
+for action `execute()` paths that return early without setting `goblin.task`.
+
+**Workflow for tuning an action:**
+1. Run 2–3 seeds at 3000 ticks; note the action's share and avg needs
+2. Edit the `score()` or `eligible()` function
+3. Re-run the same seeds; compare action share and need metrics
+4. Type-check: `npx tsc --noEmit`
 
 ## Phaser 3 camera gotcha
 
@@ -131,7 +177,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Implementation status
 
-**Current: Iteration 13.** See `git log` for full changelog. Key milestones:
+**Current: Iteration 20.** See `git log` for full changelog. Key milestones:
 1–3: World gen, tileset, pathfinding, BT, LLM crisis detection.
 4–6: Camera, LLM execution, memory, roles, VERIFY, procedural world, scarcity.
 7–9: Colony goals, depot, fighter role, succession, traits/weather/storyteller, dual-noise biomes.
@@ -139,6 +185,9 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 11: Lumberjack role, ore/wood stockpiles, fort building (`fortWallSlots`), minimap.
 12: Goblin migration (dwarf→goblin rename), comedic tone, save v2.
 13: Faction system (goblins vs dwarves), chronicle chapters, storyteller LLM.
+14–17: Actions split to `actions/` modules, HUD split to `HUD/` modules, dead BT removed.
+18–19: Inventory capacity shared across ore/wood/food; need-based chop/mine scoring.
+20: Headless sim harness; fixed idle measurement, foraging threshold, socializing loop.
 
 ---
 
