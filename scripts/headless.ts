@@ -54,8 +54,11 @@ const goalLog:       { tick: number; type: string; generation: number }[] = [];
 const warnLog:       { tick: number; name: string; message: string }[] = [];
 
 function recordAction(task: string) {
-  // Normalise task string to a bare action label
-  const key = task.replace(/\s*[\(→].*/, '').trim() || 'idle';
+  // Normalise task string to a bare action label.
+  // Tasks starting with → are navigation steps (traveling), not idle.
+  const key = task.startsWith('→')
+    ? 'traveling'
+    : task.replace(/\s*[\(→].*/, '').trim() || 'idle';
   actionCounts[key] = (actionCounts[key] ?? 0) + 1;
 }
 

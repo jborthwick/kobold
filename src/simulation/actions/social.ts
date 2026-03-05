@@ -72,7 +72,18 @@ export const share: Action = {
 export const socialize: Action = {
   name: 'socialize',
   intentMatch: 'socialize',
-  eligible: ({ goblin }) => goblin.social > 30,
+  eligible: ({ goblin, goblins }) => {
+    if (goblin.social <= 30) return false;
+    if (!goblins) return false;
+    const FRIEND_REL    = 40;
+    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
+    // Only eligible if there's actually a friend within reach — prevents idle "socializing" when alone
+    return goblins.some(other =>
+      other.id !== goblin.id && other.alive &&
+      Math.abs(other.x - goblin.x) + Math.abs(other.y - goblin.y) <= FRIEND_RADIUS * 4 &&
+      (goblin.relations[other.id] ?? 50) >= FRIEND_REL,
+    );
+  },
   score: ({ goblin }) => sigmoid(goblin.social, 50) * 0.6,
   execute: ({ goblin, goblins, grid }) => {
     if (!goblins) { goblin.task = 'lonely'; return; }
@@ -84,11 +95,22 @@ export const socialize: Action = {
       if (other.id === goblin.id || !other.alive) continue;
       if ((goblin.relations[other.id] ?? 50) < FRIEND_REL) continue;
       const dist = Math.abs(other.x - goblin.x) + Math.abs(other.y - goblin.y);
-      if (dist > FRIEND_RADIUS * 4) continue; // don't seek friends too far away
+      if (dist > FRIEND_RADIUS * 4) continue;
       if (dist < bestDist) { bestDist = dist; bestFriend = other; }
     }
-    if (bestFriend && bestDist > 1) {
+    if (!bestFriend) { goblin.task = 'lonely'; return; }
+    if (bestDist > 1) {
       moveTo(goblin, { x: bestFriend.x, y: bestFriend.y }, grid);
+    }
+    // Apply direct social relief proportional to proximity — don't rely solely on updateNeeds.
+    // This ensures the need can be met even when the friend keeps moving.
+    // Close (within FRIEND_RADIUS): full relief (supplements updateNeeds' -0.3/tick)
+    // Moving toward: small credit per tick (effort counts even when friend is elusive)
+    const closeDist = Math.abs(bestFriend.x - goblin.x) + Math.abs(bestFriend.y - goblin.y);
+    if (closeDist <= FRIEND_RADIUS) {
+      goblin.social = Math.max(0, goblin.social - 1.2);
+    } else {
+      goblin.social = Math.max(0, goblin.social - 0.4); // moving toward friend, partial credit
     }
     goblin.task = 'socializing';
   },

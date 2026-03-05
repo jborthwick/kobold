@@ -20,13 +20,14 @@ export function bestFoodTile(
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
-  let bestValue = 1;
+  let bestValue = 0; // start at 0 so a tile with exactly foodValue=1 at dist=0 wins (v=1>0)
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const nx = goblin.x + dx;
       const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (!FORAGEABLE_TILES.has(grid[ny][nx].type)) continue;
+      if (grid[ny][nx].foodValue < 1) continue; // skip sub-threshold tiles (can't harvest)
       const dist = Math.abs(dx) + Math.abs(dy);
       const v = grid[ny][nx].foodValue - dist;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }

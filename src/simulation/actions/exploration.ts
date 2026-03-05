@@ -171,6 +171,7 @@ export const seekWarmth: Action = {
     const warmth = goblin.warmth ?? 0;
     if (nearestDist <= traitMod(goblin, 'coziness', 2) || warmth >= 40) {
       goblin.lastLoggedTicks['seekWarmthDone'] = currentTick;
+      goblin.task = 'warming up';
       return;
     }
 
