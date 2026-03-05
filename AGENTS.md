@@ -211,8 +211,6 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
 - **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
-- **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
-
 
 ---
 
