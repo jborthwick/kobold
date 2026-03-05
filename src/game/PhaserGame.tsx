@@ -21,7 +21,7 @@ export function PhaserGame({ startMode }: Props) {
       scene:           [BootScene, WorldScene],
       scale: {
         mode:       Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
+        autoCenter: Phaser.Scale.NO_CENTER,  // RESIZE fills container; centering can offset input coords
       },
     });
 
@@ -39,7 +39,7 @@ export function PhaserGame({ startMode }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ position: 'absolute', inset: 0 }}
+      style={{ position: 'absolute', inset: 0, touchAction: 'none', userSelect: 'none' }}
     />
   );
 }
