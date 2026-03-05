@@ -24,8 +24,8 @@ const OVERLAY_COLOR: Record<OverlayMode, string> = {
   traffic:  '#ffee00',
 };
 
-const WEATHER_ICONS: Record<WeatherType, string> = { clear: '☀', rain: '🌧', drought: '🏜', cold: '❄' };
-const WEATHER_COLORS: Record<WeatherType, string> = { clear: '#f0c040', rain: '#5b9bd5', drought: '#d4a437', cold: '#9ecae1' };
+const WEATHER_ICONS: Record<WeatherType, string> = { clear: '☀', rain: '🌧', drought: '🏜', cold: '❄', storm: '⛈' };
+const WEATHER_COLORS: Record<WeatherType, string> = { clear: '#f0c040', rain: '#5b9bd5', drought: '#d4a437', cold: '#9ecae1', storm: '#7b9fc0' };
 const SEASON_LABELS: Record<Season, string> = { spring: 'Spr', summer: 'Sum', autumn: 'Aut', winter: 'Win' };
 
 function Stat({ label, value }: { label: string; value: string }) {

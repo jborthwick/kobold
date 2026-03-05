@@ -20,6 +20,8 @@ const TILE_RGB: Record<TileType, [number, number, number]> = {
   [TileType.Wall]:     [110, 100,  75],
   [TileType.Hearth]:   [150,  75,   0],
   [TileType.TreeStump]:[ 60,  40,  25],
+  [TileType.Fire]:     [220,  60,   0],
+  [TileType.Pool]:     [ 30, 140, 140],
 };
 
 export function MiniMap() {

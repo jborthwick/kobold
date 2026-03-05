@@ -22,7 +22,6 @@ const BASE_SPREAD         = 0.80;  // probability per neighbor per spread attemp
 const RAIN_EXTINGUISH     = 0.25;  // probability per fire tile per tick during rain
 const FIRE_DAMAGE_HP           = 5;     // hp lost per tick while standing on a fire tile
 const FIRE_DAMAGE_MOR          = 3;     // morale lost per tick while standing on a fire tile
-const FIRE_LOG_COOLDOWN        = 30;    // ticks between "on fire!" log messages per goblin
 const GOBLIN_CATCH_FIRE_CHANCE = 0.15;  // chance to catch fire per tick while standing on a fire tile
 
 // Burning goblin constants
