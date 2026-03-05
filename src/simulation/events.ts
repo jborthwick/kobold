@@ -290,7 +290,7 @@ function chooseEvent(tension: number): EventType {
   // Normalize weights and pick by cumulative probability
   const types: EventType[] = ['blight', 'bounty', 'mushroom', 'ore'];
   const weights = types.map(t => distribution[t]);
-  const total = weights.reduce((s, w) => s + w, 0);
+  const total = weights.reduce((s, w) => s + w, 0 as number);
   let cumulative = 0;
   for (let i = 0; i < types.length; i++) {
     cumulative += weights[i] / total;

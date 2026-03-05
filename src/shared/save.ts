@@ -49,6 +49,16 @@ export function loadGame(): SaveData | null {
       if (d.skillLevel      === undefined) d.skillLevel      = 0;
       if (d.knownHearthSites === undefined) d.knownHearthSites = [];
       // wound is optional (undefined = healthy) — no migration needed
+      // Iteration 17: split inventory.materials → inventory.ore + inventory.wood
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const inv = d.inventory as any;
+      if (inv.materials !== undefined) {
+        d.inventory.ore  = d.role === 'miner'      ? (inv.materials ?? 0) : 0;
+        d.inventory.wood = d.role === 'lumberjack' ? (inv.materials ?? 0) : 0;
+        delete inv.materials;
+      }
+      if (d.inventory.ore  === undefined) d.inventory.ore  = 0;
+      if (d.inventory.wood === undefined) d.inventory.wood = 0;
     }
     return data;
   } catch {

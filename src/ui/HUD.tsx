@@ -68,7 +68,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     <div style={topBarStyle}>
       <Stat label={isPhone ? 'g' : getActiveFaction().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
       <Stat label={isPhone ? 'f' : 'food'}    value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
-      <Stat label={isPhone ? 'm' : 'mats'}    value={state.totalMaterials.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'o' : 'ore'}  value={state.totalOre.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'w' : 'wood'} value={state.totalWood.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
       {state.weatherSeason && state.weatherType && (
         <WeatherIndicator season={state.weatherSeason} weather={state.weatherType} />
@@ -262,7 +263,9 @@ export function StockpilePanel() {
   // Count goblins carrying items of this type
   const carriers = isFoodSp
     ? state.goblins.filter(d => d.alive && d.inventory.food > 0).length
-    : state.goblins.filter(d => d.alive && d.inventory.materials > 0).length;
+    : isOreSp
+      ? state.goblins.filter(d => d.alive && d.inventory.ore > 0).length
+      : state.goblins.filter(d => d.alive && d.inventory.wood > 0).length;
 
   return (
     <div style={{ ...styles.panel, borderLeft: `2px solid ${color}` }}>
@@ -566,10 +569,12 @@ function GoblinPanel({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Gobli
       <Bar label="warmth" value={goblin.warmth ?? 0} max={100}         color="#ff7733" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {goblin.inventory.food.toFixed(1)}</span>
-        {goblin.role === 'lumberjack'
-          ? <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.materials.toFixed(1)}</span>
-          : <span style={{ color: '#ff8800' }}>⛏ {goblin.inventory.materials.toFixed(1)}</span>
-        }
+        {goblin.inventory.ore > 0 && (
+          <span style={{ color: '#ff8800' }}>⛏ {goblin.inventory.ore.toFixed(1)}</span>
+        )}
+        {goblin.inventory.wood > 0 && (
+          <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.wood.toFixed(1)}</span>
+        )}
         {goblin.adventurerKills > 0 && (
           <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
         )}

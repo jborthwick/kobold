@@ -529,21 +529,19 @@ const withdrawFood: Action = {
 // --- mine: miners target ore tiles ---
 const mine: Action = {
   name: 'mine',
-  eligible: ({ goblin, goblins }) => {
-    if (goblin.inventory.materials >= MAX_INVENTORY_CAPACITY) return false;
-    if (goblin.role === 'miner') return true;
-    // Non-miners only mine when no alive miner exists (emergency fallback)
-    return !(goblins?.some(g => g.alive && g.role === 'miner') ?? false);
-  },
-  score: ({ goblin, grid }) => {
+  eligible: ({ goblin }) => goblin.inventory.ore < MAX_INVENTORY_CAPACITY,
+  score: ({ goblin, grid, oreStockpiles }) => {
     const apt = ROLE_MINING_APT[goblin.role];
+    // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
+    const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
+    const maxOre   = oreStockpiles?.reduce((s, p) => s + p.maxOre, 0) ?? 1;
+    const oreNeed  = maxOre > 0 ? 0.2 + 0.8 * (1 - totalOre / maxOre) : 1.0;
     const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
-      // Check remembered ore sites
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt;
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * oreNeed;
       return 0;
     }
-    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt;
+    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * oreNeed;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -569,7 +567,7 @@ const mine: Action = {
         const mined        = Math.min(hadMat, oreYield);
         here.materialValue = Math.max(0, hadMat - mined);
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        goblin.inventory.materials = Math.min(goblin.inventory.materials + mined, MAX_INVENTORY_CAPACITY);
+        goblin.inventory.ore = Math.min(goblin.inventory.ore + mined, MAX_INVENTORY_CAPACITY);
         addWorkFatigue(goblin);
         // Miner XP — grant on successful ore extraction
         grantXp(goblin, currentTick, onLog);
@@ -601,20 +599,19 @@ const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 const chop: Action = {
   name: 'chop',
-  eligible: ({ goblin, goblins }) => {
-    if (goblin.inventory.materials >= MAX_INVENTORY_CAPACITY) return false;
-    if (goblin.role === 'lumberjack') return true;
-    // Non-lumberjacks only chop when no alive lumberjack exists (emergency fallback)
-    return !(goblins?.some(g => g.alive && g.role === 'lumberjack') ?? false);
-  },
-  score: ({ goblin, grid }) => {
+  eligible: ({ goblin }) => goblin.inventory.wood < MAX_INVENTORY_CAPACITY,
+  score: ({ goblin, grid, woodStockpiles }) => {
     const apt = ROLE_CHOP_APT[goblin.role];
+    // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
+    const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
+    const maxWood   = woodStockpiles?.reduce((s, p) => s + p.maxWood, 0) ?? 1;
+    const woodNeed  = maxWood > 0 ? 0.2 + 0.8 * (1 - totalWood / maxWood) : 1.0;
     const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt;
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * woodNeed;
       return 0;
     }
-    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt;
+    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * woodNeed;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -642,7 +639,7 @@ const chop: Action = {
         here.materialValue = Math.max(0, hadWood - chopped);
         // Depleted forest reverts to a tree stump
         if (here.materialValue === 0) { here.type = TileType.TreeStump; here.maxMaterial = 0; }
-        goblin.inventory.materials = Math.min(goblin.inventory.materials + chopped, MAX_INVENTORY_CAPACITY);
+        goblin.inventory.wood = Math.min(goblin.inventory.wood + chopped, MAX_INVENTORY_CAPACITY);
         addWorkFatigue(goblin);
         // Lumberjack XP — grant on successful wood chop
         grantXp(goblin, currentTick, onLog);
@@ -674,28 +671,27 @@ const chop: Action = {
 // --- depositOre: miners carry ore to stockpile ---
 const depositOre: Action = {
   name: 'depositOre',
-  eligible: ({ goblin, goblins, oreStockpiles }) => {
-    if (goblin.inventory.materials <= 0) return false;
-    if (goblin.role !== 'miner' && (goblins?.some(g => g.alive && g.role === 'miner') ?? false)) return false;
+  eligible: ({ goblin, oreStockpiles }) => {
+    if (goblin.inventory.ore <= 0) return false;
     return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
   score: ({ goblin, oreStockpiles }) => {
     const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.materials, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+    return ramp(goblin.inventory.ore, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, oreStockpiles }) => {
     const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
-      const stored = Math.min(goblin.inventory.materials, target.maxOre - target.ore);
+      const stored = Math.min(goblin.inventory.ore, target.maxOre - target.ore);
       if (stored > 0) {
-        target.ore                 += stored;
-        goblin.inventory.materials -= stored;
-        goblin.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
+        target.ore          += stored;
+        goblin.inventory.ore -= stored;
+        goblin.task          = `deposited ${stored.toFixed(0)} ore → stockpile`;
       }
     } else {
       moveTo(goblin, target, grid);
-      goblin.task = `→ ore stockpile (${goblin.inventory.materials.toFixed(0)} ore)`;
+      goblin.task = `→ ore stockpile (${goblin.inventory.ore.toFixed(0)} ore)`;
     }
   },
 };
@@ -703,28 +699,27 @@ const depositOre: Action = {
 // --- depositWood: lumberjacks carry wood to stockpile ---
 const depositWood: Action = {
   name: 'depositWood',
-  eligible: ({ goblin, goblins, woodStockpiles }) => {
-    if (goblin.inventory.materials <= 0) return false;
-    if (goblin.role !== 'lumberjack' && (goblins?.some(g => g.alive && g.role === 'lumberjack') ?? false)) return false;
+  eligible: ({ goblin, woodStockpiles }) => {
+    if (goblin.inventory.wood <= 0) return false;
     return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
   score: ({ goblin, woodStockpiles }) => {
     const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.materials, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+    return ramp(goblin.inventory.wood, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, woodStockpiles }) => {
     const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
-      const stored = Math.min(goblin.inventory.materials, target.maxWood - target.wood);
+      const stored = Math.min(goblin.inventory.wood, target.maxWood - target.wood);
       if (stored > 0) {
-        target.wood                += stored;
-        goblin.inventory.materials -= stored;
-        goblin.task                 = `deposited ${stored.toFixed(0)} wood → stockpile`;
+        target.wood           += stored;
+        goblin.inventory.wood -= stored;
+        goblin.task            = `deposited ${stored.toFixed(0)} wood → stockpile`;
       }
     } else {
       moveTo(goblin, target, grid);
-      goblin.task = `→ wood stockpile (${goblin.inventory.materials.toFixed(0)} wood)`;
+      goblin.task = `→ wood stockpile (${goblin.inventory.wood.toFixed(0)} wood)`;
     }
   },
 };
@@ -732,7 +727,7 @@ const depositWood: Action = {
 // --- buildWall: any goblin can build fort walls ---
 const buildWall: Action = {
   name: 'buildWall',
-  eligible: ({ goblin, foodStockpiles, oreStockpiles }) => {
+  eligible: ({ foodStockpiles, oreStockpiles }) => {
     if (!foodStockpiles?.length || !oreStockpiles?.length) return false;
     const buildStockpile = oreStockpiles.find(s => s.ore >= 3);
     return buildStockpile !== null && buildStockpile !== undefined;

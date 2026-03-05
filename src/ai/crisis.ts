@@ -57,7 +57,6 @@ const HUNGER_CRISIS_THRESHOLD   = 65;  // % hunger — fires when eating is due 
 const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tickAgent)
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
-const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
 const ADVENTURER_RAID_AWARENESS = 8;   // base radius — scales with wariness trait
 const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
 const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis

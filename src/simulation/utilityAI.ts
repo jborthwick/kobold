@@ -16,7 +16,7 @@
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType } from '../shared/types';
 import { getWarmth } from './diffusion';
-import { MAX_INVENTORY_CAPACITY } from '../shared/constants';
+import { } from '../shared/constants';
 import { isWalkable } from './world';
 import {
   traitMod,

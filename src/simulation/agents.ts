@@ -217,7 +217,7 @@ export function spawnGoblins(
       hunger:        rand(10, 30),
       metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,  // 0.15–0.35/tick (~3–6 min to starve)
       vision:        rand(stats.visionMin, stats.visionMax),
-      inventory:     { food: rand(8, 15), materials: 0 },
+      inventory:     { food: rand(8, 15), ore: 0, wood: 0 },
       morale:        70 + rand(0, 20),
       alive:         true,
       task:          'idle',
@@ -332,7 +332,7 @@ export function spawnSuccessor(
     hunger:        rand(10, 30),
     metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
     vision:        rand(stats.visionMin, stats.visionMax),
-    inventory:     { food: rand(5, 12), materials: 0 },
+    inventory:     { food: rand(5, 12), ore: 0, wood: 0 },
     morale:        60 + rand(0, 20),
     alive:         true,
     task:          'just arrived',
@@ -856,12 +856,12 @@ export function tickAgent(
   // ── 2.9. Ore stockpile deposit ────────────────────────────────────────
   // Miners standing on any ore stockpile tile deposit all carried ore.
   const standingOreStockpile = oreStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
-  if (goblin.role === 'miner' && standingOreStockpile && goblin.inventory.materials > 0) {
-    const stored = Math.min(goblin.inventory.materials, standingOreStockpile.maxOre - standingOreStockpile.ore);
+  if (goblin.role === 'miner' && standingOreStockpile && goblin.inventory.ore > 0) {
+    const stored = Math.min(goblin.inventory.ore, standingOreStockpile.maxOre - standingOreStockpile.ore);
     if (stored > 0) {
       standingOreStockpile.ore  += stored;
-      goblin.inventory.materials -= stored;
-      goblin.task                 = `deposited ${stored.toFixed(0)} ore → stockpile`;
+      goblin.inventory.ore      -= stored;
+      goblin.task                = `deposited ${stored.toFixed(0)} ore → stockpile`;
       return;
     }
   }
@@ -869,11 +869,11 @@ export function tickAgent(
   // ── 2.9b. Wood stockpile deposit ──────────────────────────────────────
   // Lumberjacks standing on any wood stockpile tile deposit all carried wood.
   const standingWoodStockpile = woodStockpiles?.find(s => s.x === goblin.x && s.y === goblin.y) ?? null;
-  if (goblin.role === 'lumberjack' && standingWoodStockpile && goblin.inventory.materials > 0) {
-    const stored = Math.min(goblin.inventory.materials, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
+  if (goblin.role === 'lumberjack' && standingWoodStockpile && goblin.inventory.wood > 0) {
+    const stored = Math.min(goblin.inventory.wood, standingWoodStockpile.maxWood - standingWoodStockpile.wood);
     if (stored > 0) {
       standingWoodStockpile.wood  += stored;
-      goblin.inventory.materials   -= stored;
+      goblin.inventory.wood        -= stored;
       goblin.task                   = `deposited ${stored.toFixed(0)} wood → stockpile`;
       return;
     }
@@ -1204,7 +1204,7 @@ export function tickAgent(
       return dist < bestDist ? s : best;
     }, null) ?? null;
   if (goblin.role === 'miner' && nearestOreStockpileWithCapacity
-      && goblin.inventory.materials >= 8
+      && goblin.inventory.ore >= 8
       && !(goblin.x === nearestOreStockpileWithCapacity.x && goblin.y === nearestOreStockpileWithCapacity.y)) {
     const next = pathNextStep(
       { x: goblin.x, y: goblin.y },
@@ -1213,7 +1213,7 @@ export function tickAgent(
     );
     goblin.x    = next.x;
     goblin.y    = next.y;
-    goblin.task = `→ ore stockpile (${goblin.inventory.materials.toFixed(0)} ore)`;
+    goblin.task = `→ ore stockpile (${goblin.inventory.ore.toFixed(0)} ore)`;
     return;
   }
 
@@ -1227,7 +1227,7 @@ export function tickAgent(
       return dist < bestDist ? s : best;
     }, null) ?? null;
   if (goblin.role === 'lumberjack' && nearestWoodStockpileWithCapacity
-      && goblin.inventory.materials >= 8
+      && goblin.inventory.wood >= 8
       && !(goblin.x === nearestWoodStockpileWithCapacity.x && goblin.y === nearestWoodStockpileWithCapacity.y)) {
     const next = pathNextStep(
       { x: goblin.x, y: goblin.y },
@@ -1236,7 +1236,7 @@ export function tickAgent(
     );
     goblin.x    = next.x;
     goblin.y    = next.y;
-    goblin.task = `→ wood stockpile (${goblin.inventory.materials.toFixed(0)} wood)`;
+    goblin.task = `→ wood stockpile (${goblin.inventory.wood.toFixed(0)} wood)`;
     return;
   }
 
@@ -1354,8 +1354,8 @@ export function tickAgent(
         here.materialValue = Math.max(0, hadMat - mined);
         // Exhausted ore vein reverts to bare stone — miners must find new veins
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        goblin.inventory.materials = Math.min(
-          goblin.inventory.materials + mined, MAX_INVENTORY_CAPACITY,
+        goblin.inventory.ore = Math.min(
+          goblin.inventory.ore + mined, MAX_INVENTORY_CAPACITY,
         );
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
         goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
@@ -1389,8 +1389,8 @@ export function tickAgent(
         const chopped      = Math.min(hadWood, 2);
         here.materialValue = Math.max(0, hadWood - chopped);
         // Forest tile stays as Forest even when wood is depleted — it regrows
-        goblin.inventory.materials = Math.min(
-          goblin.inventory.materials + chopped, MAX_INVENTORY_CAPACITY,
+        goblin.inventory.wood = Math.min(
+          goblin.inventory.wood + chopped, MAX_INVENTORY_CAPACITY,
         );
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate);
         goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;

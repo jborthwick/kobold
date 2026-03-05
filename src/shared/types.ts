@@ -24,7 +24,8 @@ export interface Tile {
 
 export interface Inventory {
   food: number;
-  materials: number;
+  ore:  number;   // mined by miners; deposited to ore stockpiles
+  wood: number;   // chopped by lumberjacks; deposited to wood stockpiles
 }
 
 /** Hostile NPC — spawns in raids from map edges. */
@@ -201,7 +202,8 @@ export interface GameState {
   tick: number;
   goblins: Goblin[];
   totalFood: number;
-  totalMaterials: number;
+  totalOre:  number;
+  totalWood: number;
   selectedGoblinId: string | null;
   overlayMode: OverlayMode;
   paused: boolean;
