@@ -25,6 +25,16 @@ import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
 import { tickWoundHealing } from './wounds';
 
 // ── Response curves ────────────────────────────────────────────────────────────
+//
+// These three functions are the scoring vocabulary for the entire utility AI.
+// Every action score is built from combinations of these curves applied to need values.
+//
+// sigmoid:        low→0, high→1  (urgency rises as need worsens)
+// inverseSigmoid: low→1, high→0  (urgency falls as need worsens, e.g. "forage less when full")
+// ramp:           dead-simple linear 0→1 between two breakpoints
+//
+// Traits shift the *midpoint* argument, not the output — a lazy goblin hits the
+// rest midpoint sooner, producing organically higher rest scores without special-casing.
 
 /** S-curve: 0 at low values, 1 at high values. Steepness controls transition sharpness. */
 export function sigmoid(value: number, midpoint: number, steepness = 0.15): number {
@@ -54,6 +64,11 @@ function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number):
   return true;
 }
 
+// updateNeeds runs every tick *before* action selection.
+// It mutates need meters directly — these are not actions, just physics.
+// The needs feed into action scores: high hunger → high eat/forage score, etc.
+// Note that morale has no direct "restore morale" action — it recovers passively
+// when hunger is low and loneliness is met. It's a lagging indicator of wellbeing.
 function updateNeeds(
   goblin: Goblin,
   goblins: Goblin[] | undefined,
@@ -63,10 +78,15 @@ function updateNeeds(
   weatherType: WeatherType | undefined,
   onLog?: LogFn,
 ): void {
-  // Hunger grows every tick (cold weather burns calories faster)
+  // ── Hunger ──────────────────────────────────────────────────────────────────
+  // Grows every tick. weatherMetabolismMod is >1 in cold/drought, making
+  // food more scarce relative to consumption without changing the map.
   goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * weatherMetabolismMod);
 
-  // Exposure penalty — freezing in the open during cold weather
+  // ── Cold exposure penalty ────────────────────────────────────────────────────
+  // During cold weather, goblins away from a hearth accumulate fatigue, morale loss,
+  // and extra hunger. coldPenalty is 0 when warm (warmth > 50), rises to 1 when freezing.
+  // This is what makes seekWarmth score highly in cold weather: the penalty is ongoing.
   if (weatherType === 'cold' && warmthField) {
     const warmth = getWarmth(warmthField, goblin.x, goblin.y);
     const coldPenalty = inverseSigmoid(warmth, 30, 0.12);
@@ -80,13 +100,16 @@ function updateNeeds(
     }
   }
 
-  // Morale decays continuously with hunger above 60, recovers below 30
+  // ── Morale ───────────────────────────────────────────────────────────────────
+  // Morale decays when hungry (above 60), recovers when well-fed (below 30).
+  // These two terms run every tick and partially cancel — at hunger=45 neither fires strongly.
   goblin.morale = Math.max(0, Math.min(100,
     goblin.morale
-    - sigmoid(goblin.hunger, 60) * 0.5
-    + inverseSigmoid(goblin.hunger, 30) * 0.25,
+    - sigmoid(goblin.hunger, 60) * 0.5       // hunger above 60 → morale falls
+    + inverseSigmoid(goblin.hunger, 30) * 0.25, // hunger below 30 → morale recovers
   ));
-  // Stress metabolism: low morale burns calories faster, scales continuously
+  // Stress loop: low morale → burns calories faster → harder to stay fed → morale falls further.
+  // stressMod is near 0 above morale=50, rises sharply below 35.
   const stressMod = inverseSigmoid(goblin.morale, 35) * 0.4;
   if (stressMod > 0.05) {
     goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * stressMod);
@@ -94,13 +117,12 @@ function updateNeeds(
       onLog?.('😤 morale is dangerously low', 'warn');
     }
   }
-  // High morale is the default state — not worth logging individually
-  // (colony-wide morale shifts are reported by world events instead)
 
-  // Fatigue — passive decay; traits via fatigueRate applied at action sites.
-  // We use a larger decay (0.5) so they actually recover even when cold (0.25) and bruised (0.3).
+  // ── Fatigue ──────────────────────────────────────────────────────────────────
+  // Passive recovery of 0.5/tick. Actions that cost fatigue apply their drain inside
+  // execute(), not here. The 0.5 baseline is intentionally larger than the cold (0.25)
+  // and wound (0.05–0.30) penalties so recovery is always possible, just slower.
   goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
-  // Wound fatigue penalties by type
   const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
     bruised: 0.30,
     leg:     0.15,
@@ -111,7 +133,7 @@ function updateNeeds(
   if (woundDrain > 0) {
     goblin.fatigue = Math.min(100, goblin.fatigue + woundDrain);
   }
-  // Exhaustion drains morale continuously above 80
+  // Exhaustion above 80 also drains morale — two bad things reinforce each other.
   goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.fatigue, 80) * 0.25);
   if (goblin.fatigue > 80 && shouldLog(goblin, 'exhausted', currentTick, 150)) {
     onLog?.('😩 exhausted', 'warn');
@@ -120,10 +142,14 @@ function updateNeeds(
   // Wound healing — check and clear expired wounds
   tickWoundHealing(goblin, currentTick, onLog);
 
-  // Social — check for friendly goblin within generosityRange tiles (helpful/cheerful: wider; mean: narrower)
+  // ── Social ───────────────────────────────────────────────────────────────────
+  // Social is a loneliness meter: 0 = content, 100 = isolated.
+  // It ticks *down* when a friendly goblin is nearby, and *up* when alone.
+  // Isolation accumulates slowly (capped at 0.5/tick), so a briefly solo goblin is fine;
+  // one stuck alone for hundreds of ticks starts suffering morale loss.
   if (goblins) {
-    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1; // generous goblins detect friends further
-    const FRIEND_REL    = 40;
+    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1; // helpful/cheerful trait widens this
+    const FRIEND_REL    = 40; // minimum relation score to count as "friendly"
     const hasFriend = goblins.some(
       other => other.id !== goblin.id && other.alive &&
         Math.abs(other.x - goblin.x) <= FRIEND_RADIUS &&
@@ -135,10 +161,12 @@ function updateNeeds(
       goblin.social = Math.max(0, goblin.social - (0.3 + socialBonus));
       goblin.lastSocialTick = currentTick;
     } else {
+      // Isolation grows faster the longer they've been alone (capped at 0.5/tick)
       const isolationTicks = currentTick - goblin.lastSocialTick;
       goblin.social = Math.min(100, goblin.social + Math.min(0.5, isolationTicks / 400));
     }
   }
+  // High loneliness drains morale — this is what makes the socialize action score highly
   if (goblin.social > 40) {
     goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.social, 60) * 0.2);
     if (goblin.social > 60 && shouldLog(goblin, 'lonely', currentTick, 200)) {
@@ -191,7 +219,8 @@ export function tickAgentUtility(
 ): void {
   if (!goblin.alive) return;
 
-  // ── Safety: nudge off unwalkable tile ──────────────────────────────────
+  // Safety: if a world event (wall built, tile changed) trapped the goblin on an
+  // unwalkable tile, nudge them to an adjacent walkable tile before doing anything else.
   if (!isWalkable(grid, goblin.x, goblin.y)) {
     const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
     for (const d of dirs) {
@@ -201,20 +230,25 @@ export function tickAgentUtility(
     }
   }
 
-  // 1. Update needs (hunger, morale, fatigue, social)
+  // ── Step 1: Update needs ──────────────────────────────────────────────────────
+  // Hunger, morale, fatigue, and social all advance here before any decision is made.
+  // These feed into action scores — a goblin with hunger=80 will score "eat" near 1.0.
   updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, onLog);
 
-  // Fatigue > 70: chance to skip action this tick (exhaustion stumble).
-  // Chance rises from 20% at 70 to 80% at 100 fatigue.
+  // Exhaustion stumble: above fatigue=70 there's a chance to skip the whole action this tick.
+  // The goblin just stands there recovering. Chance scales from ~20% at 70 to ~80% at 100.
+  // This is separate from the rest *action* — it's involuntary collapse, not a choice.
   const stumbleChance = ramp(goblin.fatigue, 70, 100) * 0.6 + 0.2;
   if (goblin.fatigue > 70 && Math.random() < stumbleChance) {
     goblin.task = 'exhausted…';
-    // Forced rest recovers same as "Exposed" rest action (1.5)
-    goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
+    goblin.fatigue = Math.max(0, goblin.fatigue - 1.5); // forced rest, same recovery as the rest action
     return;
   }
 
-  // 2. Starvation damage — sigmoid-smoothed: ramps from 0 at hunger=90 to ~3/tick at 100
+  // ── Step 2: Starvation damage ─────────────────────────────────────────────────
+  // Not an action — runs unconditionally if the goblin has no food and hunger ≥ 90.
+  // Damage is sigmoid-smoothed so it accelerates as hunger approaches 100, not a hard cliff.
+  // A goblin with food in their inventory avoids this entirely — eat() fires before they hit 90.
   if (goblin.inventory.food === 0 && goblin.hunger >= 90) {
     const starveDmg = sigmoid(goblin.hunger, 95, 0.2) * 0.003 * goblin.maxHealth;
     goblin.health -= starveDmg;
@@ -230,19 +264,30 @@ export function tickAgentUtility(
     }
   }
 
-  // 3. Expire stale LLM intent
+  // ── Step 3: Expire stale LLM intent ──────────────────────────────────────────
+  // LLM decisions write goblin.llmIntent (e.g. "forage") and a tick expiry.
+  // If the intent is past its expiry it's cleared here so it stops boosting scores.
   if (goblin.llmIntent && currentTick > goblin.llmIntentExpiry) {
     goblin.llmIntent = null;
   }
 
-  // 4. Build action context — shared state that actions read from
+  // ── Step 4: Build action context ─────────────────────────────────────────────
+  // ActionContext is just a read-only bag of world references passed to every action's
+  // eligible() and score() functions. Actions don't reach outside this object.
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
     warmthField, dangerField, weatherType,
   };
 
-  // 5. Score all eligible actions (+ LLM boost)
+  // ── Step 5: Score all eligible actions ───────────────────────────────────────
+  // Each action has two functions:
+  //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
+  //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
+  //
+  // We loop ALL_ACTIONS once, skipping ineligible ones, and track the top two scores.
+  // LLM intents nudge the matching action by +0.5 (capped at 1.0) — they tip the balance
+  // without overriding a genuinely urgent competing need.
   let bestAction: Action | null = null;
   let bestScore = -1;
   let secondName = '';
@@ -251,7 +296,7 @@ export function tickAgentUtility(
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
     let score = action.score(ctx);
-    // LLM intent boost: +0.5 to the matching action, capped at 1.0
+    // LLM intent boost: the LLM said "do X" — give X a meaningful nudge but don't hard-override
     if (goblin.llmIntent && action.intentMatch === goblin.llmIntent) {
       score = Math.min(1.0, score + 0.5);
     }
@@ -266,7 +311,9 @@ export function tickAgentUtility(
     }
   }
 
-  // Close-call log: only truly agonizing decisions (within 0.03, both urgent)
+  // Close-call log: fires when top two scores are within 0.03 AND both are genuinely urgent
+  // (above 0.45). A goblin choosing between "idle" and "wander" isn't agonizing — one
+  // choosing between "eat" and "flee" is.
   if (bestAction && secondScore >= 0 && bestScore - secondScore <= 0.03 && bestScore > 0.45) {
     if (shouldLog(goblin, 'close_call', currentTick, 400)) {
       const nameA = ACTION_DISPLAY_NAMES[bestAction.name] ?? bestAction.name;
@@ -275,8 +322,9 @@ export function tickAgentUtility(
     }
   }
 
-  // 6. Execute highest-scoring action
-  // Reset task to a descriptive idle string first — execute will override if it does real work
+  // ── Step 6: Execute ───────────────────────────────────────────────────────────
+  // Set an idle description first — execute() will overwrite goblin.task if it does real work.
+  // If execute() returns early (e.g. pathfinding finds nothing), the idle string shows in the HUD.
   goblin.task = idleDescription(goblin);
   if (bestAction) {
     bestAction.execute(ctx);

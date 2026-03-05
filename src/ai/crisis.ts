@@ -54,7 +54,7 @@ export const PROVIDERS: Record<LLMProvider, ProviderConfig> = {
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
 const HUNGER_CRISIS_THRESHOLD   = 65;  // % hunger — fires when eating is due (eating now at > 70)
-const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tickAgent)
+const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in utilityAI updateNeeds)
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const ADVENTURER_RAID_AWARENESS = 8;   // base radius — scales with wariness trait
@@ -78,7 +78,7 @@ type CrisisPriority = 'high' | 'medium' | 'low';
 const CRISIS_PRIORITY: Record<string, CrisisPriority> = {
   goblin_raid:      'high',    // fight-or-flee dilemma, personality-dependent
   low_supplies:     'high',    // genuine decision point — forage, share, depot?
-  resource_contest: 'high',    // social dilemma — trait/relation driven
+  resource_contest: 'medium',  // utility AI resolves mechanically; LLM adds flavor only
   resource_sharing: 'high',    // greedy vs helpful — key personality tension
   morale:           'medium',  // flavor value, but BT handles the mechanics
   hunger:           'low',     // always "eat" — no decision space
@@ -143,7 +143,7 @@ export function detectCrisis(
     };
   }
 
-  // Morale breaking point (morale decays in tickAgent when hungry)
+  // Morale breaking point (morale decays in utilityAI updateNeeds when hungry)
   if (goblin.morale <= traitMod(goblin, 'moraleCrisisThreshold', MORALE_CRISIS_THRESHOLD)) {
     return {
       type:        'morale',
@@ -171,16 +171,17 @@ export function detectCrisis(
   }
 
   // Resource contest — rival within detection radius targeting the same area.
-  // Base radius + role bonus (scouts naturally perceptive) + trait bonus.
+  // Requires *this* goblin to also be food-hungry, not just the rival — prevents
+  // firing constantly whenever any two goblins happen to be near each other.
   const contestRadius = CONTEST_RADIUS
     + (goblin.role === 'scout' ? 2 : 0)
     + traitMod(goblin, 'perceptiveness', 0);
-  const rival = alive.find(d =>
+  const rival = goblin.hunger > 50 && goblin.inventory.food < 5 ? alive.find(d =>
     d.id !== goblin.id &&
     Math.abs(d.x - goblin.x) <= contestRadius &&
     Math.abs(d.y - goblin.y) <= contestRadius &&
-    d.inventory.food < 3,   // only contest if rival is also food-hungry
-  );
+    d.inventory.food < 3,
+  ) : null;
   if (rival) {
     return {
       type:        'resource_contest',

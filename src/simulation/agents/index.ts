@@ -1,5 +1,5 @@
 /**
- * Agents public API. Modules: sites, roles, pathfinding, fort, spawn, tickAgent.
+ * Agents public API. Modules: sites, roles, pathfinding, fort, spawn.
  * Import from './agents' (or '../simulation/agents') to get all exports.
  */
 
@@ -40,4 +40,3 @@ export { fortWallSlots, fortEnclosureSlots } from './fort';
 
 export { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY } from './spawn';
 
-export { tickAgent, type LogFn } from './tickAgent';
