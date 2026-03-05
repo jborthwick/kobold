@@ -372,12 +372,15 @@ const forage: Action = {
       }
       const here = grid[goblin.y][goblin.x];
 
-      // Contest yield — if a hungrier goblin is on the same tile, yield
+      // Contest yield — if a higher-priority goblin is on the same tile, yield.
+      // Priority = hunger + skillLevel * 5 so experienced foragers can hold their tile
+      // against a slightly hungrier but unskilled rival (skill = social status).
       if (goblins) {
+        const contestPriority = (g: Goblin) => g.hunger + g.skillLevel * 5;
         const rival = goblins.find(d =>
           d.alive && d.id !== goblin.id &&
           d.x === goblin.x && d.y === goblin.y &&
-          d.hunger > goblin.hunger,
+          contestPriority(d) > contestPriority(goblin),
         );
         if (rival) {
           const relation = goblin.relations[rival.id] ?? 50;

@@ -740,7 +740,7 @@ export class WorldScene extends Phaser.Scene {
       );
     }
 
-    growback(this.grid, growbackModifier(this.weather));
+    growback(this.grid, growbackModifier(this.weather), this.tick);
 
     // ── Adventurer raids ───────────────────────────────────────────────────────
     const raid = maybeSpawnRaid(this.grid, this.goblins, this.tick);

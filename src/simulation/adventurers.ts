@@ -148,12 +148,16 @@ export function tickAdventurers(
       }, null);
       g.targetId = target?.id ?? null;
     }
-    // Proximity override: if a goblin is standing on the same tile, fight them
-    // immediately — regardless of which goblin the adventurer was originally chasing.
-    // This is the key fix for fighters: a fighter can close on an adventurer that is
-    // targeting a different goblin and still trigger melee combat.
+    // Proximity override: if a goblin is on the same tile, switch to them —
+    // but only if the current target is still far away (> 2 tiles). This prevents
+    // an adventurer mid-chase from being distracted by a passing forager.
     const onSameTile = alive.find(d => d.x === g.x && d.y === g.y);
-    if (onSameTile) { target = onSameTile; g.targetId = onSameTile.id; }
+    if (onSameTile) {
+      const currentDist = target
+        ? Math.abs(target.x - g.x) + Math.abs(target.y - g.y)
+        : Infinity;
+      if (currentDist > 2) { target = onSameTile; g.targetId = onSameTile.id; }
+    }
     if (!target) continue;
 
     const dist = Math.abs(target.x - g.x) + Math.abs(target.y - g.y);

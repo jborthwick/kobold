@@ -22,7 +22,7 @@ emergently through the utility AI / trait system. Checked = fixed.
   Player commands always win regardless of crisis state. During active raid or extreme
   starvation, score should drop to 0.8 so a flee/eat can override.
 
-- [ ] 🟡 **`actions.ts:149–153` — Adventurer proximity target override**
+- [x] 🟡 **`actions.ts:149–153` — Adventurer proximity target override**
   Adventurers always switch to goblin on same tile regardless of current target. Should be
   a weighted comparison: only switch if new target priority outweighs current target
   proximity.
@@ -178,7 +178,7 @@ The fix is to assign high default trait values per role and score continuously.
 - [x] 🟡 **`utilityAI.ts:209`** — Starvation: `if (hunger >= 100 && inv === 0): health -= 2`
   → `sigmoid(hunger, 95) * 0.003 * maxHealth/tick`; ramps in from 90 hunger (not binary at 100).
 
-- [ ] 🟡 **`actions.ts:368–398`** — Forage contest: only yields to hungrier goblins
+- [x] 🟡 **`actions.ts:368–398`** — Forage contest: only yields to hungrier goblins
   (`d.hunger > goblin.hunger`). Should be a priority score combining hunger, skill, and
   relationship so status/respect can tip the outcome.
 
@@ -200,7 +200,7 @@ The fix is to assign high default trait values per role and score continuously.
 
 ## LOW: World Generation Constants
 
-- [ ] 🟡 **`world.ts:18–41` (`WORLD_CONFIG`)** — All resource min/max/growback values are
+- [x] 🟡 **`world.ts:18–41` (`WORLD_CONFIG`)** — All resource min/max/growback values are
   fixed. No poor vs rich vein variation; no seasonal growback modulation.
   Consider: `growbackMod = 1 + 0.3 * sin(tick / 5000)` for seasonal cycling; events
   can permanently alter a region's `maxFood`, not just current value.

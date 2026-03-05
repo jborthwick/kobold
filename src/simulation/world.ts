@@ -351,18 +351,28 @@ export function generateWorld(seed?: string): WorldGenResult {
 const WOOD_GROWBACK_RATE = 0.02;
 
 /**
+ * Ticks for one full 4-season year. Seasonal growback peaks in summer and
+ * troughs in winter — a slow macro-cycle layered on top of weather variation.
+ */
+const YEAR_CYCLE_TICKS = 2400; // 600 ticks/season × 4 seasons
+
+/**
  * Apply per-tick food and wood regrowth.
  * @param growbackMod — weather multiplier (1.0 = normal, 0.25 = drought, 1.8 = rain)
+ * @param tick — current game tick, used for seasonal sine cycle (±30% over a full year)
  */
-export function growback(grid: Tile[][], growbackMod: number = 1): void {
+export function growback(grid: Tile[][], growbackMod: number = 1, tick: number = 0): void {
+  // Seasonal cycle: sin peaks at summer (tick≈600), troughs at winter (tick≈1800)
+  const seasonalMod = 1 + 0.3 * Math.sin((tick / YEAR_CYCLE_TICKS) * 2 * Math.PI);
+  const effectiveMod = growbackMod * seasonalMod;
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
       if (t.growbackRate > 0 && t.maxFood > 0 && t.foodValue < t.maxFood) {
-        t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate * growbackMod);
+        t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate * effectiveMod);
       }
       if (t.type === TileType.Forest && t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
-        t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE * growbackMod);
+        t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE * effectiveMod);
       }
     }
   }
