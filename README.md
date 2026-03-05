@@ -33,6 +33,34 @@ LLM is off by default. Toggle with 🤖 button in-game. The LLM acts as a crisis
 | `npx tsx scripts/headless.ts 3000 42` | Reproducible run |
 | `npx tsc --noEmit` | Type-check |
 
+## Headless Simulation
+
+Run the full simulation without graphics — useful for testing, tuning, and debugging.
+
+```bash
+npm run headless                      # 2000 ticks, random seed
+npx tsx scripts/headless.ts 5000      # 5000 ticks
+npx tsx scripts/headless.ts 3000 42  # reproducible run (seed=42)
+DUMP_JSON=1 npx tsx scripts/headless.ts 1000  # full JSON output
+```
+
+Output includes survivors, deaths, goals completed, stockpiles, and average needs. The **action frequency table** shows what goblins spend their time on — useful for catching:
+
+- **Score imbalances** — action dominating (>20%) or never firing (<0.5%)
+- **Need drift** — hunger/morale trending wrong over time
+- **Starvation cascades** — deaths clustered in specific tick ranges
+
+### Healthy Action Ranges
+
+| Action | Expected |
+|--------|----------|
+| traveling | 40–55% |
+| exploring | 15–30% |
+| harvesting | >1% |
+| socializing | <8% |
+| fleeing to safety | <5% |
+| idle | <2% |
+
 ## Gameplay
 
 - **5 goblins** with distinct roles (forager, miner, scout, lumberjack, fighter)
