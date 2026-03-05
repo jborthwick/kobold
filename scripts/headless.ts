@@ -25,6 +25,7 @@ import { getActiveFaction } from '../src/shared/factions';
 import { GRID_SIZE } from '../src/shared/constants';
 import type { Goblin, Tile, FoodStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
+import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -114,8 +115,25 @@ function makeGoal(type: GoalType, generation: number): ColonyGoal {
 
 console.log(`\n🧌 Kobold headless sim — ${TICKS} ticks${SEED_ARG !== undefined ? `, seed ${SEED_ARG}` : ''}\n`);
 
-const { grid, spawnZone, seed } = generateWorld(SEED_ARG);
+const { grid, spawnZone, seed } = generateWorld(SEED_ARG?.toString());
 console.log(`   World seed: ${seed}`);
+
+// World stats for diagnostics
+let totalForageable = 0;
+let forageableNearSpawn = 0;
+const spawnCx = spawnZone.x + Math.floor(spawnZone.w / 2);
+const spawnCy = spawnZone.y + Math.floor(spawnZone.h / 2);
+for (let y = 0; y < GRID_SIZE; y++) {
+  for (let x = 0; x < GRID_SIZE; x++) {
+    if (FORAGEABLE_TILES.has(grid[y][x].type)) {
+      totalForageable++;
+      const dist = Math.sqrt((x - spawnCx) ** 2 + (y - spawnCy) ** 2);
+      if (dist < 30) forageableNearSpawn++;
+    }
+  }
+}
+console.log(`   Harvestable: ${forageableNearSpawn} tiles within 30 of spawn`);
+console.log(`   Total: ${totalForageable} ${[...FORAGEABLE_TILES].join('/')} tiles across ${GRID_SIZE}x${GRID_SIZE} map`);
 
 let goblins:       Goblin[]       = spawnGoblins(grid, spawnZone);
 let adventurers:   Adventurer[]   = spawnInitialAdventurers(grid, 3);

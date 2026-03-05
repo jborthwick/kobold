@@ -1,4 +1,4 @@
-export const GRID_SIZE = 64;
+export const GRID_SIZE = 128;
 export const TILE_SIZE = 16;
 export const TICK_RATE_MS = 150; // ~6-7 ticks/second
 export const INITIAL_GOBLINS = 5;

@@ -12,6 +12,7 @@
 import { createNoise2D } from 'simplex-noise';
 import { TileType, type Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
+import { FORAGEABLE_TILES } from './agents/sites';
 
 // ── World Config (unchanged — same resource min/max/growback as before) ──────
 
@@ -211,7 +212,8 @@ function countNearbyFoodTiles(grid: Tile[][], cx: number, cy: number, radius: nu
     for (let dx = -radius; dx <= radius; dx++) {
       const x = cx + dx, y = cy + dy;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
-      if (grid[y][x].maxFood > 0) count++;
+      const t = grid[y][x];
+      if (FORAGEABLE_TILES.has(t.type) && t.maxFood > 0) count++;
     }
   }
   return count;
@@ -271,9 +273,11 @@ export function generateWorld(seed?: string): WorldGenResult {
   }
 
   // ── Step 3: Find best spawn zone ────────────────────────────────────────────
-  // Scan candidate positions for a 12×6 rectangle that is mostly walkable
+  // Scan candidate positions for a rectangle that is mostly walkable
   // and has the most food tiles within a 15-tile radius.  Avoids edges.
-  const SPAWN_W = 12, SPAWN_H = 6;
+  // (width was increased when ore stockpiles were added to the right of the
+  // initial depot so the cleared area covers both food and ore storage.)
+  const SPAWN_W = 24, SPAWN_H = 10;
   const MARGIN  = 4; // keep away from map borders
   let bestSpawnX = Math.floor(GRID_SIZE / 2 - SPAWN_W / 2);
   let bestSpawnY = Math.floor(GRID_SIZE / 2 - SPAWN_H / 2);
@@ -332,14 +336,19 @@ export function generateWorld(seed?: string): WorldGenResult {
   // ── Step 5: Validate food near spawn ───────────────────────────────────────
   const spawnCx = spawnZone.x + Math.floor(spawnZone.w / 2);
   const spawnCy = spawnZone.y + Math.floor(spawnZone.h / 2);
-  const nearbyFood = countNearbyFoodTiles(grid, spawnCx, spawnCy, 15);
+  const foodCheckRadius = Math.floor(15 * GRID_SIZE / 64);
+  const nearbyFood = countNearbyFoodTiles(grid, spawnCx, spawnCy, foodCheckRadius);
+  const minFoodThreshold = Math.floor(20 * (GRID_SIZE / 64) ** 2);
 
-  if (nearbyFood < 20) {
-    // Seed a guaranteed mushroom patch ~6 tiles from spawn center
-    const angle = rng() * Math.PI * 2;
-    const px = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCx + Math.cos(angle) * 6)));
-    const py = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCy + Math.sin(angle) * 6)));
-    seedMushroomPatch(grid, px, py, rng);
+  if (nearbyFood < minFoodThreshold) {
+    const patchCount = Math.floor(4 * (GRID_SIZE / 64) ** 2);
+    for (let i = 0; i < patchCount; i++) {
+      const angle = rng() * Math.PI * 2;
+      const dist = 5 + rng() * 8;
+      const px = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCx + Math.cos(angle) * dist)));
+      const py = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCy + Math.sin(angle) * dist)));
+      seedMushroomPatch(grid, px, py, rng);
+    }
   }
 
   return { grid, spawnZone, seed: worldSeed };

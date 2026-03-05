@@ -10,8 +10,12 @@
  */
 
 import { TileType, type Tile, type Goblin, type Adventurer } from '../shared/types';
+import { GRID_SIZE } from '../shared/constants';
 
 // ── Config ────────────────────────────────────────────────────────────────────
+
+// Scale constants by map size (128x128 = 4x the 64x64 area)
+const AREA_SCALE = (GRID_SIZE / 64) ** 2;
 
 // Event scheduling
 const EVENT_MIN_INTERVAL  = 300;  // ticks between world events (min)
@@ -31,7 +35,7 @@ const MUSHROOM_ISOLATION_RADIUS  = 4;
 const MUSHROOM_SPREAD_RADIUS_MIN = 3;
 const MUSHROOM_SPREAD_RADIUS_MAX = 5; // exclusive upper bound (rand(3) → 0,1,2)
 const MUSHROOM_FILL_CHANCE       = 0.6;
-const MUSHROOM_MAX_COUNT         = 14;
+const MUSHROOM_MAX_COUNT         = Math.floor(14 * AREA_SCALE);
 const MUSHROOM_FOOD_MIN          = 3;
 const MUSHROOM_FOOD_MAX          = 5; // exclusive (rand(3) → 0,1,2 added to min)
 
@@ -44,7 +48,7 @@ const ORE_DISCOVERY_VALUE     = 15;
 const MUSHROOM_SPROUT_INTERVAL    = 60;
 const MUSHROOM_SPROUT_RADIUS      = 2;
 const MUSHROOM_SPROUT_FILL        = 0.7;
-const MUSHROOM_SPROUT_MAX         = 8;
+const MUSHROOM_SPROUT_MAX         = Math.floor(8 * AREA_SCALE);
 
 // Tension calculation weights
 const TENSION_PER_THREAT   = 15;
