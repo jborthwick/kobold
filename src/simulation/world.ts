@@ -128,16 +128,16 @@ function classifyBiome(elevation: number, moisture: number): TileType {
     return TileType.Dirt;
   }
 
-  // MEDIUM
+  // MEDIUM — forest only in wetter bands (higher threshold = less forest)
   if (elevation < 0.58) {
-    if (moisture > 0.45) return TileType.Forest;
+    if (moisture > 0.58) return TileType.Forest;
     if (moisture > 0.30) return TileType.Grass;
     return TileType.Dirt;
   }
 
   // HIGH
   if (elevation < 0.78) {
-    if (moisture > 0.55) return TileType.Forest;
+    if (moisture > 0.68) return TileType.Forest;
     if (moisture > 0.35) return TileType.Dirt;
     return TileType.Stone; // Ore -> Stone
   }
@@ -155,7 +155,7 @@ function tileResourceValues(
 ): Pick<Tile, 'foodValue' | 'materialValue' | 'maxFood' | 'maxMaterial' | 'growbackRate'> {
   switch (type) {
     case TileType.Forest: {
-      const foodScale = Math.max(0, (moisture - 0.45) / 0.55);
+      const foodScale = Math.max(0, (moisture - 0.58) / 0.42); // 0.58 = min moisture for forest
       const fMax = lerp(WORLD_CONFIG.forestFoodMin, WORLD_CONFIG.forestFoodMax, foodScale);
       const wMax = lerp(WORLD_CONFIG.forestWoodMin, WORLD_CONFIG.forestWoodMax, 0.5 + rng() * 0.5);
       return {
