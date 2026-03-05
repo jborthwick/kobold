@@ -15,6 +15,7 @@
 
 import { generateWorld, growback } from '../src/simulation/world';
 import { tickFire, tickBurningGoblins } from '../src/simulation/fire';
+import { tickLightning } from '../src/simulation/lightning';
 import { tickPooling } from '../src/simulation/pooling';
 import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY, fortEnclosureSlots } from '../src/simulation/agents';
 import { tickAgentUtility } from '../src/simulation/utilityAI';
@@ -215,6 +216,9 @@ for (let tick = 1; tick <= TICKS; tick++) {
   });
   growback(grid, growbackModifier(weather), tick);
   tickPooling(grid, tick, weather.type);
+  tickLightning(grid, tick, weather.type, (msg, level) => {
+    if (level === 'warn' || level === 'error') fireLog.push({ tick, message: msg });
+  });
   const fireResult = tickFire(grid, tick, goblins, weather.type, (msg, level) => {
     if (level === 'warn' || level === 'error') fireLog.push({ tick, message: msg });
   });

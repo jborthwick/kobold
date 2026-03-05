@@ -195,7 +195,7 @@ export interface MiniMapData {
 
 /** Weather state — drives cascading resource scarcity/abundance. */
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
-export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold';
+export type WeatherType = 'clear' | 'rain' | 'drought' | 'cold' | 'storm';
 
 /** One narrator chapter — generated when a colony goal completes. */
 export interface Chapter {

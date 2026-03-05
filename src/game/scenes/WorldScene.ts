@@ -12,6 +12,7 @@ import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { tickFire, tickBurningGoblins } from '../../simulation/fire';
+import { tickLightning } from '../../simulation/lightning';
 import { tickPooling } from '../../simulation/pooling';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { rollWound, woundLabel } from '../../simulation/wounds';
@@ -747,6 +748,9 @@ export class WorldScene extends Phaser.Scene {
       bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
     });
     tickPooling(this.grid, this.tick, this.weather.type);
+    tickLightning(this.grid, this.tick, this.weather.type, (msg, level) => {
+      bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'STORM', message: msg, level });
+    });
     tickFire(this.grid, this.tick, this.goblins, this.weather.type, (msg, level) => {
       bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
     });

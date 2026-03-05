@@ -36,6 +36,7 @@ const GROWBACK_MODS: Record<WeatherType, number> = {
   rain:    1.8,    // food grows almost twice as fast
   drought: 0.25,   // food barely regenerates
   cold:    0.5,    // slow growth
+  storm:   2.5,    // torrential rain — fastest growback, offset by lightning risk
 };
 
 /** Metabolism multipliers by weather type. */
@@ -44,19 +45,20 @@ const METABOLISM_MODS: Record<WeatherType, number> = {
   rain:    1.0,
   drought: 1.0,
   cold:    1.4,    // burn calories faster in cold
+  storm:   1.2,    // stressful conditions burn extra energy
 };
 
 /** Weighted weather distributions per season.
- *  Each array: [clear, rain, drought, cold] weights (sum to 1). */
-const SEASON_WEIGHTS: Record<Season, [number, number, number, number]> = {
-  spring:  [0.35, 0.45, 0.05, 0.15],  // rainy spring
-  summer:  [0.50, 0.10, 0.35, 0.05],  // hot, drought-prone
-  autumn:  [0.40, 0.30, 0.10, 0.20],  // mixed
-  winter:  [0.15, 0.10, 0.05, 0.70],  // cold dominates
+ *  Each array: [clear, rain, drought, cold, storm] weights (sum to 1). */
+const SEASON_WEIGHTS: Record<Season, [number, number, number, number, number]> = {
+  spring:  [0.25, 0.35, 0.05, 0.10, 0.25],  // stormy spring
+  summer:  [0.40, 0.05, 0.35, 0.05, 0.15],  // summer thunderstorms
+  autumn:  [0.35, 0.25, 0.10, 0.15, 0.15],  // mixed, moderate storms
+  winter:  [0.15, 0.10, 0.05, 0.70, 0.00],  // cold dominates; no storms
 };
 
 const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
-const WEATHER_TYPES: WeatherType[] = ['clear', 'rain', 'drought', 'cold'];
+const WEATHER_TYPES: WeatherType[] = ['clear', 'rain', 'drought', 'cold', 'storm'];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,7 +134,7 @@ export const SEASON_LENGTH_TICKS = SEASON_LENGTH;
 /** Display label for weather (for HUD). */
 export function weatherLabel(weather: Weather): string {
   const icons: Record<WeatherType, string> = {
-    clear: 'Clear', rain: 'Rain', drought: 'Drought', cold: 'Cold',
+    clear: 'Clear', rain: 'Rain', drought: 'Drought', cold: 'Cold', storm: 'Storm ⚡',
   };
   const seasonIcons: Record<Season, string> = {
     spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter',

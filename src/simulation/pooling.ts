@@ -42,9 +42,10 @@ export function tickPooling(
   currentTick: number,
   weatherType: WeatherType,
 ): void {
-  const isRaining  = weatherType === 'rain';
+  const isRaining  = weatherType === 'rain' || weatherType === 'storm';
   const isDrought  = weatherType === 'drought';
   const evapChance = isDrought ? POOL_EVAP_DROUGHT : POOL_EVAP_CHANCE;
+  const poolChance = weatherType === 'storm' ? POOL_CHANCE_RAIN * 3 : POOL_CHANCE_RAIN;
 
   const newPools:  { x: number; y: number; prior: TileType }[] = [];
   const evaporate: { x: number; y: number }[] = [];
@@ -55,7 +56,7 @@ export function tickPooling(
 
       if (isRaining && POOL_ELIGIBLE.has(t.type)) {
         // Form a pool if adjacent to water/pool and roll succeeds
-        if (hasAdjacentSource(grid, x, y) && Math.random() < POOL_CHANCE_RAIN) {
+        if (hasAdjacentSource(grid, x, y) && Math.random() < poolChance) {
           newPools.push({ x, y, prior: t.type });
         }
       } else if (t.type === TileType.Pool) {

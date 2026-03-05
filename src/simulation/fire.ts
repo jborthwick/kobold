@@ -45,6 +45,7 @@ function weatherMod(weatherType: WeatherType | undefined): WeatherMod {
   switch (weatherType) {
     case 'drought': return { ignition: 3,   spread: 1.2, extinguish: 0 };
     case 'rain':    return { ignition: 0,   spread: 0,   extinguish: RAIN_EXTINGUISH };
+    case 'storm':   return { ignition: 0,   spread: 0,   extinguish: RAIN_EXTINGUISH * 1.5 }; // heavy rain kills fire fast
     case 'cold':    return { ignition: 0.5, spread: 0.6, extinguish: 0 };
     default:        return { ignition: 1,   spread: 1,   extinguish: 0 };
   }
