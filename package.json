@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "headless": "npx tsx scripts/headless.ts"
   },
   "dependencies": {
     "comlink": "^4.4.2",
