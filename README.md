@@ -1,5 +1,7 @@
 # Kobold — Goblin Colony Sim
 
+![Gameplay screenshot](kobold_safari.png)
+
 A browser-based colony survival game inspired by RimWorld and Dwarf Fortress. Lead a small colony of goblin agents in a tile-based world with emergent behavior arising from resource scarcity.
 
 ![Kobold](https://img.shields.io/badge/goblins-5-orange) ![License](https://img.shields.io/badge/license-CC0-blue)
