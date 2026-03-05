@@ -1,6 +1,6 @@
 import { sigmoid } from '../utilityAI';
 import { getWarmth } from '../diffusion';
-import { traitMod } from '../agents';
+import { traitMod, FORAGEABLE_TILES } from '../agents';
 import { accelerateHealing } from '../wounds';
 import { moveTo, shouldLog, traitText } from './helpers';
 import type { Action } from './types';
@@ -28,22 +28,39 @@ export const commandMove: Action = {
   },
 };
 
-// --- eat: consume food from inventory ---
+// --- eat: consume food from inventory, or graze from tile underfoot ---
 export const eat: Action = {
   name: 'eat',
   intentMatch: 'eat',
-  eligible: ({ goblin }) => goblin.inventory.food > 0,
+  eligible: ({ goblin, grid }) => {
+    if (goblin.inventory.food > 0) return true;
+    // Graze: standing on a forageable tile with food
+    const tile = grid[goblin.y]?.[goblin.x];
+    return !!tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
+  },
   score: ({ goblin }) => {
     const mid = traitMod(goblin, 'eatThreshold', 70);
     return sigmoid(goblin.hunger, mid);
   },
-  execute: ({ goblin, currentTick, onLog }) => {
+  execute: ({ goblin, grid, currentTick, onLog }) => {
     const wasDesperatelyHungry = goblin.hunger > 80;
-    const bite = Math.min(goblin.inventory.food, 3);
-    goblin.inventory.food -= bite;
-    goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
-    goblin.task = 'eating';
-    // Only log desperate eating — routine meals are too noisy
+
+    if (goblin.inventory.food > 0) {
+      // Eat from inventory (normal path)
+      const bite = Math.min(goblin.inventory.food, 3);
+      goblin.inventory.food -= bite;
+      goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
+      goblin.task = 'eating';
+    } else {
+      // Graze directly from the tile underfoot
+      const tile = grid[goblin.y]?.[goblin.x];
+      if (!tile || tile.foodValue < 1) return;
+      const bite = Math.min(tile.foodValue, 2);
+      tile.foodValue -= bite;
+      goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
+      goblin.task = 'grazing';
+    }
+
     if (wasDesperatelyHungry && shouldLog(goblin, 'eat', currentTick, 200)) {
       onLog?.(`🍖 ${traitText(goblin, 'eat')} — was starving`, 'warn');
     }
