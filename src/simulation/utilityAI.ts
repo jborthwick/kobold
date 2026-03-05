@@ -120,9 +120,9 @@ function updateNeeds(
   // Wound healing — check and clear expired wounds
   tickWoundHealing(goblin, currentTick, onLog);
 
-  // Social — check for friendly goblin (relation >= 40) within 3 tiles
+  // Social — check for friendly goblin within generosityRange tiles (helpful/cheerful: wider; mean: narrower)
   if (goblins) {
-    const FRIEND_RADIUS = 3;
+    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1; // generous goblins detect friends further
     const FRIEND_REL    = 40;
     const hasFriend = goblins.some(
       other => other.id !== goblin.id && other.alive &&
@@ -214,12 +214,13 @@ export function tickAgentUtility(
     return;
   }
 
-  // 2. Starvation damage (unconditional — not an action)
-  if (goblin.hunger >= 100 && goblin.inventory.food === 0) {
-    goblin.health -= 2;
-    goblin.morale  = Math.max(0, goblin.morale - 2);
+  // 2. Starvation damage — sigmoid-smoothed: ramps from 0 at hunger=90 to ~3/tick at 100
+  if (goblin.inventory.food === 0 && goblin.hunger >= 90) {
+    const starveDmg = sigmoid(goblin.hunger, 95, 0.2) * 0.003 * goblin.maxHealth;
+    goblin.health -= starveDmg;
+    goblin.morale  = Math.max(0, goblin.morale - starveDmg);
     goblin.task    = 'starving!';
-    onLog?.(`is starving! (health ${goblin.health})`, 'warn');
+    onLog?.(`is starving! (health ${goblin.health.toFixed(0)})`, 'warn');
     if (goblin.health <= 0) {
       goblin.alive        = false;
       goblin.task         = 'dead';

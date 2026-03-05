@@ -67,6 +67,31 @@ export const FORAGEABLE_TILES = new Set<TileType>([
 // Role assignment order and vision ranges
 const ROLE_ORDER: GoblinRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
 
+// ── Per-role aptitude multipliers ─────────────────────────────────────────────
+// Scale action scores for non-primary roles — non-zero so a desperate goblin
+// of any role can still perform the action; primary role gets full score.
+export const ROLE_COMBAT_APT: Record<GoblinRole, number> = {
+  fighter:    1.0,
+  scout:      0.25,  // mobile, can engage in a pinch
+  miner:      0.15,
+  forager:    0.15,
+  lumberjack: 0.15,
+};
+export const ROLE_MINING_APT: Record<GoblinRole, number> = {
+  miner:      1.0,
+  fighter:    0.15,
+  scout:      0.15,
+  forager:    0.10,
+  lumberjack: 0.15,
+};
+export const ROLE_CHOP_APT: Record<GoblinRole, number> = {
+  lumberjack: 1.0,
+  scout:      0.15,
+  miner:      0.10,
+  forager:    0.10,
+  fighter:    0.10,
+};
+
 // ── Trait modifiers ──────────────────────────────────────────────────────────
 // Traits modify BT thresholds so personality drives behavioral divergence.
 // Missing keys fall back to defaults in traitMod() below.
@@ -88,16 +113,25 @@ export interface TraitMods {
   perceptiveness?: number;           // bonus tiles added to contest detection radius (default 0)
   // Gathering / work output
   gatheringPower?: number;           // bonus to harvest yield and depletion rate (default 0)
+  chopPower?: number;                // bonus to chop base yield on top of role bonus (default 0)
+  // Spatial / range modifiers
+  generosityRange?: number;          // share detection radius in tiles (default 2)
+  huntRange?: number;                // fight hunt radius multiplier vs vision (default 2.0)
+  wariness?: number;                 // component of avoidRival radius: 3 + wariness (default 2)
+  coziness?: number;                 // satisfactory warmth proximity in tiles (default 2)
+  maxSearchRadius?: number;          // LLM-intent forage radius cap (default 15)
+  // HP modifier
+  healthBonus?: number;              // added to role base maxHealth at spawn (default 0)
 }
 
 export const TRAIT_MODS: Record<GoblinTrait, TraitMods> = {
-  helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15, lonelinessCrisisThreshold: 55 },
-  greedy:    { shareThreshold: 12, shareDonorKeeps: 8 },
-  brave:     { fleeThreshold: 95, moraleCrisisThreshold: 30 },
-  paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5, moraleCrisisThreshold: 50, hungerCrisisThreshold: 55, perceptiveness: 2 },
+  helpful:   { shareThreshold: 6, shareDonorKeeps: 3, shareRelationGate: 15, lonelinessCrisisThreshold: 55, generosityRange: 3 },
+  greedy:    { shareThreshold: 12, shareDonorKeeps: 8, generosityRange: 1 },
+  brave:     { fleeThreshold: 95, moraleCrisisThreshold: 30, healthBonus: 20, huntRange: 2.5 },
+  paranoid:  { fleeThreshold: 60, wanderHomeDrift: 0.5, moraleCrisisThreshold: 50, hungerCrisisThreshold: 55, perceptiveness: 2, wariness: 4, healthBonus: -10 },
   lazy:      { eatThreshold: 55, fatigueRate: 1.3, exhaustionThreshold: 65, hungerCrisisThreshold: 58 },
-  cheerful:  { shareThreshold: 6, shareRelationGate: 20, socialDecayBonus: 0.15 },
-  mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55, lonelinessCrisisThreshold: 85 },
+  cheerful:  { shareThreshold: 6, shareRelationGate: 20, socialDecayBonus: 0.15, generosityRange: 3 },
+  mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55, lonelinessCrisisThreshold: 85, generosityRange: 1 },
   forgetful: {},  // personality-flavor only for now
 };
 
@@ -166,6 +200,9 @@ export function spawnGoblins(
 
     const role  = ROLE_ORDER[i % ROLE_ORDER.length];
     const stats = ROLE_STATS[role];
+    const trait = GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)];
+    const healthBonus = TRAIT_MODS[trait]?.healthBonus ?? 0;
+    const maxHealth   = Math.max(10, stats.maxHealth + healthBonus);
 
     const factionNames = getActiveFaction().names;
     const baseName = factionNames[i % factionNames.length];
@@ -175,8 +212,8 @@ export function spawnGoblins(
       baseName,
       generation:    1,
       x, y,
-      health:        stats.maxHealth,
-      maxHealth:     stats.maxHealth,
+      health:        maxHealth,
+      maxHealth,
       hunger:        rand(10, 30),
       metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,  // 0.15–0.35/tick (~3–6 min to starve)
       vision:        rand(stats.visionMin, stats.visionMax),
@@ -191,7 +228,7 @@ export function spawnGoblins(
       llmIntentExpiry: 0,
       memory:          [],
       relations:       {},   // populated lazily as goblins interact
-      trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
+      trait,
       bio:             getGoblinBios()[Math.floor(Math.random() * getGoblinBios().length)],
       goal:            getGoblinGoals()[Math.floor(Math.random() * getGoblinGoals().length)],
       wanderTarget:    null,
@@ -237,6 +274,9 @@ export function spawnSuccessor(
 
   const role  = ROLE_ORDER[Math.floor(Math.random() * ROLE_ORDER.length)];
   const stats = ROLE_STATS[role];
+  const trait       = GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)];
+  const healthBonus = TRAIT_MODS[trait]?.healthBonus ?? 0;
+  const maxHealth   = Math.max(10, stats.maxHealth + healthBonus);
 
   let x: number, y: number;
   do {
@@ -287,8 +327,8 @@ export function spawnSuccessor(
     baseName,
     generation,
     x, y,
-    health:        stats.maxHealth,
-    maxHealth:     stats.maxHealth,
+    health:        maxHealth,
+    maxHealth,
     hunger:        rand(10, 30),
     metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
     vision:        rand(stats.visionMin, stats.visionMax),
@@ -303,7 +343,7 @@ export function spawnSuccessor(
     llmIntentExpiry: 0,
     memory:          inheritedMemory,
     relations,
-    trait:           GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)],
+    trait,
     bio:             getGoblinBios()[Math.floor(Math.random() * getGoblinBios().length)],
     goal:            getGoblinGoals()[Math.floor(Math.random() * getGoblinGoals().length)],
     wanderTarget:    null,

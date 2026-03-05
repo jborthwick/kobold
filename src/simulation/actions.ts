@@ -21,7 +21,7 @@ import {
   pathNextStep, bestFoodTile, bestMaterialTile, bestWoodTile,
   fortWallSlots, fortEnclosureSlots,
   recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS,
-  traitMod,
+  traitMod, ROLE_COMBAT_APT, ROLE_MINING_APT, ROLE_CHOP_APT,
 } from './agents';
 import { grantXp, skillYieldBonus, skillOreBonus } from './skills';
 import { effectiveVision, isLegWoundSkip, woundYieldMultiplier, accelerateHealing } from './wounds';
@@ -140,7 +140,12 @@ function nearestWoodStockpile(
 const commandMove: Action = {
   name: 'commandMove',
   eligible: ({ goblin }) => goblin.commandTarget !== null,
-  score: () => 1.0,
+  score: ({ goblin, adventurers }) => {
+    // Drop to 0.8 during extreme starvation or active raid — survival instincts can override
+    const raid = adventurers && adventurers.length > 0;
+    const starving = goblin.hunger >= 95 && goblin.inventory.food === 0;
+    return (raid || starving) ? 0.8 : 1.0;
+  },
   execute: ({ goblin, grid, onLog }) => {
     const { x: tx, y: ty } = goblin.commandTarget!;
     if (goblin.x === tx && goblin.y === ty) {
@@ -221,7 +226,7 @@ const share: Action = {
     const relGate = traitMod(goblin, 'shareRelationGate', 30);
     return goblins.some(d =>
       d.alive && d.id !== goblin.id &&
-      Math.abs(d.x - goblin.x) <= 2 && Math.abs(d.y - goblin.y) <= 2 &&
+      Math.abs(d.x - goblin.x) <= traitMod(goblin, 'generosityRange', 2) && Math.abs(d.y - goblin.y) <= traitMod(goblin, 'generosityRange', 2) &&
       d.hunger > 60 && d.inventory.food < 3 &&
       (goblin.relations[d.id] ?? 50) >= relGate,
     );
@@ -232,7 +237,7 @@ const share: Action = {
     const target = goblins
       .filter(d =>
         d.alive && d.id !== goblin.id &&
-        Math.abs(d.x - goblin.x) <= 2 && Math.abs(d.y - goblin.y) <= 2 &&
+        Math.abs(d.x - goblin.x) <= traitMod(goblin, 'generosityRange', 2) && Math.abs(d.y - goblin.y) <= traitMod(goblin, 'generosityRange', 2) &&
         d.hunger > 60 && d.inventory.food < 3 &&
         (goblin.relations[d.id] ?? 50) >= relGate,
       )
@@ -248,7 +253,7 @@ const share: Action = {
     const target = goblins
       .filter(d =>
         d.alive && d.id !== goblin.id &&
-        Math.abs(d.x - goblin.x) <= 2 && Math.abs(d.y - goblin.y) <= 2 &&
+        Math.abs(d.x - goblin.x) <= traitMod(goblin, 'generosityRange', 2) && Math.abs(d.y - goblin.y) <= traitMod(goblin, 'generosityRange', 2) &&
         d.hunger > 60 && d.inventory.food < 3 &&
         (goblin.relations[d.id] ?? 50) >= relGate,
       )
@@ -278,24 +283,27 @@ const fight: Action = {
   name: 'fight',
   intentMatch: undefined,
   eligible: ({ goblin, adventurers }) => {
-    if (goblin.role !== 'fighter' || !adventurers || adventurers.length === 0) return false;
+    if (!adventurers || adventurers.length === 0) return false;
     const fleeAt = traitMod(goblin, 'fleeThreshold', 80);
     return goblin.hunger < fleeAt;
   },
   score: ({ goblin, adventurers }) => {
     if (!adventurers || adventurers.length === 0) return 0;
-    const HUNT_RADIUS = effectiveVision(goblin) * 2;
+    const HUNT_RADIUS = effectiveVision(goblin) * traitMod(goblin, 'huntRange', 2.0);
     const nearest = adventurers.reduce<{ dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - goblin.x) + Math.abs(g.y - goblin.y);
       return (!best || dist < best.dist) ? { dist } : best;
     }, null);
     if (!nearest || nearest.dist > HUNT_RADIUS) return 0;
     // Closer adventurers score higher; less hungry = more willing to fight
-    return inverseSigmoid(nearest.dist, HUNT_RADIUS * 0.5, 0.2) * inverseSigmoid(goblin.hunger, 60);
+    // Role aptitude scales the score so non-fighters rarely choose this over foraging
+    return inverseSigmoid(nearest.dist, HUNT_RADIUS * 0.5, 0.2)
+      * inverseSigmoid(goblin.hunger, 60)
+      * ROLE_COMBAT_APT[goblin.role];
   },
   execute: ({ goblin, adventurers, grid, currentTick, onLog }) => {
     if (!adventurers) return;
-    const HUNT_RADIUS = effectiveVision(goblin) * 2;
+    const HUNT_RADIUS = effectiveVision(goblin) * traitMod(goblin, 'huntRange', 2.0);
     const nearest = adventurers.reduce<{ g: Adventurer; dist: number } | null>((best, g) => {
       const dist = Math.abs(g.x - goblin.x) + Math.abs(g.y - goblin.y);
       return (!best || dist < best.dist) ? { g, dist } : best;
@@ -329,7 +337,7 @@ const forage: Action = {
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
     const hungerDrive = sigmoid(goblin.hunger, 60);
-    const radius = Math.round(Math.min(vision * (1 + hungerDrive * 0.8), 15));
+    const radius = Math.round(Math.min(vision * (1 + hungerDrive * 0.8), traitMod(goblin, 'maxSearchRadius', 15)));
     const target = bestFoodTile(goblin, grid, radius);
     if (!target) {
       // Check remembered food sites
@@ -341,7 +349,8 @@ const forage: Action = {
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
     const vision = effectiveVision(goblin);
-    const radius = goblin.llmIntent === 'forage' ? 15 : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), 15));
+    const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
+    const radius = goblin.llmIntent === 'forage' ? maxSearch : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const foodTarget = bestFoodTile(goblin, grid, radius);
 
     // Record visible food sites in memory
@@ -520,18 +529,16 @@ const withdrawFood: Action = {
 // --- mine: miners target ore tiles ---
 const mine: Action = {
   name: 'mine',
-  eligible: ({ goblin }) => {
-    if (goblin.role !== 'miner') return false;
-    return goblin.inventory.materials < MAX_INVENTORY_CAPACITY;
-  },
+  eligible: ({ goblin }) => goblin.inventory.materials < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
+    const apt = ROLE_MINING_APT[goblin.role];
     const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
       // Check remembered ore sites
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35;
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt;
       return 0;
     }
-    return inverseSigmoid(goblin.hunger, 60) * 0.6;
+    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -589,17 +596,15 @@ const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 const chop: Action = {
   name: 'chop',
-  eligible: ({ goblin }) => {
-    if (goblin.role !== 'lumberjack') return false;
-    return goblin.inventory.materials < MAX_INVENTORY_CAPACITY;
-  },
+  eligible: ({ goblin }) => goblin.inventory.materials < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
+    const apt = ROLE_CHOP_APT[goblin.role];
     const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35;
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt;
       return 0;
     }
-    return inverseSigmoid(goblin.hunger, 60) * 0.6;
+    return inverseSigmoid(goblin.hunger, 60) * 0.6 * apt;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -620,7 +625,8 @@ const chop: Action = {
       const here = grid[goblin.y][goblin.x];
       if (here.type === TileType.Forest && here.materialValue >= 1) {
         const hadWood      = here.materialValue;
-        const baseChop     = 20 + skillYieldBonus(goblin);
+        const roleChopBonus = goblin.role === 'lumberjack' ? 15 : 0;
+        const baseChop     = 5 + roleChopBonus + traitMod(goblin, 'chopPower', 0) + skillYieldBonus(goblin);
         const chopYield    = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
         const chopped      = Math.min(hadWood, chopYield);
         here.materialValue = Math.max(0, hadWood - chopped);
@@ -659,7 +665,7 @@ const chop: Action = {
 const depositOre: Action = {
   name: 'depositOre',
   eligible: ({ goblin, oreStockpiles }) => {
-    if (goblin.role !== 'miner' || goblin.inventory.materials <= 0) return false;
+    if (goblin.inventory.materials <= 0) return false;
     return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
   score: ({ goblin, oreStockpiles }) => {
@@ -687,7 +693,7 @@ const depositOre: Action = {
 const depositWood: Action = {
   name: 'depositWood',
   eligible: ({ goblin, woodStockpiles }) => {
-    if (goblin.role !== 'lumberjack' || goblin.inventory.materials <= 0) return false;
+    if (goblin.inventory.materials <= 0) return false;
     return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
   score: ({ goblin, woodStockpiles }) => {
@@ -778,13 +784,15 @@ const socialize: Action = {
   score: ({ goblin }) => sigmoid(goblin.social, 50) * 0.6,
   execute: ({ goblin, goblins, grid }) => {
     if (!goblins) { goblin.task = 'lonely'; return; }
-    const FRIEND_REL = 40;
+    const FRIEND_REL    = 40;
+    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
     let bestDist = Infinity;
     let bestFriend: Goblin | null = null;
     for (const other of goblins) {
       if (other.id === goblin.id || !other.alive) continue;
       if ((goblin.relations[other.id] ?? 50) < FRIEND_REL) continue;
       const dist = Math.abs(other.x - goblin.x) + Math.abs(other.y - goblin.y);
+      if (dist > FRIEND_RADIUS * 4) continue; // don't seek friends too far away
       if (dist < bestDist) { bestDist = dist; bestFriend = other; }
     }
     if (bestFriend && bestDist > 1) {
@@ -800,19 +808,21 @@ const avoidRival: Action = {
   intentMatch: 'avoid',
   eligible: ({ goblin, goblins }) => {
     if (!goblins) return false;
+    const avoidRadius = 3 + traitMod(goblin, 'wariness', 2);
     return goblins.some(r =>
       r.alive && r.id !== goblin.id &&
-      Math.abs(r.x - goblin.x) + Math.abs(r.y - goblin.y) <= 5 &&
+      Math.abs(r.x - goblin.x) + Math.abs(r.y - goblin.y) <= avoidRadius &&
       (goblin.relations[r.id] ?? 50) < 30,
     );
   },
   score: () => 0.3,
   execute: ({ goblin, goblins, grid }) => {
     if (!goblins) return;
+    const avoidRadius = 3 + traitMod(goblin, 'wariness', 2);
     const rival = goblins
       .filter(r => r.alive && r.id !== goblin.id)
       .map(r => ({ r, dist: Math.abs(r.x - goblin.x) + Math.abs(r.y - goblin.y) }))
-      .filter(e => e.dist <= 5 && (goblin.relations[e.r.id] ?? 50) < 30)
+      .filter(e => e.dist <= avoidRadius && (goblin.relations[e.r.id] ?? 50) < 30)
       .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
     if (!rival) return;
     const avoidDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
@@ -836,9 +846,11 @@ const wander: Action = {
   eligible: () => true,
   score: () => 0.05,
   execute: ({ goblin, grid, currentTick, onLog }) => {
+    // Paranoid goblins (wariness 4) roam further; default wariness=2 → normal wander distances
     const WANDER_HOLD_TICKS = 25;
-    const WANDER_MIN_DIST   = 10;
-    const WANDER_MAX_DIST   = 20;
+    const wanDrift  = traitMod(goblin, 'wariness', 2); // higher wariness = wider exploration
+    const WANDER_MIN_DIST   = 8 + wanDrift;
+    const WANDER_MAX_DIST   = 16 + wanDrift * 2;
 
     // Invalidate wander target if blocked
     if (goblin.wanderTarget && !isWalkable(grid, goblin.wanderTarget.x, goblin.wanderTarget.y)) {
@@ -990,7 +1002,7 @@ const seekWarmth: Action = {
 
     // Satisfied: close to hearth or smoothed warmth has risen enough — start cooldown
     const warmth = goblin.warmth ?? 0;
-    if (nearestDist <= 2 || warmth >= 40) {
+    if (nearestDist <= traitMod(goblin, 'coziness', 2) || warmth >= 40) {
       goblin.lastLoggedTicks['seekWarmthDone'] = currentTick;
       return;
     }

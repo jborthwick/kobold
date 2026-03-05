@@ -18,7 +18,7 @@ emergently through the utility AI / trait system. Checked = fixed.
   bypassing all action scoring. Give `depositFood`/`withdrawFood`/`depositOre`/`depositWood` a
   high on-stockpile score multiplier (×2.5) and let them win naturally instead.
 
-- [ ] 🟡 **`actions.ts:140` — `commandMove` scores 1.0 unconditionally**
+- [x] 🟡 **`actions.ts:140` — `commandMove` scores 1.0 unconditionally**
   Player commands always win regardless of crisis state. During active raid or extreme
   starvation, score should drop to 0.8 so a flee/eat can override.
 
@@ -35,28 +35,27 @@ Six actions use hard `if (goblin.role !== 'X') return false` gates instead of tr
 scoring. A brave miner should be able to fight; a desperate scout should be able to mine.
 The fix is to assign high default trait values per role and score continuously.
 
-- [ ] 🟡 **`actions.ts:280–284` — `fight` only for fighters**
-  Replace `if (goblin.role !== 'fighter') return false` with a `combatAppetence` trait score.
-  Fighters get high default; other roles get low but non-zero.
+- [x] 🟡 **`actions.ts:280–284` — `fight` only for fighters**
+  Replace `if (goblin.role !== 'fighter') return false` with a `ROLE_COMBAT_APT` per-role
+  multiplier (fighter=1.0, scout=0.25, others=0.15). Score × aptitude.
 
-- [ ] 🟡 **`actions.ts:505–506` — `mine` only for miners**
-  Replace role gate with `materialAffinity` trait score.
+- [x] 🟡 **`actions.ts:505–506` — `mine` only for miners**
+  Replace role gate with `ROLE_MINING_APT` per-role multiplier (miner=1.0, others=0.10–0.15).
 
-- [ ] 🟡 **`actions.ts:574–575` — `chop` only for lumberjacks**
-  Replace role gate with `woodAffinity` trait score.
+- [x] 🟡 **`actions.ts:574–575` — `chop` only for lumberjacks**
+  Replace role gate with `ROLE_CHOP_APT` per-role multiplier (lumberjack=1.0, others=0.10–0.15).
+  Chop base yield: `5 + roleBonus(15 for LJ) + traitMod(chopPower, 0) + skill`.
 
 - [x] **`actions.ts:332` — Miner/lumberjack forage gate when hunger < 50**
   `if (role === 'miner' || role === 'lumberjack') && hunger < 50) return false`
   Remove; let sigmoid scoring naturally suppress at low hunger. Miners just have a higher
   `forageHungerThreshold` trait value.
 
-- [ ] 🟡 **`actions.ts:643` — Ore deposit role gate**
-  `if (goblin.role !== 'miner' || ...)` — replace with inventory/affinity score.
-  _(Threshold `< 8` removed; now `<= 0` — fires as soon as any materials are carried.)_
+- [x] 🟡 **`actions.ts:643` — Ore deposit role gate**
+  `if (goblin.role !== 'miner' || ...)` — removed; any goblin carrying materials can deposit.
 
-- [ ] 🟡 **`actions.ts:660` — Wood deposit role gate**
-  `if (goblin.role !== 'lumberjack' || ...)` — same.
-  _(Same threshold fix applied.)_
+- [x] 🟡 **`actions.ts:660` — Wood deposit role gate**
+  `if (goblin.role !== 'lumberjack' || ...)` — removed; same.
 
 ---
 
@@ -99,38 +98,38 @@ The fix is to assign high default trait values per role and score continuously.
   _(lazy: 58, paranoid: 55)_
 - [x] 🟡 **Line 56** — `MORALE_CRISIS_THRESHOLD = 40` → `traitMod(goblin, 'moraleCrisisThreshold', 40)`
   _(brave: 30, paranoid: 50)_
-- [ ] 🟡 **Line 58–59** — `LOW_SUPPLIES_FOOD = 2`, `LOW_SUPPLIES_HUNGER = 40` →
-  trait-modifiable resource wisdom
+- [x] 🟡 **Line 58–59** — `LOW_SUPPLIES_FOOD = 2`, `LOW_SUPPLIES_HUNGER = 40` →
+  `lowSuppliesHunger = traitMod(hungerCrisisThreshold, 65) - 25` — paranoid panics at 30, default at 40.
 - [x] 🟡 **Line 61** — `EXHAUSTION_THRESHOLD = 80` → `traitMod(goblin, 'exhaustionThreshold', 80)`
   _(lazy: 65)_
 - [x] 🟡 **Line 62** — `LONELINESS_THRESHOLD = 70` → `traitMod(goblin, 'lonelinessCrisisThreshold', 70)`
   _(helpful: 55, mean: 85)_
-- [ ] 🟡 **Line 107** — `if (role === 'fighter' || trait === 'brave')` raid gate →
-  `combatAppetence` score; only high-scoring goblins get the LLM call
+- [x] 🟡 **Line 107** — `if (role === 'fighter' || trait === 'brave')` raid gate →
+  `ROLE_COMBAT_APT[role] >= 0.5` — only fighters (+ brave) get LLM raid call
 
 ---
 
 ## MEDIUM: Hardcoded Spatial Constants
 
-- [ ] 🟡 **`utilityAI.ts:117–124`** — `FRIEND_RADIUS = 3`, `FRIEND_REL = 40` hardcoded;
-  make `sociability` trait shift both
-- [ ] 🟡 **`actions.ts:224`** — Share radius `<= 2` hardcoded →
-  `traitMod(goblin, 'generosityRange', 2)`
-- [ ] 🟡 **`actions.ts:287`** — Hunt radius `vision * 2` multiplier →
-  `traitMod(goblin, 'huntRange', 2.0)`
-- [ ] 🟡 **`actions.ts:349`** — LLM-intent forage radius `= 15` hardcoded →
+- [x] 🟡 **`utilityAI.ts:117–124`** — `FRIEND_RADIUS = 3`, `FRIEND_REL = 40` hardcoded →
+  `FRIEND_RADIUS = traitMod(generosityRange, 2) + 1` — helpful/cheerful: 4 tiles, mean: 2 tiles
+- [x] 🟡 **`actions.ts:224`** — Share radius `<= 2` hardcoded →
+  `traitMod(goblin, 'generosityRange', 2)` (helpful: 3, mean/greedy: 1)
+- [x] 🟡 **`actions.ts:287`** — Hunt radius `vision * 2` multiplier →
+  `vision * traitMod(goblin, 'huntRange', 2.0)` (brave: 2.5×)
+- [x] 🟡 **`actions.ts:349`** — LLM-intent forage radius `= 15` hardcoded →
   `traitMod(goblin, 'maxSearchRadius', 15)`
-- [ ] 🟡 **`actions.ts:766`** — Avoid rival radius `<= 5` hardcoded →
-  `3 + traitMod(goblin, 'wariness', 2)`
+- [x] 🟡 **`actions.ts:766`** — Avoid rival radius `<= 5` hardcoded →
+  `3 + traitMod(goblin, 'wariness', 2)` (paranoid: 3+4=7, default: 3+2=5)
 - [x] 🟡 **`crisis.ts:57`** — `CONTEST_RADIUS = 2` (scouts get 4 via role check) →
   `CONTEST_RADIUS + (role === 'scout' ? 2 : 0) + traitMod(goblin, 'perceptiveness', 0)`
   _(paranoid gets +2 perceptiveness; scouts keep role bonus until role gates are removed)_
-- [ ] 🟡 **`crisis.ts:60`** — `ADVENTURER_RAID_AWARENESS = 8` hardcoded →
-  scale by vision + wariness trait
-- [ ] 🟡 **`actions.ts:800–802`** — `WANDER_HOLD_TICKS = 25`, `WANDER_MIN_DIST = 10`,
-  `WANDER_MAX_DIST = 20` → trait-driven wanderlust
-- [ ] 🟡 **`actions.ts:953`** — Warmth satisfaction distance `<= 2` →
-  `traitMod(goblin, 'coziness', 2)`
+- [x] 🟡 **`crisis.ts:60`** — `ADVENTURER_RAID_AWARENESS = 8` hardcoded →
+  `raidRadius = 8 + traitMod(wariness, 2) - 2` — paranoid sees raids at 10 tiles
+- [x] 🟡 **`actions.ts:800–802`** — `WANDER_HOLD_TICKS = 25`, `WANDER_MIN_DIST = 10`,
+  `WANDER_MAX_DIST = 20` → `wariness`-driven: paranoid wanders 10–24, default 10–20
+- [x] 🟡 **`actions.ts:953`** — Warmth satisfaction distance `<= 2` →
+  `traitMod(goblin, 'coziness', 2)` (default 2)
 - [x] 🟢 **`actions.ts:912`** — Seek warmth max score: `cold ? 0.28 : 0.08` hardcoded →
   move into weather system config
 
@@ -138,26 +137,22 @@ The fix is to assign high default trait values per role and score continuously.
 
 ## MEDIUM: Faction / Role Stat Hardcoding
 
-- [ ] 🟡 **`agents.ts:128–134`** — Fighter is the only role with 130 HP. Vision ranges are
-  per-role constants. Replace with trait system:
-  - `toughness` trait → `maxHealth = 100 + traitMod(goblin, 'healthBonus', 0)`
-  - `perceptiveness` trait → vision range shift
-  - Fighters default-assigned `toughness: 'tough'`; scouts default `perceptiveness: 'keen'`
+- [x] 🟡 **`agents.ts:128–134`** — Fighter is the only role with 130 HP →
+  `healthBonus` applied at spawn: `maxHealth = ROLE_STATS[role].maxHealth + traitMod(healthBonus, 0)`.
+  brave: +20 HP, paranoid: -10 HP. Fighter base stays 130.
 
-- [ ] 🟡 **`agents.ts:85–94` (`TRAIT_MODS`)** — Traits only shift sigmoid midpoints.
-  Missing trait effects: vision range, harvest yield, HP, movement speed. Extend
-  `TRAIT_MODS` entries with these properties:
-  - `brave: { healthBonus: 20, courageMod: 0.8 }`
-  - `paranoid: { awarenessRadius: +4, healthBonus: -10 }`
-  - `lazy: { yieldReduction: -0.1 }`
-  - `helpful: { shareRadius: +1, yieldReduction: -0.05 }`
+- [x] 🟡 **`agents.ts:85–94` (`TRAIT_MODS`)** — Extended with:
+  `brave: { healthBonus: 20, huntRange: 2.5 }`,
+  `paranoid: { wariness: 4, healthBonus: -10 }`,
+  `helpful/cheerful: { generosityRange: 3 }`,
+  `greedy/mean: { generosityRange: 1 }`
 
 - [x] 🟡 **`actions.ts:405–406`** — Forager harvest: `depletionRate = role === 'forager' ? 6 : 5`
   and `baseYield = role === 'forager' ? 2 : 1` → role provides base bonus, trait augments:
   `gatherBonus = roleBonus + traitMod(goblin, 'gatheringPower', 0)`
 
-- [ ] 🟡 **`actions.ts:605`** — Wood chop base yield `= 20` hardcoded →
-  `5 + traitMod(goblin, 'chopPower', 5)`
+- [x] 🟡 **`actions.ts:605`** — Wood chop base yield `= 20` hardcoded →
+  `5 + roleBonus(15 for LJ) + traitMod(chopPower, 0) + skill` — non-LJs get 5 base
 
 ---
 
@@ -180,9 +175,8 @@ The fix is to assign high default trait values per role and score continuously.
 
 ## MEDIUM: Special-Case Logic Breaking Symmetry
 
-- [ ] 🟡 **`utilityAI.ts:209`** — Starvation: `if (hunger >= 100 && inv === 0): health -= 2`
-  This runs before action scoring as a special case with fixed 2 damage/tick. Replace with
-  a crisis trigger + `health -= sigmoid(hunger, 100) * 0.002 * maxHealth/tick`.
+- [x] 🟡 **`utilityAI.ts:209`** — Starvation: `if (hunger >= 100 && inv === 0): health -= 2`
+  → `sigmoid(hunger, 95) * 0.003 * maxHealth/tick`; ramps in from 90 hunger (not binary at 100).
 
 - [ ] 🟡 **`actions.ts:368–398`** — Forage contest: only yields to hungrier goblins
   (`d.hunger > goblin.hunger`). Should be a priority score combining hunger, skill, and

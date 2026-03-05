@@ -14,7 +14,7 @@ import type { Goblin, Tile, LLMIntent, Adventurer, ColonyGoal } from '../shared/
 import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
 import { getActiveFaction } from '../shared/factions';
-import { traitMod } from '../simulation/agents';
+import { traitMod, ROLE_COMBAT_APT } from '../simulation/agents';
 
 // ── LLM provider abstraction ─────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in tick
 const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
 const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
 const LOW_SUPPLIES_HUNGER       = 40;  // must also be hungry (not a crisis if full)
-const ADVENTURER_RAID_AWARENESS     = 8;   // tiles — goblin_raid fires within this distance
+const ADVENTURER_RAID_AWARENESS = 8;   // base radius — scales with wariness trait
 const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
 const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis
 const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/goblin/hour
@@ -105,12 +105,13 @@ export function detectCrisis(
   // Only fighters and brave goblins get LLM raid calls — everyone else always
   // flees via BT, so the LLM call is wasted budget. This cuts 3-4 calls per
   // raid event. Also skip if the goblin is too far away (can't engage anyway).
-  if (adventurers && adventurers.length > 0 && (goblin.role === 'fighter' || goblin.trait === 'brave')) {
+  if (adventurers && adventurers.length > 0 && (ROLE_COMBAT_APT[goblin.role] >= 0.5 || goblin.trait === 'brave')) {
+    const raidRadius = ADVENTURER_RAID_AWARENESS + traitMod(goblin, 'wariness', 2) - 2;
     const nearest = adventurers.reduce<{ adventurer: Adventurer; dist: number } | null>((best, g) => {
       const d = Math.abs(g.x - goblin.x) + Math.abs(g.y - goblin.y);
       return (!best || d < best.dist) ? { adventurer: g, dist: d } : best;
     }, null);
-    if (nearest && nearest.dist <= ADVENTURER_RAID_AWARENESS) {
+    if (nearest && nearest.dist <= raidRadius) {
       const enemyPlural = getActiveFaction().enemyNounPlural;
       const enemyCap    = enemyPlural.charAt(0).toUpperCase() + enemyPlural.slice(1);
       return {
@@ -124,7 +125,9 @@ export function detectCrisis(
   // Low supplies — fires when inventory nearly empty AND hunger is rising.
   // This catches the realistic crisis *before* starvation, while there's
   // still time to act (go harvest, steal from rival, etc.).
-  if (goblin.inventory.food <= LOW_SUPPLIES_FOOD && goblin.hunger >= LOW_SUPPLIES_HUNGER) {
+  // Paranoid goblins have a lower hungerCrisisThreshold (55 vs 65), which shifts low-supplies too
+  const lowSuppliesHunger = Math.max(25, traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD) - 25);
+  if (goblin.inventory.food <= LOW_SUPPLIES_FOOD && goblin.hunger >= lowSuppliesHunger) {
     return {
       type:        'low_supplies',
       description: `You are running out of food (only ${goblin.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${goblin.hunger.toFixed(0)}/100).`,
