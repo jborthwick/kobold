@@ -26,6 +26,11 @@ import {
 import { grantXp, skillYieldBonus, skillOreBonus } from './skills';
 import { effectiveVision, isLegWoundSkip, woundYieldMultiplier, accelerateHealing } from './wounds';
 
+/** Total items a goblin is carrying across all slots. */
+function totalLoad(inv: { food: number; ore: number; wood: number }): number {
+  return inv.food + inv.ore + inv.wood;
+}
+
 // ── Trait-flavored log text ──────────────────────────────────────────────────
 
 const TRAIT_FLAVOR: Record<GoblinTrait, Record<string, string>> = {
@@ -261,7 +266,7 @@ const share: Action = {
     if (!target) return;
     const give = Math.min(3, goblin.inventory.food - donorKeeps);
     if (give <= 0) return;
-    const headroom = MAX_INVENTORY_CAPACITY - target.inventory.food;
+    const headroom = MAX_INVENTORY_CAPACITY - totalLoad(target.inventory);
     const actual   = Math.min(give, headroom);
     if (actual <= 0) return;
     goblin.inventory.food  -= actual;
@@ -333,7 +338,7 @@ const fight: Action = {
 const forage: Action = {
   name: 'forage',
   intentMatch: 'forage',
-  eligible: ({ goblin }) => goblin.inventory.food < MAX_INVENTORY_CAPACITY,
+  eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
     const hungerDrive = sigmoid(goblin.hunger, 60);
@@ -402,7 +407,7 @@ const forage: Action = {
       }
 
       // Harvest
-      const headroom = MAX_INVENTORY_CAPACITY - goblin.inventory.food;
+      const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
         // Role provides base gathering bonus; trait can further augment it
         const roleBonus     = goblin.role === 'forager' ? 1 : 0;
@@ -517,7 +522,7 @@ const withdrawFood: Action = {
     if (goblin.x === target.x && goblin.y === target.y) {
       const amount = Math.min(4, target.food);
       target.food -= amount;
-      goblin.inventory.food = Math.min(MAX_INVENTORY_CAPACITY, goblin.inventory.food + amount);
+      goblin.inventory.food += Math.min(amount, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
       goblin.task = `withdrew ${amount.toFixed(0)} from stockpile`;
     } else {
       moveTo(goblin, target, grid);
@@ -529,7 +534,7 @@ const withdrawFood: Action = {
 // --- mine: miners target ore tiles ---
 const mine: Action = {
   name: 'mine',
-  eligible: ({ goblin }) => goblin.inventory.ore < MAX_INVENTORY_CAPACITY,
+  eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, oreStockpiles }) => {
     const apt = ROLE_MINING_APT[goblin.role];
     // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
@@ -567,7 +572,7 @@ const mine: Action = {
         const mined        = Math.min(hadMat, oreYield);
         here.materialValue = Math.max(0, hadMat - mined);
         if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        goblin.inventory.ore = Math.min(goblin.inventory.ore + mined, MAX_INVENTORY_CAPACITY);
+        goblin.inventory.ore += Math.min(mined, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
         addWorkFatigue(goblin);
         // Miner XP — grant on successful ore extraction
         grantXp(goblin, currentTick, onLog);
@@ -599,7 +604,7 @@ const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 const chop: Action = {
   name: 'chop',
-  eligible: ({ goblin }) => goblin.inventory.wood < MAX_INVENTORY_CAPACITY,
+  eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, woodStockpiles }) => {
     const apt = ROLE_CHOP_APT[goblin.role];
     // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
@@ -639,7 +644,7 @@ const chop: Action = {
         here.materialValue = Math.max(0, hadWood - chopped);
         // Depleted forest reverts to a tree stump
         if (here.materialValue === 0) { here.type = TileType.TreeStump; here.maxMaterial = 0; }
-        goblin.inventory.wood = Math.min(goblin.inventory.wood + chopped, MAX_INVENTORY_CAPACITY);
+        goblin.inventory.wood += Math.min(chopped, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
         addWorkFatigue(goblin);
         // Lumberjack XP — grant on successful wood chop
         grantXp(goblin, currentTick, onLog);
