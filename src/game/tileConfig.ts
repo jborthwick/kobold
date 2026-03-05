@@ -22,6 +22,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Hearth]: [504],
   [TileType.TreeStump]: [104],
   [TileType.Fire]: [505],
+  [TileType.Pool]: [253],  // same base frame as Water; tinted lighter blue in WorldScene
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */

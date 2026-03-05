@@ -41,7 +41,9 @@ function nearestFire(
   return best;
 }
 
-/** Find the nearest Water tile within radius. Returns null if none. */
+const WATER_SOURCES = new Set([TileType.Water, TileType.Pool]);
+
+/** Find the nearest Water or Pool tile within radius. Returns null if none. */
 function nearestWater(
   cx: number, cy: number, grid: Tile[][], radius: number,
 ): { x: number; y: number } | null {
@@ -51,7 +53,7 @@ function nearestWater(
   const y0 = Math.max(0, cy - radius), y1 = Math.min(GRID_SIZE - 1, cy + radius);
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
-      if (grid[y][x].type !== TileType.Water) continue;
+      if (!WATER_SOURCES.has(grid[y][x].type)) continue;
       const d = Math.abs(x - cx) + Math.abs(y - cy);
       if (d < bestDist) { bestDist = d; best = { x, y }; }
     }

@@ -12,6 +12,7 @@ import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../../simulation/events';
 import { tickFire } from '../../simulation/fire';
+import { tickPooling } from '../../simulation/pooling';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier, type Weather } from '../../simulation/weather';
 import { rollWound, woundLabel } from '../../simulation/wounds';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
@@ -742,6 +743,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     growback(this.grid, growbackModifier(this.weather), this.tick);
+    tickPooling(this.grid, this.tick, this.weather.type);
     tickFire(this.grid, this.tick, this.goblins, this.weather.type, (msg, level) => {
       bus.emit('logEntry', { tick: this.tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
     });
@@ -1297,6 +1299,8 @@ export class WorldScene extends Phaser.Scene {
         } else if (tile.type === TileType.Fire) {
           const phase = (this.tick + x * 3 + y * 7) % 3;
           t.tint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
+        } else if (tile.type === TileType.Pool) {
+          t.tint = 0x44bbaa;  // teal-green — murky shallow puddle, distinct from deep Water
         } else {
           t.tint = 0xffffff;
         }

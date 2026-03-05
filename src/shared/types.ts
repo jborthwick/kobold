@@ -11,6 +11,7 @@ export enum TileType {
   Hearth   = 'hearth',  // goblin-built warmth source; walkable
   TreeStump = 'treestump',
   Fire = 'fire',
+  Pool = 'pool',     // temporary rain puddle in lowlands; evaporates after rain
 }
 
 export interface Tile {
@@ -21,6 +22,8 @@ export interface Tile {
   maxMaterial: number;
   growbackRate: number;   // food units restored per tick (0 = doesn't regrow)
   fireTick?: number;      // tick when fire started; undefined means tile is not burning
+  poolTick?: number;      // tick when rain pool formed; undefined means not pooled
+  priorType?: TileType;   // tile type before pooling (restored on evaporation)
   trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
 }
 
