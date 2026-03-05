@@ -125,12 +125,17 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 
 - **Crisis detection** (`crisis.ts`): 5 crisis types trigger LLM calls. Morale decays when hungry, recovers when fed.
 - **Traits** (`agents.ts` `TRAIT_MODS`): 8 traits shift sigmoid midpoints via `traitMod()`. See table in source.
-- **Weather** (`weather.ts`): clear/rain/drought/cold modify growback + metabolism. Seasons cycle every 600 ticks.
+- **Weather** (`weather.ts`): clear/rain/drought/cold/storm modify growback + metabolism. Seasons cycle every 600 ticks. Storm = heavy rain + lightning strikes.
 - **Skills** (`skills.ts`): one skill per role, level = `floor(sqrt(xp/10))`. XP on primary action, +0.3 yield or +3 dmg per level.
 - **Wounds** (`wounds.ts`): single slot, 60% chance on hit. 4 types (bruised/leg/arm/eye). `effectiveVision()` replaces raw vision everywhere.
 - **Factions** (`factions.ts`): cosmetic only — `getActiveFaction()` returns display config. Goblins (default) or Dwarves. Persists in save.
 - **Storyteller** (`events.ts`): tension-aware event distribution — struggling colonies get relief, thriving colonies get challenged.
-- **Warmth diffusion** (`diffusion.ts`): BFS from `TileType.Hearth` tiles; walls block propagation entirely; radius=8, decay 12.5/tile. Goblin `warmth` smoothed in WorldScene (0.95/0.05 blend — no Math.round or it fixed-points at 10%). Use entry/exit hysteresis in eligible checks (e.g. enter<25, exit>50) to prevent oscillation.
+- **Warmth diffusion** (`diffusion.ts`): BFS from `TileType.Hearth` and `TileType.Fire` tiles; walls block propagation entirely. Goblin `warmth` smoothed in WorldScene (0.95/0.05 blend — no Math.round or it fixed-points at 10%). Use entry/exit hysteresis in eligible checks to prevent oscillation.
+- **Fire system** (`fire.ts`): hearths ignite adjacent flammable tiles (Grass/Forest/Mushroom/Farmland/TreeStump). Slow-wave spread: high probability per attempt but long interval between attempts, staggered by `fireTick`. Rain/storm extinguishes. Burnout→Dirt. Goblins on fire tiles take damage and can catch fire. Fire tiles are danger and warmth sources in diffusion.
+- **Burning goblins** (`fire.ts` `tickBurningGoblins`): `onFire` state triggers early-return in `tickAgentUtility` — goblin sprints to nearest Water/Pool. DoT damage per tick; can spread fire to terrain underfoot; adjacent goblins can smother flames. Extinguished by Water/Pool tiles.
+- **Rain pooling** (`pooling.ts`): during rain, Dirt/Grass/Farmland adjacent to Water/Pool can flood to `TileType.Pool`. Pools evaporate back to `priorType` when dry (drought accelerates). Storms pool faster. Pools extinguish burning goblins.
+- **Lightning** (`lightning.ts`): during storms, chance per tick to strike a random tile. Flammable → ignite; Water/Pool/Fire → absorb silently; else → scorch to Dirt.
+- **Firefighting action** (`actions/firefighting.ts`): two-phase — fetch water from lake/pool → douse fire tile. Small chance of getting singed (sets `onFire=true`) on a failed douse.
 
 ---
 
@@ -147,7 +152,7 @@ Returns 2-4 sentence chapter. Timeout: 8 s. Falls back to deterministic text on 
 
 ## World design
 
-- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall, Hearth
+- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall, Hearth, Fire, Pool, TreeStump
 - **World gen** (`world.ts`): dual Simplex noise (elevation + moisture) → biome classification.
   `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`. Fully seeded — same seed = identical world.
 - **`FORAGEABLE_TILES`** (`agents.ts`): `Set<TileType>` — currently `{ Mushroom }`. Add one line to unlock new food source.
@@ -168,7 +173,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 ## Key directories
 
 - `src/game/` — Phaser scenes (WorldScene.ts is the main game loop), tileConfig
-- `src/simulation/` — game logic: agents, actions, utilityAI, world, weather, skills, wounds, events, adventurers
+- `src/simulation/` — game logic: agents, actions, utilityAI, world, weather, skills, wounds, events, adventurers, fire, pooling, lightning
 - `src/ai/` — LLM integration: crisis detection, storyteller chapters
 - `src/ui/` — React overlay: HUD, EventLog, MiniMap, StartMenu, TilePicker
 - `src/shared/` — types, constants, events bus, factions, save/load
@@ -177,7 +182,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Implementation status
 
-**Current: Iteration 20.** See `git log` for full changelog. Key milestones:
+**Current: Iteration 25.** See `git log` for full changelog. Key milestones:
 1–3: World gen, tileset, pathfinding, BT, LLM crisis detection.
 4–6: Camera, LLM execution, memory, roles, VERIFY, procedural world, scarcity.
 7–9: Colony goals, depot, fighter role, succession, traits/weather/storyteller, dual-noise biomes.
@@ -188,6 +193,11 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 14–17: Actions split to `actions/` modules, HUD split to `HUD/` modules, dead BT removed.
 18–19: Inventory capacity shared across ore/wood/food; need-based chop/mine scoring.
 20: Headless sim harness; fixed idle measurement, foraging threshold, socializing loop.
+21: Foraging search radius widened; withdrawFood trigger tuned.
+22: Fire system (hearth ignition, tile spread, burnout, goblin damage) + firefighting action.
+23: Rain pooling — lowland tiles flood during rain, evaporate after; pools extinguish goblins.
+24: Burning goblins — `onFire` state, flee-to-water override, DoT, terrain spread, friendly extinguish.
+25: Thunderstorms — new weather type; 3× faster pooling; lightning strikes ignite/scorch tiles.
 
 ---
 
@@ -201,7 +211,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
 - **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
-4. **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
+- **VERIFY step** — 40 ticks after LLM action, snapshot state and backfill outcome into memory. Prevents hallucination cascades.
 
 
 ---
