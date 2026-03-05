@@ -8,7 +8,12 @@ import { GRID_SIZE } from '../../shared/constants';
 import { isWalkable } from '../world';
 import { FORAGEABLE_TILES } from './sites';
 
-/** Scan for richest forageable tile in a square radius. */
+/**
+ * Scan for richest forageable tile in a square radius.
+ * Applies a distance penalty of 1.0 per tile so the goblin only leaves its
+ * current tile for one that's meaningfully richer — prevents oscillation between
+ * two adjacent patches with similar food values.
+ */
 export function bestFoodTile(
   goblin:  Goblin,
   grid:   Tile[][],
@@ -22,7 +27,8 @@ export function bestFoodTile(
       const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (!FORAGEABLE_TILES.has(grid[ny][nx].type)) continue;
-      const v = grid[ny][nx].foodValue;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      const v = grid[ny][nx].foodValue - dist;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
   }
