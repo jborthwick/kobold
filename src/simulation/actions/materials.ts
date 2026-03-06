@@ -20,6 +20,9 @@ export const mine: Action = {
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
     const maxOre = oreStockpiles?.reduce((s, p) => s + p.maxOre, 0) ?? 1;
     const oreNeed = maxOre > 0 ? 0.2 + 0.8 * (1 - totalOre / maxOre) : 1.0;
+    // Warmth safety: if freezing, prioritize survival over work
+    if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
+
     const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
       if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * oreNeed;
@@ -92,6 +95,9 @@ export const chop: Action = {
     const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
     const maxWood = woodStockpiles?.reduce((s, p) => s + p.maxWood, 0) ?? 1;
     const woodNeed = maxWood > 0 ? 0.2 + 0.8 * (1 - totalWood / maxWood) : 1.0;
+    // Warmth safety: if freezing, prioritize survival over work
+    if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
+
     const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
     if (!target) {
       if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * woodNeed;

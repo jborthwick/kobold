@@ -33,7 +33,11 @@ export const forage: Action = {
     const base = sigmoid(goblin.hunger, 40) * 0.8;
     // Momentum: if already foraging, keep at it to prevent 2-tile loops
     const momentum = (goblin.task.includes('foraging') || goblin.task.includes('harvesting')) ? 0.15 : 0;
-    return Math.min(1.0, base + momentum);
+    const score = Math.min(1.0, base + momentum);
+
+    // Starvation penalty: if desperately hungry, stop looking for new patches 
+    // and let survival/eat/withdraw take over.
+    return goblin.hunger > 85 ? score * 0.4 : score;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
@@ -205,7 +209,8 @@ export const withdrawFood: Action = {
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     // Midpoint 45 (was 60) so goblins head to the depot when moderately hungry (≈35+),
     // not just when desperate. Stockpile remains secondary to foraging.
-    return sigmoid(goblin.hunger, 45) * 0.55 * (onStockpile ? 2.5 : 1.0);
+    // Boosted base multiplier to 0.75 (was 0.55) to compete better with active foraging.
+    return sigmoid(goblin.hunger, 45) * 0.75 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);

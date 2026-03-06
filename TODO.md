@@ -12,7 +12,7 @@ First iteration of player build tools:
 [ ] Allow rooms to be buildable anywhere, not just in the spawn area
 [ ] Move the build menu out of the world hud. Assume we'll have more room types and update the menu accordingly
 [ ] Plan: investigate adding weather effects (rain, snow, storms, lightning, etc)
-
+[ ] Shrink the minimap by half
 
 
 ## Bugs:
@@ -21,5 +21,5 @@ First iteration of player build tools:
 [X] World Gen: There's often a super gigantic patch of mushrooms at the spawn point. Mushroom patches should be smaller, but more frequent. (i think the spawn zone picker is finding a giant patch and choosing it)
 [ ] bug: saw a goblin keep harvesting even though they were extremely hungry. and only stopped once their health dropped super low. at that point they went and gathered mushrooms.
 [ ] After building a room, you should be able to stamp more rooms until pressing cancel.
-
+[ ] Loop: goblins move between two tiles forever, "remembering ore vein" and "hearthsite"
 

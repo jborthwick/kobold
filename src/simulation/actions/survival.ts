@@ -20,7 +20,7 @@ export const commandMove: Action = {
     if (goblin.x === tx && goblin.y === ty) {
       onLog?.(`arrived at (${tx},${ty})`, 'info');
       goblin.commandTarget = null;
-      goblin.task          = 'arrived';
+      goblin.task = 'arrived';
     } else {
       moveTo(goblin, goblin.commandTarget!, grid);
       goblin.task = `→ (${tx},${ty})`;
@@ -39,8 +39,10 @@ export const eat: Action = {
     return !!tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
   },
   score: ({ goblin }) => {
-    const mid = traitMod(goblin, 'eatThreshold', 70);
-    return sigmoid(goblin.hunger, mid);
+    const mid = traitMod(goblin, 'eatThreshold', 50); // was 70
+    const score = sigmoid(goblin.hunger, mid);
+    // Survival priority boost: if starving, jump to the front of the queue
+    return goblin.hunger > 80 ? Math.min(1.0, score * 1.5) : score;
   },
   execute: ({ goblin, grid, currentTick, onLog }) => {
     const wasDesperatelyHungry = goblin.hunger > 80;
@@ -85,19 +87,19 @@ export const rest: Action = {
       // Sheltered by hearth — best recovery
       goblin.fatigue = Math.max(0, goblin.fatigue - 2.5);
       accelerateHealing(goblin, 3);
-      goblin.morale  = Math.min(100, goblin.morale + 0.3);
-      goblin.task    = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
+      goblin.morale = Math.min(100, goblin.morale + 0.3);
+      goblin.task = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
     } else if (warmth >= 20) {
       // Mild warmth — small bonus
       goblin.fatigue = Math.max(0, goblin.fatigue - 2.0);
       accelerateHealing(goblin, 2);
-      goblin.morale  = Math.min(100, goblin.morale + 0.1);
-      goblin.task    = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
+      goblin.morale = Math.min(100, goblin.morale + 0.1);
+      goblin.task = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
     } else {
       // Exposed — baseline
       goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
       accelerateHealing(goblin, 2);
-      goblin.task    = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
+      goblin.task = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
     }
   },
 };

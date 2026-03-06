@@ -3,25 +3,25 @@ import { bus } from '../shared/events';
 import { TileType, type MiniMapData } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 
-// 2 px per tile → 128×128 canvas
-const SCALE = 2;
-const SIZE  = GRID_SIZE * SCALE; // 128
+// 1 px per tile → 128×128 canvas
+const SCALE = 1;
+const SIZE = GRID_SIZE * SCALE; // 128
 
 // Base colors per tile type [r, g, b]
 const TILE_RGB: Record<TileType, [number, number, number]> = {
-  [TileType.Dirt]:     [ 42,  28,  22],
-  [TileType.Grass]:    [ 50,  90,  35],
-  [TileType.Forest]:   [ 20,  60,  20],
-  [TileType.Water]:    [ 20,  60, 110],
-  [TileType.Stone]:    [ 85,  85,  85],
-  [TileType.Farmland]: [100,  80,  40],
-  [TileType.Ore]:      [ 90,  75,  20],
-  [TileType.Mushroom]: [ 70,  40,  80],
-  [TileType.Wall]:     [110, 100,  75],
-  [TileType.Hearth]:   [150,  75,   0],
-  [TileType.TreeStump]:[ 60,  40,  25],
-  [TileType.Fire]:     [220,  60,   0],
-  [TileType.Pool]:     [ 30, 140, 140],
+  [TileType.Dirt]: [42, 28, 22],
+  [TileType.Grass]: [50, 90, 35],
+  [TileType.Forest]: [20, 60, 20],
+  [TileType.Water]: [20, 60, 110],
+  [TileType.Stone]: [85, 85, 85],
+  [TileType.Farmland]: [100, 80, 40],
+  [TileType.Ore]: [90, 75, 20],
+  [TileType.Mushroom]: [70, 40, 80],
+  [TileType.Wall]: [110, 100, 75],
+  [TileType.Hearth]: [150, 75, 0],
+  [TileType.TreeStump]: [60, 40, 25],
+  [TileType.Fire]: [220, 60, 0],
+  [TileType.Pool]: [30, 140, 140],
 };
 
 export function MiniMap() {
@@ -54,7 +54,7 @@ export function MiniMap() {
         for (let dy = 0; dy < SCALE; dy++) {
           for (let dx = 0; dx < SCALE; dx++) {
             const i = ((y * SCALE + dy) * SIZE + (x * SCALE + dx)) * 4;
-            img.data[i]     = Math.min(255, Math.round(r * boost));
+            img.data[i] = Math.min(255, Math.round(r * boost));
             img.data[i + 1] = Math.min(255, Math.round(g * boost));
             img.data[i + 2] = Math.min(255, Math.round(b * boost));
             img.data[i + 3] = 255;
@@ -67,7 +67,7 @@ export function MiniMap() {
     // ── Camera viewport ──────────────────────────────────────────────────
     const vp = data.viewport;
     ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth   = 1;
+    ctx.lineWidth = 1;
     ctx.strokeRect(
       vp.x * SCALE,
       vp.y * SCALE,
@@ -78,7 +78,7 @@ export function MiniMap() {
     // ── Goblin dots ───────────────────────────────────────────────────────
     for (const d of data.goblins) {
       const hr = d.hunger / 100;
-      const dr = Math.floor(60  + hr * 195);
+      const dr = Math.floor(60 + hr * 195);
       const dg = Math.floor(200 - hr * 150);
       ctx.fillStyle = `rgb(${dr},${dg},60)`;
       ctx.fillRect(d.x * SCALE, d.y * SCALE, SCALE + 1, SCALE + 1);
@@ -103,25 +103,25 @@ export function MiniMap() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position:      'absolute',
-    bottom:        16,
-    left:          12,
-    background:    'rgba(0,0,0,0.75)',
-    borderRadius:  6,
-    padding:       '4px 6px 6px',
-    userSelect:    'none',
+    position: 'absolute',
+    bottom: 16,
+    left: 12,
+    background: 'rgba(0,0,0,0.75)',
+    borderRadius: 6,
+    padding: '4px 6px 6px',
+    userSelect: 'none',
     pointerEvents: 'none',
   },
   header: {
-    fontFamily:    'monospace',
-    fontSize:      8,
-    color:         '#555',
+    fontFamily: 'monospace',
+    fontSize: 8,
+    color: '#555',
     letterSpacing: '0.1em',
-    marginBottom:  3,
+    marginBottom: 3,
   },
   canvas: {
-    display:     'block',
+    display: 'block',
     imageRendering: 'pixelated',
-    border:      '1px solid #333',
+    border: '1px solid #333',
   },
 };

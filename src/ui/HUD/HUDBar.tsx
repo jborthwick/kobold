@@ -2,26 +2,27 @@ import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
 import type { LLMProvider } from '../../ai/crisis';
 import { getActiveFaction } from '../../shared/factions';
-import type { GameState, OverlayMode, WeatherType, Season } from '../../shared/types';
+import type { GameState, OverlayMode, WeatherType, Season, RoomType } from '../../shared/types';
 import type { LayoutMode } from '../../shared/useViewport';
+import { BuildMenu } from './BuildMenu';
 
 const OVERLAY_LABEL: Record<OverlayMode, string> = {
-  off:      '[O] overlay',
-  food:     '[O] food ▓',
+  off: '[O] overlay',
+  food: '[O] food ▓',
   material: '[O] stone ▓',
-  wood:     '[O] wood ▓',
-  warmth:   '[O] warmth ▓',
-  danger:   '[O] danger ▓',
-  traffic:  '[O] traffic ▓',
+  wood: '[O] wood ▓',
+  warmth: '[O] warmth ▓',
+  danger: '[O] danger ▓',
+  traffic: '[O] traffic ▓',
 };
 const OVERLAY_COLOR: Record<OverlayMode, string> = {
-  off:      '#555',
-  food:     '#00dd44',
+  off: '#555',
+  food: '#00dd44',
   material: '#ff8800',
-  wood:     '#56d973',
-  warmth:   '#ff6600',
-  danger:   '#ff2222',
-  traffic:  '#ffee00',
+  wood: '#56d973',
+  warmth: '#ff6600',
+  danger: '#ff2222',
+  traffic: '#ffee00',
 };
 
 const WEATHER_ICONS: Record<WeatherType, string> = { clear: '☀', rain: '🌧', drought: '🏜', cold: '❄', storm: '⛈' };
@@ -87,16 +88,25 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
 }
 
 export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode }) {
-  const [state,      setState]      = useState<GameState | null>(null);
+  const [state, setState] = useState<GameState | null>(null);
   const [llmEnabled, setLlmEnabled] = useState(false);
-  const [provider,   setProvider]   = useState<LLMProvider>('groq');
+  const [provider, setProvider] = useState<LLMProvider>('groq');
   const [confirmNew, setConfirmNew] = useState(false);
-  const [buildActive, setBuildActive] = useState(false);
+  const [showBuildMenu, setShowBuildMenu] = useState(false);
+  const [activeBuildType, setActiveBuildType] = useState<RoomType | null>(null);
   const [hintDismissed, setHintDismissed] = useState(false);
 
   useEffect(() => {
     bus.on('gameState', setState);
     return () => bus.off('gameState', setState);
+  }, []);
+
+  useEffect(() => {
+    const handleBuildMode = (ev: { roomType: RoomType } | null) => {
+      setActiveBuildType(ev?.roomType ?? null);
+    };
+    bus.on('buildMode', handleBuildMode);
+    return () => bus.off('buildMode', handleBuildMode);
   }, []);
 
   // Dismiss hint when first room is placed
@@ -117,9 +127,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
   };
 
   const toggleBuild = () => {
-    const next = !buildActive;
-    setBuildActive(next);
-    bus.emit('buildMode', next ? { roomType: 'storage' as const } : null);
+    setShowBuildMenu(!showBuildMenu);
   };
 
   if (!state) return null;
@@ -143,8 +151,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
   return (
     <div style={topBarStyle}>
       <Stat label={isPhone ? 'g' : getActiveFaction().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
-      <Stat label={isPhone ? 'f' : 'food'}    value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
-      <Stat label={isPhone ? 'o' : 'ore'}  value={state.totalOre.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'f' : 'food'} value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'o' : 'ore'} value={state.totalOre.toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'w' : 'wood'} value={state.totalWood.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
       {state.weatherSeason && state.weatherType && (
@@ -153,20 +161,32 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
       {/* Desktop: inline pause/speed/overlay controls */}
       {isDesktop && <PauseSpeed paused={state.paused} speed={state.speed} />}
       {isDesktop && <OverlayIndicator mode={state.overlayMode} />}
-      {/* Build button */}
+
+      {/* Build Menu Toggle */}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button
           onClick={toggleBuild}
-          style={{ ...styles.llmToggle, ...(buildActive ? styles.buildBtnActive : styles.llmToggleOff) }}
+          style={{
+            ...styles.llmToggle,
+            ...(showBuildMenu ? styles.buildBtnActive : styles.llmToggleOff),
+            ...(activeBuildType ? { borderColor: '#00ff88', border: '1px solid' } : {})
+          }}
         >
-          {buildActive ? 'Cancel' : 'Build'}
+          {activeBuildType ? `Building: ${activeBuildType}` : 'Build'}
         </button>
-        {!hintDismissed && state.rooms.length === 0 && state.tick > 200 && !buildActive && (
+        {showBuildMenu && (
+          <BuildMenu
+            activeType={activeBuildType}
+            onClose={() => setShowBuildMenu(false)}
+          />
+        )}
+        {!hintDismissed && state.rooms.length === 0 && state.tick > 200 && !showBuildMenu && (
           <span style={styles.buildHint} onClick={() => setHintDismissed(true)}>
-            Place a storage room!
+            Open Build Menu!
           </span>
         )}
       </div>
+
       {/* LLM toggle: desktop only (LLM disabled on mobile) */}
       {isDesktop && (
         <button
@@ -212,142 +232,142 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
 const styles: Record<string, React.CSSProperties> = {
   topBar: {
-    position:   'absolute',
-    top:        12,
-    left:       12,
-    display:    'flex',
-    gap:        16,
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    display: 'flex',
+    gap: 16,
     background: 'rgba(0,0,0,0.65)',
-    padding:    '6px 14px',
+    padding: '6px 14px',
     borderRadius: 8,
     fontFamily: 'monospace',
-    fontSize:   13,
-    color:      '#fff',
+    fontSize: 13,
+    color: '#fff',
     userSelect: 'none',
     pointerEvents: 'none',
   },
   stat: {
-    display:       'flex',
+    display: 'flex',
     flexDirection: 'column',
-    alignItems:    'center',
-    gap:           2,
+    alignItems: 'center',
+    gap: 2,
   },
   statLabel: {
     fontSize: 9,
-    color:    '#aaa',
+    color: '#aaa',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
   statValue: {
-    fontSize:   14,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   llmToggle: {
     pointerEvents: 'auto' as const,
-    fontFamily:    'monospace',
-    fontSize:      10,
-    fontWeight:    'bold',
-    border:        'none',
-    borderRadius:  4,
-    padding:       '3px 8px',
-    cursor:        'pointer',
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: 'bold',
+    border: 'none',
+    borderRadius: 4,
+    padding: '3px 8px',
+    cursor: 'pointer',
     letterSpacing: '0.03em',
-    alignSelf:     'center',
-    transition:    'background 0.15s',
+    alignSelf: 'center',
+    transition: 'background 0.15s',
   },
   llmToggleOn: {
     background: 'rgba(0,200,80,0.25)',
-    color:      '#4efa8a',
+    color: '#4efa8a',
   },
   llmToggleOff: {
     background: 'rgba(120,120,120,0.2)',
-    color:      '#777',
+    color: '#777',
   },
   providerToggle: {
     background: 'rgba(100,140,220,0.2)',
-    color:      '#7ec8e3',
+    color: '#7ec8e3',
   },
   pauseSpeedGroup: {
-    display:    'flex',
+    display: 'flex',
     alignItems: 'center',
-    gap:        4,
+    gap: 4,
     pointerEvents: 'auto' as const,
   },
   speedLabel: {
     fontFamily: 'monospace',
-    fontSize:   12,
+    fontSize: 12,
     fontWeight: 'bold',
-    color:      '#fff',
-    minWidth:   24,
-    textAlign:  'center' as const,
+    color: '#fff',
+    minWidth: 24,
+    textAlign: 'center' as const,
   },
   ctrlBtn: {
-    fontFamily:   'monospace',
-    fontSize:     12,
-    fontWeight:   'bold',
-    border:       'none',
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: 'bold',
+    border: 'none',
     borderRadius: 4,
-    width:        22,
-    height:       22,
-    cursor:       'pointer',
-    display:      'flex',
-    alignItems:   'center',
+    width: 22,
+    height: 22,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
-    lineHeight:   1,
+    lineHeight: 1,
   } as React.CSSProperties,
   ctrlBtnNeutral: {
     background: 'rgba(120,120,120,0.25)',
-    color:      '#aaa',
+    color: '#aaa',
   },
   ctrlBtnPlay: {
     background: 'rgba(0,200,80,0.2)',
-    color:      '#4efa8a',
+    color: '#4efa8a',
   },
   ctrlBtnPaused: {
     background: 'rgba(220,60,60,0.25)',
-    color:      '#e74c3c',
+    color: '#e74c3c',
   },
   newColonyConfirm: {
-    display:    'flex',
+    display: 'flex',
     alignItems: 'center',
-    gap:        4,
+    gap: 4,
     pointerEvents: 'auto' as const,
   },
   newColonyBtn: {
-    fontFamily:   'monospace',
-    fontSize:     10,
-    fontWeight:   'bold' as const,
-    border:       'none',
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: 'bold' as const,
+    border: 'none',
     borderRadius: 4,
-    padding:      '2px 7px',
-    cursor:       'pointer',
+    padding: '2px 7px',
+    cursor: 'pointer',
   },
   newColonyBtnYes: {
     background: 'rgba(200,50,50,0.3)',
-    color:      '#e74c3c',
+    color: '#e74c3c',
   },
   newColonyBtnNo: {
     background: 'rgba(120,120,120,0.2)',
-    color:      '#aaa',
+    color: '#aaa',
   },
   buildBtnActive: {
     background: 'rgba(220,60,60,0.25)',
-    color:      '#e74c3c',
+    color: '#e74c3c',
   },
   buildHint: {
-    position:      'absolute' as const,
-    top:           -22,
-    left:          '50%',
-    transform:     'translateX(-50%)',
-    whiteSpace:    'nowrap' as const,
-    fontSize:      9,
-    fontWeight:    'bold' as const,
-    color:         '#f0c040',
-    background:    'rgba(0,0,0,0.7)',
-    padding:       '2px 6px',
-    borderRadius:  4,
-    cursor:        'pointer',
-    animation:     'pulse 1.5s infinite',
+    position: 'absolute' as const,
+    top: -22,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    whiteSpace: 'nowrap' as const,
+    fontSize: 9,
+    fontWeight: 'bold' as const,
+    color: '#f0c040',
+    background: 'rgba(0,0,0,0.7)',
+    padding: '2px 6px',
+    borderRadius: 4,
+    cursor: 'pointer',
+    animation: 'pulse 1.5s infinite',
     pointerEvents: 'auto' as const,
   },
 };

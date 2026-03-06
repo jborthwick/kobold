@@ -755,9 +755,6 @@ export class WorldScene extends Phaser.Scene {
       level: 'info',
     });
 
-    this.buildMode = null;
-    this.buildPreview = null;
-    this.buildPreviewGfx.clear();
     this.terrainDirty = true;
   }
 
@@ -1395,7 +1392,8 @@ export class WorldScene extends Phaser.Scene {
 
         // Add dirt background under objects if needed (so we don't see black voids)
         if (isObject) {
-          this.floorLayer.putTileAt(TILE_CONFIG[TileType.Dirt][0], x, y);
+          const dirtFrames = TILE_CONFIG[TileType.Dirt] ?? [0];
+          this.floorLayer.putTileAt(dirtFrames[0], x, y);
         }
 
         // Room tint overlay
