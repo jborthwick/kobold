@@ -17,38 +17,38 @@ import { FORAGEABLE_TILES } from './agents/sites';
 // ── World Config (unchanged — same resource min/max/growback as before) ──────
 
 const WORLD_CONFIG = {
-  forestFoodMin:  8,
-  forestFoodMax:  12,
+  forestFoodMin: 8,
+  forestFoodMax: 12,
   forestGrowback: 0.04,
 
   forestWoodMin: 8,
   forestWoodMax: 12,
 
-  farmFoodMin:    2,
-  farmFoodMax:    3,
-  farmGrowback:   0.02,
+  farmFoodMin: 2,
+  farmFoodMax: 3,
+  farmGrowback: 0.02,
 
-  oreMatMin:      30,
-  oreMatMax:      50,
-  oreGrowback:    0,
+  oreMatMin: 30,
+  oreMatMax: 50,
+  oreGrowback: 0,
 
-  grassMeadowFoodMin:  2,
-  grassMeadowFoodMax:  4,
+  grassMeadowFoodMin: 2,
+  grassMeadowFoodMax: 4,
   grassMeadowGrowback: 0.02,
 
-  mushroomFoodMin:  3,
-  mushroomFoodMax:  5,
+  mushroomFoodMin: 3,
+  mushroomFoodMax: 5,
   mushroomGrowback: 0.08,
 } as const;
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
 export interface WorldGenResult {
-  grid:      Tile[][];
+  grid: Tile[][];
   /** Cleared walkable rectangle where goblins spawn. */
   spawnZone: { x: number; y: number; w: number; h: number };
   /** Seed string — display in UI for reproducibility. */
-  seed:      string;
+  seed: string;
 }
 
 // ── Seeded PRNG ──────────────────────────────────────────────────────────────
@@ -160,11 +160,11 @@ function tileResourceValues(
       const fMax = lerp(WORLD_CONFIG.forestFoodMin, WORLD_CONFIG.forestFoodMax, foodScale);
       const wMax = lerp(WORLD_CONFIG.forestWoodMin, WORLD_CONFIG.forestWoodMax, 0.5 + rng() * 0.5);
       return {
-        foodValue:     fMax * (0.7 + rng() * 0.3),
+        foodValue: fMax * (0.7 + rng() * 0.3),
         materialValue: wMax * (0.7 + rng() * 0.3),
-        maxFood:       fMax,
-        maxMaterial:   wMax,
-        growbackRate:  WORLD_CONFIG.forestGrowback,
+        maxFood: fMax,
+        maxMaterial: wMax,
+        growbackRate: WORLD_CONFIG.forestGrowback,
       };
     }
     case TileType.Mushroom: {
@@ -221,13 +221,13 @@ function countNearbyFoodTiles(grid: Tile[][], cx: number, cy: number, radius: nu
 
 /** Seed a guaranteed mushroom patch near (cx, cy). */
 function seedMushroomPatch(grid: Tile[][], cx: number, cy: number, rng: () => number): void {
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
       const x = cx + dx, y = cy + dy;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
       const t = grid[y][x];
       if (t.type === TileType.Water || t.type === TileType.Wall) continue;
-      if (rng() > 0.7) continue; // ~70% fill
+      if (rng() > 0.6) continue; // ~60% fill
       const fMax = lerp(WORLD_CONFIG.mushroomFoodMin, WORLD_CONFIG.mushroomFoodMax, rng());
       grid[y][x] = {
         type: TileType.Mushroom, foodValue: fMax, materialValue: 0,
@@ -245,8 +245,8 @@ function seedMushroomPatch(grid: Tile[][], cx: number, cy: number, rng: () => nu
  *  Increasing octaves adds detail but slows generation.
  */
 const NOISE_PARAMS = {
-  elevation: { frequency: 0.04,  octaves: 3, persistence: 0.5, lacunarity: 2.0 },
-  moisture:  { frequency: 0.035, octaves: 3, persistence: 0.5, lacunarity: 2.0 },
+  elevation: { frequency: 0.04, octaves: 3, persistence: 0.5, lacunarity: 2.0 },
+  moisture: { frequency: 0.035, octaves: 3, persistence: 0.5, lacunarity: 2.0 },
 } as const;
 
 export function generateWorld(seed?: string): WorldGenResult {
@@ -254,18 +254,28 @@ export function generateWorld(seed?: string): WorldGenResult {
   const rng = mulberry32(hashSeed(worldSeed));
 
   // Two independent noise fields — different seeds prevent correlation
-  const elevNoise  = createNoise2D(mulberry32(hashSeed(worldSeed + '_elev')));
+  const elevNoise = createNoise2D(mulberry32(hashSeed(worldSeed + '_elev')));
   const moistNoise = createNoise2D(mulberry32(hashSeed(worldSeed + '_moist')));
+  const spotNoise = createNoise2D(mulberry32(hashSeed(worldSeed + '_spot')));
 
   // ── Step 1: Generate noise fields + Step 2: Biome assignment ───────────────
   const grid: Tile[][] = [];
   for (let y = 0; y < GRID_SIZE; y++) {
     grid[y] = [];
     for (let x = 0; x < GRID_SIZE; x++) {
-      const elev  = norm01(fbm(elevNoise,  x, y, NOISE_PARAMS.elevation.octaves, NOISE_PARAMS.elevation.frequency,  NOISE_PARAMS.elevation.persistence, NOISE_PARAMS.elevation.lacunarity));
+      const elev = norm01(fbm(elevNoise, x, y, NOISE_PARAMS.elevation.octaves, NOISE_PARAMS.elevation.frequency, NOISE_PARAMS.elevation.persistence, NOISE_PARAMS.elevation.lacunarity));
       const moist = norm01(fbm(moistNoise, x, y, NOISE_PARAMS.moisture.octaves, NOISE_PARAMS.moisture.frequency, NOISE_PARAMS.moisture.persistence, NOISE_PARAMS.moisture.lacunarity));
 
-      const type = classifyBiome(elev, moist);
+      // Spot noise (high frequency) to break up large mushroom patches
+      const spot = norm01(fbm(spotNoise, x, y, 2, 0.15, 0.5, 2.0));
+
+      let type = classifyBiome(elev, moist);
+
+      // Break up mushroom patches if spot noise is low
+      if (type === TileType.Mushroom && spot < 0.4) {
+        type = TileType.Grass;
+      }
+
       const resources = tileResourceValues(type, elev, moist, rng);
 
       grid[y][x] = { type, ...resources };
@@ -278,10 +288,11 @@ export function generateWorld(seed?: string): WorldGenResult {
   // (width was increased when ore stockpiles were added to the right of the
   // initial depot so the cleared area covers both food and ore storage.)
   const SPAWN_W = 24, SPAWN_H = 10;
-  const MARGIN  = 4; // keep away from map borders
+  const MARGIN = 4; // keep away from map borders
   let bestSpawnX = Math.floor(GRID_SIZE / 2 - SPAWN_W / 2);
   let bestSpawnY = Math.floor(GRID_SIZE / 2 - SPAWN_H / 2);
-  let bestScore  = -1;
+  let bestScore = -1;
+  const minFoodThreshold = Math.floor(20 * (GRID_SIZE / 64) ** 2);
 
   // Sample ~40 random candidate positions (seeded) + center fallback
   const candidates: { x: number; y: number }[] = [];
@@ -309,9 +320,16 @@ export function generateWorld(seed?: string): WorldGenResult {
     // Score by nearby food
     const cx = c.x + Math.floor(SPAWN_W / 2);
     const cy = c.y + Math.floor(SPAWN_H / 2);
-    const food = countNearbyFoodTiles(grid, cx, cy, 15);
+    let food = countNearbyFoodTiles(grid, cx, cy, 15);
+
+    // CAP SCORE: preventing the picker from always prioritizing "gigantic clusters".
+    // Once a site is "good enough" (2x threshold), we stop caring about MORE food.
+    if (food > minFoodThreshold * 2) {
+      food = minFoodThreshold * 2;
+    }
+
     if (food > bestScore) {
-      bestScore  = food;
+      bestScore = food;
       bestSpawnX = c.x;
       bestSpawnY = c.y;
     }
@@ -337,14 +355,14 @@ export function generateWorld(seed?: string): WorldGenResult {
   const spawnCx = spawnZone.x + Math.floor(spawnZone.w / 2);
   const spawnCy = spawnZone.y + Math.floor(spawnZone.h / 2);
   const foodCheckRadius = Math.floor(15 * GRID_SIZE / 64);
-  const nearbyFood = countNearbyFoodTiles(grid, spawnCx, spawnCy, foodCheckRadius);
-  const minFoodThreshold = Math.floor(20 * (GRID_SIZE / 64) ** 2);
+  const nearbyFood = countNearbyFoodTiles(grid, spawnCx, spawnCx, foodCheckRadius);
 
   if (nearbyFood < minFoodThreshold) {
-    const patchCount = Math.floor(4 * (GRID_SIZE / 64) ** 2);
+    // Smaller but more frequent patches
+    const patchCount = Math.floor(10 * (GRID_SIZE / 64) ** 2);
     for (let i = 0; i < patchCount; i++) {
       const angle = rng() * Math.PI * 2;
-      const dist = 5 + rng() * 8;
+      const dist = 5 + rng() * 10;
       const px = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCx + Math.cos(angle) * dist)));
       const py = Math.max(2, Math.min(GRID_SIZE - 3, Math.round(spawnCy + Math.sin(angle) * dist)));
       seedMushroomPatch(grid, px, py, rng);
