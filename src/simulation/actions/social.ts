@@ -52,13 +52,13 @@ export const share: Action = {
     const give = Math.min(3, goblin.inventory.food - donorKeeps);
     if (give <= 0) return;
     const headroom = MAX_INVENTORY_CAPACITY - totalLoad(target.inventory);
-    const actual   = Math.min(give, headroom);
+    const actual = Math.min(give, headroom);
     if (actual <= 0) return;
-    goblin.inventory.food  -= actual;
+    goblin.inventory.food -= actual;
     target.inventory.food += actual;
     const prevRel = goblin.relations[target.id] ?? 50;
-    goblin.relations[target.id]  = Math.min(100, prevRel + 5);
-    target.relations[goblin.id]  = Math.min(100, (target.relations[goblin.id] ?? 50) + 3);
+    goblin.relations[target.id] = Math.min(100, prevRel + 5);
+    target.relations[goblin.id] = Math.min(100, (target.relations[goblin.id] ?? 50) + 3);
     goblin.task = `shared ${actual.toFixed(0)} food → ${target.name}`;
     onLog?.(`🤝 ${traitText(goblin, 'share')} ${actual.toFixed(0)} food with ${target.name}`, 'info');
     // Friendship milestone — relation crossed 70
@@ -75,7 +75,7 @@ export const socialize: Action = {
   eligible: ({ goblin, goblins }) => {
     if (goblin.social <= 30) return false;
     if (!goblins) return false;
-    const FRIEND_REL    = 40;
+    const FRIEND_REL = 40;
     const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
     // Only eligible if there's actually a friend within reach — prevents idle "socializing" when alone
     return goblins.some(other =>
@@ -84,10 +84,14 @@ export const socialize: Action = {
       (goblin.relations[other.id] ?? 50) >= FRIEND_REL,
     );
   },
-  score: ({ goblin }) => sigmoid(goblin.social, 50) * 0.6,
+  score: ({ goblin }) => {
+    const base = sigmoid(goblin.social, 50) * 0.6;
+    const momentum = (goblin.task.includes('socializing')) ? 0.15 : 0;
+    return Math.min(1.0, base + momentum);
+  },
   execute: ({ goblin, goblins, grid }) => {
     if (!goblins) { goblin.task = 'lonely'; return; }
-    const FRIEND_REL    = 40;
+    const FRIEND_REL = 40;
     const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
     let bestDist = Infinity;
     let bestFriend: Goblin | null = null;
@@ -146,7 +150,7 @@ export const avoidRival: Action = {
     if (avoidOpen.length > 0) {
       const next = avoidOpen.reduce((best, p) =>
         (Math.abs(p.x - rival.x) + Math.abs(p.y - rival.y)) >
-        (Math.abs(best.x - rival.x) + Math.abs(best.y - rival.y)) ? p : best,
+          (Math.abs(best.x - rival.x) + Math.abs(best.y - rival.y)) ? p : best,
       );
       goblin.x = next.x; goblin.y = next.y;
       goblin.task = `avoiding ${rival.name}`;

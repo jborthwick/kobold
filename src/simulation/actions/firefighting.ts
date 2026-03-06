@@ -12,15 +12,16 @@
 
 import { TileType, type Tile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
+import { inverseSigmoid } from '../utilityAI';
 import { effectiveVision } from '../wounds';
 import { moveTo, shouldLog, addWorkFatigue } from './helpers';
 import type { Action } from './types';
 
-const FIRE_SCAN_RADIUS   = 18;   // tiles — how far to look for fire
-const WATER_SCAN_RADIUS  = 24;   // tiles — how far to look for water (lakes can be far)
-const DOUSE_CHANCE       = 0.80; // probability of extinguishing the fire tile
-const SINGE_CHANCE       = 0.20; // probability of taking a light wound while dousing
-const SINGE_MOR_LOSS     = 5;    // morale loss on singe
+const FIRE_SCAN_RADIUS = 18;   // tiles — how far to look for fire
+const WATER_SCAN_RADIUS = 24;   // tiles — how far to look for water (lakes can be far)
+const DOUSE_CHANCE = 0.80; // probability of extinguishing the fire tile
+const SINGE_CHANCE = 0.20; // probability of taking a light wound while dousing
+const SINGE_MOR_LOSS = 5;    // morale loss on singe
 
 /** Find the nearest Fire tile within radius. Returns null if none. */
 function nearestFire(
@@ -65,25 +66,29 @@ export const fightFire: Action = {
 
   eligible({ goblin, grid }) {
     // Only respond to fire within scan radius
-        return nearestFire(goblin.x, goblin.y, grid, FIRE_SCAN_RADIUS) !== null;
+    return nearestFire(goblin.x, goblin.y, grid, FIRE_SCAN_RADIUS) !== null;
   },
 
   score({ goblin, grid }) {
-        const fire  = nearestFire(goblin.x, goblin.y, grid, FIRE_SCAN_RADIUS);
+    const fire = nearestFire(goblin.x, goblin.y, grid, FIRE_SCAN_RADIUS);
     if (!fire) return 0;
 
-    const dist    = Math.abs(fire.x - goblin.x) + Math.abs(fire.y - goblin.y);
-    const vision  = effectiveVision(goblin);
+    const dist = Math.abs(fire.x - goblin.x) + Math.abs(fire.y - goblin.y);
+    const vision = effectiveVision(goblin);
 
-    // Urgency: high when fire is within vision range, trails off beyond
-    if (dist <= vision)      return 0.75;
-    if (dist <= vision * 2)  return 0.50;
-    if (dist <= FIRE_SCAN_RADIUS) return 0.25;
-    return 0;
+    // Urgency: smooth ramp based on distance, high when close, trails off at scan limit.
+    // 0.8 at distance 1, 0.2 at scan limit.
+    const base = 0.8 * inverseSigmoid(dist, vision, 0.2);
+
+    // Momentum: if already fetching water or fighting fire, stay committed.
+    const active = goblin.task.includes('fire') || goblin.task.includes('water') || goblin.carryingWater;
+    const momentum = active ? 0.15 : 0;
+
+    return Math.min(1.0, base + momentum);
   },
 
   execute({ goblin, grid, currentTick, onLog }) {
-    
+
     if (!goblin.carryingWater) {
       // ── Phase 1: go fetch water ──────────────────────────────────────────────
       const water = nearestWater(goblin.x, goblin.y, grid, WATER_SCAN_RADIUS);
@@ -143,9 +148,9 @@ export const fightFire: Action = {
 
         // Singe risk — being this close to fire can set the goblin alight
         if (Math.random() < SINGE_CHANCE && !goblin.onFire) {
-          goblin.onFire     = true;
+          goblin.onFire = true;
           goblin.onFireTick = currentTick;
-          goblin.morale     = Math.max(0, goblin.morale - SINGE_MOR_LOSS);
+          goblin.morale = Math.max(0, goblin.morale - SINGE_MOR_LOSS);
           onLog?.(`🔥 ${goblin.name} caught fire while fighting the flames!`, 'warn');
         }
 

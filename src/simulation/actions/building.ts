@@ -22,7 +22,9 @@ export const buildWall: Action = {
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
 
-    return ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    const base = ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    const momentum = (goblin.task.includes('wall')) ? 0.15 : 0;
+    return Math.min(1.0, base + momentum);
   },
   execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers }) => {
     if (!rooms || rooms.length === 0) return;
@@ -70,7 +72,7 @@ export const buildWall: Action = {
 // so the first fire gets built there. Once it warms that area, nearby goblins
 // stay warm and won't build another. Only goblins cold in a different location build elsewhere.
 const HEARTH_COVERAGE_RADIUS = 8;  // matches warmth BFS radius — if a hearth covers you, don't build
-const HEARTH_BUILD_COOLDOWN  = 300; // personal cooldown after placing, prevents back-to-back builds
+const HEARTH_BUILD_COOLDOWN = 300; // personal cooldown after placing, prevents back-to-back builds
 export const buildHearth: Action = {
   name: 'buildHearth',
   eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick }) => {
@@ -85,21 +87,21 @@ export const buildHearth: Action = {
       for (let dx = -HEARTH_COVERAGE_RADIUS; dx <= HEARTH_COVERAGE_RADIUS; dx++) {
         const nx = goblin.x + dx, ny = goblin.y + dy;
         if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE
-            && grid[ny][nx].type === TileType.Hearth) return false;
+          && grid[ny][nx].type === TileType.Hearth) return false;
       }
     }
     return true;
   },
   score: ({ goblin, woodStockpiles }) => {
     const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
-    const warmth    = goblin.warmth ?? 100;
-    const base      = inverseSigmoid(warmth, 25, 0.12)
-                    * ramp(totalWood, 2, 20)
-                    * inverseSigmoid(goblin.hunger, 60)
-                    * 0.5;
+    const warmth = goblin.warmth ?? 100;
+    const base = inverseSigmoid(warmth, 25, 0.12)
+      * ramp(totalWood, 2, 20)
+      * inverseSigmoid(goblin.hunger, 60)
+      * 0.5;
     // Momentum: already en route → commit, but only while base conditions still hold
-    const momentum  = (goblin.task === '→ hearth site' && base > 0) ? 0.15 : 0;
-    return base + momentum;
+    const momentum = (goblin.task.includes('hearth') && base > 0) ? 0.15 : 0;
+    return Math.min(1.0, base + momentum);
   },
   execute: ({ goblin, grid, woodStockpiles, currentTick, onLog }) => {
     if (!woodStockpiles) return;
@@ -121,8 +123,8 @@ export const buildHearth: Action = {
         const t = grid[ny][nx];
         if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
         const distToGoblin = Math.abs(dx) + Math.abs(dy);
-        const distToHome   = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
-        const siteScore    = distToGoblin + 0.2 * distToHome;
+        const distToHome = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
+        const siteScore = distToGoblin + 0.2 * distToHome;
         if (siteScore < bestScore) { bestScore = siteScore; buildTarget = { x: nx, y: ny }; }
       }
     }

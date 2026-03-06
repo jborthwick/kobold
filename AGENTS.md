@@ -113,7 +113,7 @@ Agent data model is in `src/shared/types.ts` (plain interfaces, no ECS). Roles a
 Every tick: `updateNeeds()` → starvation damage → expire LLM intent → stockpile
 deposit/withdraw → score all eligible actions (0–1 via sigmoid/ramp curves) → execute
 highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action scores.
-16 actions defined in `actions.ts`; see file for scoring formulas.
+17 actions defined in `actions/`; see files for scoring formulas.
 
 **Close-call logging:** top two actions within 0.03 → "⚖ agonizing over X vs Y".
 **Fatigue:** 0–100; >70 → 30% skip action; >90 → morale decay. Rest recovers 1.5/tick.
@@ -136,6 +136,7 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 - **Rain pooling** (`pooling.ts`): during rain, Dirt/Grass/Farmland adjacent to Water/Pool can flood to `TileType.Pool`. Pools evaporate back to `priorType` when dry (drought accelerates). Storms pool faster. Pools extinguish burning goblins.
 - **Lightning** (`lightning.ts`): during storms, chance per tick to strike a random tile. Flammable → ignite; Water/Pool/Fire → absorb silently; else → scorch to Dirt.
 - **Firefighting action** (`actions/firefighting.ts`): two-phase — fetch water from lake/pool → douse fire tile. Small chance of getting singed (sets `onFire=true`) on a failed douse.
+- **Storage rooms** (`actions/stockpiling.ts`): player places 5×5 zones via Build button; goblins auto-specialize (food/ore/wood) based on colony need. Walls built on 7×7 perimeter ring with 4 doorways. Stockpiles expand within room bounds only. Room data: `Room` in `types.ts`, stored in `WorldScene.rooms`, persisted in save.
 
 ---
 
@@ -152,7 +153,7 @@ Returns 2-4 sentence chapter. Timeout: 8 s. Falls back to deterministic text on 
 
 ## World design
 
-- **Grid:** 64×64 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall, Hearth, Fire, Pool, TreeStump
+- **Grid:** 128×128 tiles, 16×16 px. Tile types: Dirt, Grass, Forest, Water, Stone, Farmland, Ore, Mushroom, Wall, Hearth, Fire, Pool, TreeStump
 - **World gen** (`world.ts`): dual Simplex noise (elevation + moisture) → biome classification.
   `generateWorld(seed?)` returns `{ grid, spawnZone, seed }`. Fully seeded — same seed = identical world.
 - **`FORAGEABLE_TILES`** (`agents.ts`): `Set<TileType>` — currently `{ Mushroom }`. Add one line to unlock new food source.
@@ -182,7 +183,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Implementation status
 
-**Current: Iteration 25.** See `git log` for full changelog. Key milestones:
+**Current: Iteration 27.** See `git log` for full changelog. Key milestones:
 1–3: World gen, tileset, pathfinding, BT, LLM crisis detection.
 4–6: Camera, LLM execution, memory, roles, VERIFY, procedural world, scarcity.
 7–9: Colony goals, depot, fighter role, succession, traits/weather/storyteller, dual-noise biomes.
@@ -198,6 +199,8 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 23: Rain pooling — lowland tiles flood during rain, evaporate after; pools extinguish goblins.
 24: Burning goblins — `onFire` state, flee-to-water override, DoT, terrain spread, friendly extinguish.
 25: Thunderstorms — new weather type; 3× faster pooling; lightning strikes ignite/scorch tiles.
+26: Player-placed storage rooms — build mode UI, room placement, goblin-chosen specialization, room-aware walls.
+27: Persistent tiled glow; terrain layering (floor/object) for depth occlusion; AI momentum fixes for 2-tile loops.
 
 ---
 
@@ -211,6 +214,8 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
 - **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
+- **Runtime stockpile creation:** actions may push to `foodStockpiles`/`oreStockpiles`/`woodStockpiles` during `tickAgentUtility`. WorldScene syncs graphics arrays each tick (`while gfxList.length < stockpiles.length`).
+- **No hardcoded stockpiles:** new games start with empty stockpile arrays. Code referencing `foodStockpiles[0]` must fallback to spawn zone center.
 
 ---
 

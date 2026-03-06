@@ -30,7 +30,10 @@ export const forage: Action = {
       if (goblin.knownFoodSites.length > 0) return sigmoid(goblin.hunger, 40) * 0.4;
       return 0;
     }
-    return sigmoid(goblin.hunger, 40) * 0.8;
+    const base = sigmoid(goblin.hunger, 40) * 0.8;
+    // Momentum: if already foraging, keep at it to prevent 2-tile loops
+    const momentum = (goblin.task.includes('foraging') || goblin.task.includes('harvesting')) ? 0.15 : 0;
+    return Math.min(1.0, base + momentum);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
@@ -96,19 +99,19 @@ export const forage: Action = {
       const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
         // Role provides base gathering bonus; trait can further augment it
-        const roleBonus     = goblin.role === 'forager' ? 1 : 0;
-        const gatherBonus   = roleBonus + traitMod(goblin, 'gatheringPower', 0);
+        const roleBonus = goblin.role === 'forager' ? 1 : 0;
+        const gatherBonus = roleBonus + traitMod(goblin, 'gatheringPower', 0);
         const depletionRate = 5 + gatherBonus;
-        const baseYield     = 1 + gatherBonus + skillYieldBonus(goblin);
-        const moraleScale   = 0.5 + (goblin.morale / 100) * 0.5;
-        const fatigueScale  = 1.0 - inverseSigmoid(goblin.fatigue, 70, 0.12) * 0.5;
-        const woundScale    = woundYieldMultiplier(goblin);
-        const harvestYield  = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
-        const hadFood       = here.foodValue;
-        const depleted      = Math.min(hadFood, depletionRate);
-        here.foodValue      = Math.max(0, hadFood - depleted);
+        const baseYield = 1 + gatherBonus + skillYieldBonus(goblin);
+        const moraleScale = 0.5 + (goblin.morale / 100) * 0.5;
+        const fatigueScale = 1.0 - inverseSigmoid(goblin.fatigue, 70, 0.12) * 0.5;
+        const woundScale = woundYieldMultiplier(goblin);
+        const harvestYield = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
+        const hadFood = here.foodValue;
+        const depleted = Math.min(hadFood, depletionRate);
+        here.foodValue = Math.max(0, hadFood - depleted);
         if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
-        const amount         = Math.min(harvestYield, depleted, headroom);
+        const amount = Math.min(harvestYield, depleted, headroom);
         goblin.inventory.food += amount;
         addWorkFatigue(goblin);
         // Forager XP — grant on successful harvest
@@ -125,7 +128,7 @@ export const forage: Action = {
       const best = goblin.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
       if (goblin.x === best.x && goblin.y === best.y) {
         // Arrived — check if still harvestable
-        const tileHere  = grid[goblin.y][goblin.x];
+        const tileHere = grid[goblin.y][goblin.x];
         const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
         if (!stillGood) {
           let better: ResourceSite | null = null;
@@ -180,9 +183,9 @@ export const depositFood: Action = {
       const amount = goblin.inventory.food - DEPOSIT_KEEP_FOOD;
       const stored = Math.min(amount, target.maxFood - target.food);
       if (stored > 0) {
-        target.food           += stored;
+        target.food += stored;
         goblin.inventory.food -= stored;
-        goblin.task            = `deposited ${stored.toFixed(0)} → stockpile`;
+        goblin.task = `deposited ${stored.toFixed(0)} → stockpile`;
       }
     } else {
       moveTo(goblin, target, grid);

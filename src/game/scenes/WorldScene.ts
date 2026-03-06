@@ -23,9 +23,9 @@ import { getActiveFaction, setActiveFaction } from '../../shared/factions';
 
 // Frame assignments live in src/game/tileConfig.ts — edit them there
 // or use the in-game tile picker (press T).
-const GOBLIN_FRAME   = SPRITE_CONFIG.goblin;
-const ADVENTURER_FRAME  = SPRITE_CONFIG.adventurer;    // editable via T-key tile picker
-const CAM_PAN_SPEED  = 200; // world pixels per second for WASD pan
+const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
+const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;    // editable via T-key tile picker
+const CAM_PAN_SPEED = 200; // world pixels per second for WASD pan
 
 export class WorldScene extends Phaser.Scene {
   private grid: Tile[][] = [];
@@ -43,11 +43,13 @@ export class WorldScene extends Phaser.Scene {
 
   // Tilemap for terrain
   private map!: Phaser.Tilemaps.Tilemap;
-  private terrainLayer!: Phaser.Tilemaps.TilemapLayer;
+  private floorLayer!: Phaser.Tilemaps.TilemapLayer;
+  private objectLayer!: Phaser.Tilemaps.TilemapLayer;
 
   // Graphics layers
   private selectionGfx!: Phaser.GameObjects.Graphics;
   private flagGfx!: Phaser.GameObjects.Graphics;
+  private ambientGfx!: Phaser.GameObjects.Graphics;
   private overlayGfx!: Phaser.GameObjects.Graphics;
   private overlayMode: OverlayMode = 'off';
 
@@ -80,15 +82,15 @@ export class WorldScene extends Phaser.Scene {
   private colonyGoal!: ColonyGoal;
   private goalStartTick = 0;
   private adventurerKillCount = 0;
-  private foodStockpiles:        FoodStockpile[]  = [];
-  private oreStockpiles:         OreStockpile[]   = [];
-  private woodStockpiles:        WoodStockpile[]  = [];
-  private foodStockpileGfxList:  Phaser.GameObjects.Graphics[] = [];
-  private foodStockpileImgList:  Phaser.GameObjects.Image[]    = [];
-  private oreStockpileGfxList:   Phaser.GameObjects.Graphics[] = [];
-  private oreStockpileImgList:   Phaser.GameObjects.Image[]    = [];
-  private woodStockpileGfxList:  Phaser.GameObjects.Graphics[] = [];
-  private woodStockpileImgList:  Phaser.GameObjects.Image[]    = [];
+  private foodStockpiles: FoodStockpile[] = [];
+  private oreStockpiles: OreStockpile[] = [];
+  private woodStockpiles: WoodStockpile[] = [];
+  private foodStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  private foodStockpileImgList: Phaser.GameObjects.Image[] = [];
+  private oreStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  private oreStockpileImgList: Phaser.GameObjects.Image[] = [];
+  private woodStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  private woodStockpileImgList: Phaser.GameObjects.Image[] = [];
 
   // Event log history (persisted to save, restored on load)
   private logHistory: LogEntry[] = [];
@@ -126,7 +128,7 @@ export class WorldScene extends Phaser.Scene {
 
   private static makeGoal(type: ColonyGoal['type'], generation: number): ColonyGoal {
     const scale = 1 + generation * 0.6;
-    const desc  = getActiveFaction().goalDescriptions;
+    const desc = getActiveFaction().goalDescriptions;
     switch (type) {
       case 'stockpile_food':
         return { type, description: desc.stockpile_food(Math.round(80 * scale)), progress: 0, target: Math.round(80 * scale), generation };
@@ -149,28 +151,28 @@ export class WorldScene extends Phaser.Scene {
       setActiveFaction(save.faction ?? 'goblins');
       bus.emit('restoreLog', save.logHistory ?? []);
       // Restore all simulation state from the save file
-      this.grid               = save.grid;
-      this.spawnZone          = save.spawnZone;
-      this.goblins            = save.goblins;
+      this.grid = save.grid;
+      this.spawnZone = save.spawnZone;
+      this.goblins = save.goblins;
       // Backward compat — default new needs fields for saves that predate them
       for (const d of this.goblins) {
-        d.fatigue        ??= 0;
-        d.social         ??= 0;
-        d.lastSocialTick  ??= save.tick;
+        d.fatigue ??= 0;
+        d.social ??= 0;
+        d.lastSocialTick ??= save.tick;
         d.lastLoggedTicks ??= {};
       }
-      this.adventurers            = save.adventurers;
-      this.tick               = save.tick;
-      this.colonyGoal         = save.colonyGoal;
-      this.goalStartTick      = save.goalStartTick ?? 0;
-      this.foodStockpiles     = save.foodStockpiles;
-      this.oreStockpiles      = save.oreStockpiles;
-      this.woodStockpiles     = save.woodStockpiles ?? [];  // graceful fallback for old saves
-      this.adventurerKillCount    = save.adventurerKillCount;
+      this.adventurers = save.adventurers;
+      this.tick = save.tick;
+      this.colonyGoal = save.colonyGoal;
+      this.goalStartTick = save.goalStartTick ?? 0;
+      this.foodStockpiles = save.foodStockpiles;
+      this.oreStockpiles = save.oreStockpiles;
+      this.woodStockpiles = save.woodStockpiles ?? [];  // graceful fallback for old saves
+      this.adventurerKillCount = save.adventurerKillCount;
       this.pendingSuccessions = save.pendingSuccessions;
-      this.commandTile        = save.commandTile;
-      this.speedMultiplier    = save.speed;
-      this.overlayMode        = save.overlayMode;
+      this.commandTile = save.commandTile;
+      this.speedMultiplier = save.speed;
+      this.overlayMode = save.overlayMode;
       resetAdventurers(); // reset raid timer to prevent an immediate raid on resume
       // Restore world-event schedule; fall back to a fresh window if save predates this field
       setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
@@ -190,24 +192,24 @@ export class WorldScene extends Phaser.Scene {
       this.lastChapterTick = 0;
       // New game — procedural world + fresh goblins
       const { grid, spawnZone, seed } = generateWorld();
-      this.grid      = grid;
+      this.grid = grid;
       this.spawnZone = spawnZone;
       this.worldSeed = seed;
       console.log('World seed:', seed);
-      this.goblins   = spawnGoblins(this.grid, spawnZone);
+      this.goblins = spawnGoblins(this.grid, spawnZone);
       resetAdventurers();
       this.adventurers = spawnInitialAdventurers(this.grid, 3);
 
       const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
       const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
-      this.foodStockpiles  = [];
-      this.oreStockpiles   = [];
-      this.woodStockpiles  = [];
-      this.rooms           = [];
+      this.foodStockpiles = [];
+      this.oreStockpiles = [];
+      this.woodStockpiles = [];
+      this.rooms = [];
       this.adventurerKillCount = 0;
-      this.goalStartTick   = 0;
-      this.colonyGoal      = WorldScene.makeGoal('stockpile_food', 0);
-      this.weather         = createWeather(0);
+      this.goalStartTick = 0;
+      this.colonyGoal = WorldScene.makeGoal('stockpile_food', 0);
+      this.weather = createWeather(0);
       for (const d of this.goblins) {
         d.homeTile = { x: depotX, y: depotY };
       }
@@ -219,30 +221,31 @@ export class WorldScene extends Phaser.Scene {
     // ── Reset graphics tracking arrays (always fresh per scene) ─────────
     this.foodStockpileGfxList = [];
     this.foodStockpileImgList = [];
-    this.oreStockpileGfxList  = [];
-    this.oreStockpileImgList  = [];
+    this.oreStockpileGfxList = [];
+    this.oreStockpileImgList = [];
     this.woodStockpileGfxList = [];
     this.woodStockpileImgList = [];
 
     // ── Tilemap for terrain ─────────────────────────────────────────────
     this.map = this.make.tilemap({
-      tileWidth:  TILE_SIZE,
+      tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
-      width:      GRID_SIZE,
-      height:     GRID_SIZE,
+      width: GRID_SIZE,
+      height: GRID_SIZE,
     });
     const tileset = this.map.addTilesetImage('kenney1bit', 'tiles', TILE_SIZE, TILE_SIZE, 0, 0)!;
-    this.terrainLayer = this.map.createBlankLayer('terrain', tileset)!;
+    this.floorLayer = this.map.createBlankLayer('floor', tileset)!.setDepth(0);
+    this.objectLayer = this.map.createBlankLayer('objects', tileset)!.setDepth(2);
 
     // ── Graphics layers ─────────────────────────────────────────────────
-    // All graphics are created AFTER the terrain layer so they render on top.
-    this.overlayGfx   = this.add.graphics();
-    this.flagGfx      = this.add.graphics();
-    this.selectionGfx = this.add.graphics();
+    this.ambientGfx = this.add.graphics().setDepth(1);
+    this.overlayGfx = this.add.graphics().setDepth(10);
+    this.flagGfx = this.add.graphics().setDepth(11);
+    this.selectionGfx = this.add.graphics().setDepth(12);
 
     // Add graphics for all stockpiles (may be >1 when loading a saved game)
     for (const sp of this.foodStockpiles) this.addFoodStockpileGraphics(sp);
-    for (const sp of this.oreStockpiles)  this.addOreStockpileGraphics(sp);
+    for (const sp of this.oreStockpiles) this.addOreStockpileGraphics(sp);
     for (const sp of this.woodStockpiles) this.addWoodStockpileGraphics(sp);
 
     // Build-mode room preview overlay
@@ -353,14 +356,14 @@ export class WorldScene extends Phaser.Scene {
     // Store handler refs so they can be removed on scene shutdown (avoids stale
     // listeners firing on a destroyed scene when the player starts a new colony).
     const controlHandler = ({ action }: { action: 'pause' | 'speedUp' | 'speedDown' | 'newColony' }) => {
-      if (action === 'pause')     this.togglePause();
-      if (action === 'speedUp')   this.adjustSpeed(1);
+      if (action === 'pause') this.togglePause();
+      if (action === 'speedUp') this.adjustSpeed(1);
       if (action === 'speedDown') this.adjustSpeed(-1);
       // 'newColony' is handled by App.tsx; WorldScene has nothing to do
     };
     const settingsHandler = (s: { llmEnabled?: boolean; llmProvider?: 'anthropic' | 'groq' }) => {
-      if (s.llmEnabled !== undefined) llmSystem.enabled  = s.llmEnabled;
-      if (s.llmProvider)              llmSystem.provider = s.llmProvider;
+      if (s.llmEnabled !== undefined) llmSystem.enabled = s.llmEnabled;
+      if (s.llmProvider) llmSystem.provider = s.llmProvider;
     };
     const logCaptureHandler = (entry: LogEntry) => {
       this.logHistory.push(entry);
@@ -408,29 +411,29 @@ export class WorldScene extends Phaser.Scene {
   /** Serialise the full simulation state into a plain object suitable for JSON. */
   private buildSaveData(): SaveData {
     return {
-      version:            2,
-      tick:               this.tick,
-      grid:               this.grid,
-      goblins:            this.goblins.map(d => ({ ...d })),
-      adventurers:            this.adventurers.map(g => ({ ...g })),
-      colonyGoal:         { ...this.colonyGoal },
-      foodStockpiles:     this.foodStockpiles.map(s => ({ ...s })),
-      oreStockpiles:      this.oreStockpiles.map(s => ({ ...s })),
-      woodStockpiles:     this.woodStockpiles.map(s => ({ ...s })),
-      adventurerKillCount:    this.adventurerKillCount,
-      spawnZone:          { ...this.spawnZone },
+      version: 2,
+      tick: this.tick,
+      grid: this.grid,
+      goblins: this.goblins.map(d => ({ ...d })),
+      adventurers: this.adventurers.map(g => ({ ...g })),
+      colonyGoal: { ...this.colonyGoal },
+      foodStockpiles: this.foodStockpiles.map(s => ({ ...s })),
+      oreStockpiles: this.oreStockpiles.map(s => ({ ...s })),
+      woodStockpiles: this.woodStockpiles.map(s => ({ ...s })),
+      adventurerKillCount: this.adventurerKillCount,
+      spawnZone: { ...this.spawnZone },
       pendingSuccessions: this.pendingSuccessions.map(s => ({ ...s })),
-      commandTile:        this.commandTile ? { ...this.commandTile } : null,
-      speed:              this.speedMultiplier,
-      overlayMode:        this.overlayMode,
-      logHistory:         [...this.logHistory],
+      commandTile: this.commandTile ? { ...this.commandTile } : null,
+      speed: this.speedMultiplier,
+      overlayMode: this.overlayMode,
+      logHistory: [...this.logHistory],
       nextWorldEventTick: getNextEventTick(),
-      weather:            { ...this.weather },
-      worldSeed:          this.worldSeed,
-      chapters:           [...this.chapters],
-      goalStartTick:      this.goalStartTick,
-      faction:            getActiveFaction().id,
-      rooms:              this.rooms.map(r => ({ ...r })),
+      weather: { ...this.weather },
+      worldSeed: this.worldSeed,
+      chapters: [...this.chapters],
+      goalStartTick: this.goalStartTick,
+      faction: getActiveFaction().id,
+      rooms: this.rooms.map(r => ({ ...r })),
     };
   }
 
@@ -472,11 +475,11 @@ export class WorldScene extends Phaser.Scene {
       }
 
       // ── Left-click drag start ────────────────────────────────────────
-      dragStartX    = p.x;
-      dragStartY    = p.y;
+      dragStartX = p.x;
+      dragStartY = p.y;
       scrollAtDragX = cam.scrollX;
       scrollAtDragY = cam.scrollY;
-      didDrag       = false;
+      didDrag = false;
 
       // ── Long-press timer (touch: replaces right-click for commands) ──
       if (this.isTouchDevice) {
@@ -637,9 +640,9 @@ export class WorldScene extends Phaser.Scene {
 
       // Left tap: select goblin — prefer alive, fall back to dead ghost
       const aliveGoblins = this.goblins.filter(d => d.alive);
-      const deadDwarves  = this.goblins.filter(d => !d.alive);
+      const deadDwarves = this.goblins.filter(d => !d.alive);
       const hitAlive = findNearest(aliveGoblins);
-      const hitDead  = !hitAlive ? findNearest(deadDwarves) : undefined;
+      const hitDead = !hitAlive ? findNearest(deadDwarves) : undefined;
       this.selectedGoblinId = (hitAlive ?? hitDead)?.id ?? null;
       bus.emit('stockpileSelect', null);
       bus.emit('adventurerSelect', null);
@@ -648,14 +651,14 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.on('wheel',
       (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, deltaY: number) => {
-        const oldZoom  = cam.zoom;
+        const oldZoom = cam.zoom;
 
         // Clamp deltaY to ±100 so a single trackpad flick doesn't jump the full range.
         // Then use a small logarithmic step (3% per 100px of delta) so the zoom feels
         // proportional rather than jumping 10% per tick.
         const clampedDelta = Phaser.Math.Clamp(deltaY, -100, 100);
         const factor = 1 - clampedDelta * 0.0003;   // e.g. deltaY=100 → factor=0.97 (−3%)
-        const newZoom  = Phaser.Math.Clamp(oldZoom * factor, this.minZoom, 5);
+        const newZoom = Phaser.Math.Clamp(oldZoom * factor, this.minZoom, 5);
         if (newZoom === oldZoom) return;
 
         // Phaser 3 uses a viewport-centred transform — scrollX is NOT the world position
@@ -663,7 +666,7 @@ export class WorldScene extends Phaser.Scene {
         // adjusts scroll by (cursor-from-viewport-centre) × (zoom-factor-delta).
         const f = 1 / oldZoom - 1 / newZoom;
         cam.zoom = newZoom;
-        cam.scrollX += (ptr.x - cam.x - cam.width  / 2) * f;
+        cam.scrollX += (ptr.x - cam.x - cam.width / 2) * f;
         cam.scrollY += (ptr.y - cam.y - cam.height / 2) * f;
       },
     );
@@ -684,11 +687,11 @@ export class WorldScene extends Phaser.Scene {
       : `${targets.length} goblins`;
 
     bus.emit('logEntry', {
-      tick:       this.tick,
-      goblinId:    this.selectedGoblinId ?? 'all',
-      goblinName:  who,
-      message:    `ordered to (${tx},${ty})`,
-      level:      'info',
+      tick: this.tick,
+      goblinId: this.selectedGoblinId ?? 'all',
+      goblinName: who,
+      message: `ordered to (${tx},${ty})`,
+      level: 'info',
     });
   }
 
@@ -745,11 +748,11 @@ export class WorldScene extends Phaser.Scene {
     this.rooms.push(room);
 
     bus.emit('logEntry', {
-      tick:       this.tick,
-      goblinId:    'world',
-      goblinName:  'COLONY',
-      message:    `Storage zone designated at (${x},${y})!`,
-      level:      'info',
+      tick: this.tick,
+      goblinId: 'world',
+      goblinName: 'COLONY',
+      message: `Storage zone designated at (${x},${y})!`,
+      level: 'info',
     });
 
     this.buildMode = null;
@@ -781,11 +784,11 @@ export class WorldScene extends Phaser.Scene {
     const weatherMsg = tickWeather(this.weather, this.tick);
     if (weatherMsg) {
       bus.emit('logEntry', {
-        tick:      this.tick,
-        goblinId:   'system',
+        tick: this.tick,
+        goblinId: 'system',
         goblinName: 'WEATHER',
-        message:   weatherMsg,
-        level:     'info',
+        message: weatherMsg,
+        level: 'info',
       });
     }
 
@@ -809,11 +812,11 @@ export class WorldScene extends Phaser.Scene {
     const surprises = llmSystem.checkVerifications(this.goblins, this.tick);
     for (const msg of surprises) {
       bus.emit('logEntry', {
-        tick:      this.tick,
-        goblinId:   'system',
+        tick: this.tick,
+        goblinId: 'system',
         goblinName: 'VERIFY',
-        message:   msg,
-        level:     'warn',
+        message: msg,
+        level: 'warn',
       });
     }
 
@@ -821,14 +824,14 @@ export class WorldScene extends Phaser.Scene {
       const wasAlive = d.alive;
       tickAgentUtility(d, this.grid, this.tick, this.goblins, (message, level) => {
         bus.emit('logEntry', {
-          tick:      this.tick,
-          goblinId:   d.id,
+          tick: this.tick,
+          goblinId: d.id,
           goblinName: d.name,
           message,
           level,
         });
       }, this.foodStockpiles, this.adventurers, this.oreStockpiles, this.colonyGoal ?? undefined, this.woodStockpiles,
-      metabolismModifier(this.weather), this.warmthField, this.dangerField, this.weather.type, this.rooms);
+        metabolismModifier(this.weather), this.warmthField, this.dangerField, this.weather.type, this.rooms);
       if (wasAlive && !d.alive) {
         this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
       }
@@ -837,11 +840,11 @@ export class WorldScene extends Phaser.Scene {
       llmSystem.requestDecision(d, this.goblins, this.grid, this.tick, this.adventurers,
         (goblin, decision, situation) => {
           goblin.llmReasoning = decision.reasoning;
-          goblin.task         = decision.action;  // show LLM action string as task label
+          goblin.task = decision.action;  // show LLM action string as task label
 
           // Store structured intent with expiry (~7.5 s at 7 ticks/s)
           if (decision.intent && decision.intent !== 'none') {
-            goblin.llmIntent       = decision.intent;
+            goblin.llmIntent = decision.intent;
             goblin.llmIntentExpiry = this.tick + 50;
           }
 
@@ -849,11 +852,11 @@ export class WorldScene extends Phaser.Scene {
           goblin.memory.push({ tick: this.tick, crisis: situation.type, action: decision.action, reasoning: decision.reasoning });
 
           bus.emit('logEntry', {
-            tick:      this.tick,
-            goblinId:   goblin.id,
+            tick: this.tick,
+            goblinId: goblin.id,
             goblinName: goblin.name,
-            message:   `[${situation.type}] ${decision.intent ?? 'none'} — "${decision.reasoning}"`,
-            level:     'warn',
+            message: `[${situation.type}] ${decision.intent ?? 'none'} — "${decision.reasoning}"`,
+            level: 'warn',
           });
         },
         this.colonyGoal,
@@ -877,11 +880,11 @@ export class WorldScene extends Phaser.Scene {
     if (raid) {
       this.adventurers.push(...raid.adventurers);
       bus.emit('logEntry', {
-        tick:      this.tick,
-        goblinId:   'adventurer',
+        tick: this.tick,
+        goblinId: 'adventurer',
         goblinName: 'RAID',
-        message:   `⚔ ${raid.count} ${getActiveFaction().enemyNounPlural} storm from the ${raid.edge}! ${getActiveFaction().raidSuffix}`,
-        level:     'error',
+        message: `⚔ ${raid.count} ${getActiveFaction().enemyNounPlural} storm from the ${raid.edge}! ${getActiveFaction().raidSuffix}`,
+        level: 'error',
       });
     }
 
@@ -896,15 +899,15 @@ export class WorldScene extends Phaser.Scene {
           d.morale = Math.max(0, d.morale - 5);
           const enemyNoun = getActiveFaction().enemyNounPlural;
           if (d.health <= 0) {
-            d.alive        = false;
-            d.task         = 'dead';
+            d.alive = false;
+            d.task = 'dead';
             d.causeOfDeath = `killed by ${enemyNoun}`;
             bus.emit('logEntry', {
-              tick:      this.tick,
-              goblinId:   d.id,
+              tick: this.tick,
+              goblinId: d.id,
               goblinName: d.name,
-              message:   `killed by ${enemyNoun}!`,
-              level:     'error',
+              message: `killed by ${enemyNoun}!`,
+              level: 'error',
             });
             this.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: this.tick + SUCCESSION_DELAY });
           } else {
@@ -915,13 +918,13 @@ export class WorldScene extends Phaser.Scene {
             this.combatHits.set(d.id, hits);
             if (hits % 3 === 1) {  // log 1st hit, then every 3rd
               bus.emit('logEntry', {
-                tick:      this.tick,
-                goblinId:   d.id,
+                tick: this.tick,
+                goblinId: d.id,
                 goblinName: d.name,
-                message:   hits === 1
+                message: hits === 1
                   ? `⚔ hit by ${enemySing}! (${d.health.toFixed(0)} hp)`
                   : `⚔ fighting ${enemySing} (${hits} hits taken, ${d.health.toFixed(0)} hp)`,
-                level:     'warn',
+                level: 'warn',
               });
             }
             // Wound roll — 60% chance of injury per hit (if not already wounded)
@@ -929,11 +932,11 @@ export class WorldScene extends Phaser.Scene {
             if (w) {
               d.wound = w;
               bus.emit('logEntry', {
-                tick:      this.tick,
-                goblinId:   d.id,
+                tick: this.tick,
+                goblinId: d.id,
                 goblinName: d.name,
-                message:   `🩹 suffered a ${woundLabel(w.type)}!`,
-                level:     'warn',
+                message: `🩹 suffered a ${woundLabel(w.type)}!`,
+                level: 'warn',
               });
             }
           }
@@ -943,8 +946,8 @@ export class WorldScene extends Phaser.Scene {
       // Emit adventurer action log entries
       for (const { message, level } of gr.logs) {
         bus.emit('logEntry', {
-          tick:      this.tick,
-          goblinId:   'adventurer',
+          tick: this.tick,
+          goblinId: 'adventurer',
           goblinName: 'GOBLIN',
           message,
           level,
@@ -954,7 +957,7 @@ export class WorldScene extends Phaser.Scene {
       // Remove dead adventurers and their sprites
       if (gr.adventurerDeaths.length > 0) {
         const deadIds = new Set(gr.adventurerDeaths);
-        this.adventurers  = this.adventurers.filter(g => !deadIds.has(g.id));
+        this.adventurers = this.adventurers.filter(g => !deadIds.has(g.id));
         this.adventurerKillCount += gr.adventurerDeaths.length;
         for (const id of gr.adventurerDeaths) {
           const spr = this.adventurerSprites.get(id);
@@ -966,20 +969,20 @@ export class WorldScene extends Phaser.Scene {
           if (killer) {
             killer.adventurerKills += 1;
             const factionCfg = getActiveFaction();
-            const killVerb   = factionCfg.killVerb;
-            const enemySing  = factionCfg.enemyNounPlural.replace(/s$/, '');
-            const article    = /^[aeiou]/i.test(enemySing) ? 'an' : 'a';
+            const killVerb = factionCfg.killVerb;
+            const enemySing = factionCfg.enemyNounPlural.replace(/s$/, '');
+            const article = /^[aeiou]/i.test(enemySing) ? 'an' : 'a';
             killer.memory.push({ tick: this.tick, crisis: 'combat', action: `${killVerb} ${article} ${enemySing} in battle` });
             const hitsTaken = this.combatHits.get(killer.id) ?? 0;
             this.combatHits.delete(killer.id);
             bus.emit('logEntry', {
-              tick:      this.tick,
-              goblinId:   killer.id,
+              tick: this.tick,
+              goblinId: killer.id,
               goblinName: killer.name,
-              message:   hitsTaken > 0
+              message: hitsTaken > 0
                 ? `⚔ ${killVerb} ${article} ${enemySing}! (took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
                 : `⚔ ${killVerb} ${article} ${enemySing}!`,
-              level:     'warn',
+              level: 'warn',
             });
           }
         }
@@ -990,11 +993,11 @@ export class WorldScene extends Phaser.Scene {
     const ev = tickWorldEvents(this.grid, this.tick, this.goblins, this.adventurers);
     if (ev.fired) {
       bus.emit('logEntry', {
-        tick:      this.tick,
-        goblinId:   'world',
+        tick: this.tick,
+        goblinId: 'world',
         goblinName: 'WORLD',
-        message:   ev.message,
-        level:     'warn',
+        message: ev.message,
+        level: 'warn',
       });
     }
 
@@ -1018,11 +1021,11 @@ export class WorldScene extends Phaser.Scene {
       this.goblins.push(successor);
 
       bus.emit('logEntry', {
-        tick:      this.tick,
-        goblinId:   successor.id,
+        tick: this.tick,
+        goblinId: successor.id,
         goblinName: successor.name,
-        message:   `arrives to take ${dead.name}'s place. [${successor.role.toUpperCase()}]`,
-        level:     'info',
+        message: `arrives to take ${dead.name}'s place. [${successor.role.toUpperCase()}]`,
+        level: 'info',
       });
 
       // LLM arrival thought — detached, never blocks the game loop
@@ -1097,14 +1100,14 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private emitMiniMap() {
-    const cam    = this.cameras.main;
-    const tpx    = TILE_SIZE;
-    const view   = cam.worldView;
+    const cam = this.cameras.main;
+    const tpx = TILE_SIZE;
+    const view = cam.worldView;
     const data: MiniMapData = {
       tiles: this.grid.map(row => row.map(t => ({
-        type:      t.type,
-        foodRatio: t.maxFood     > 0 ? t.foodValue     / t.maxFood     : 0,
-        matRatio:  t.maxMaterial > 0 ? t.materialValue / t.maxMaterial : 0,
+        type: t.type,
+        foodRatio: t.maxFood > 0 ? t.foodValue / t.maxFood : 0,
+        matRatio: t.maxMaterial > 0 ? t.materialValue / t.maxMaterial : 0,
       }))),
       goblins: this.goblins
         .filter(d => d.alive)
@@ -1113,7 +1116,7 @@ export class WorldScene extends Phaser.Scene {
       viewport: {
         x: view.x / tpx,
         y: view.y / tpx,
-        w: view.width  / tpx,
+        w: view.width / tpx,
         h: view.height / tpx,
       },
     };
@@ -1123,22 +1126,22 @@ export class WorldScene extends Phaser.Scene {
   private emitGameState() {
     const alive = this.goblins.filter(d => d.alive);
     bus.emit('gameState', {
-      tick:            this.tick,
-      goblins:         this.goblins.map(d => ({ ...d })),
-      totalFood:       alive.reduce((s, d) => s + d.inventory.food, 0),
-      totalOre:        alive.reduce((s, d) => s + d.inventory.ore, 0),
-      totalWood:       alive.reduce((s, d) => s + d.inventory.wood, 0),
+      tick: this.tick,
+      goblins: this.goblins.map(d => ({ ...d })),
+      totalFood: alive.reduce((s, d) => s + d.inventory.food, 0),
+      totalOre: alive.reduce((s, d) => s + d.inventory.ore, 0),
+      totalWood: alive.reduce((s, d) => s + d.inventory.wood, 0),
       selectedGoblinId: this.selectedGoblinId,
-      overlayMode:     this.overlayMode,
-      paused:          this.paused,
-      speed:           this.speedMultiplier,
-      colonyGoal:      { ...this.colonyGoal },
-      foodStockpiles:  this.foodStockpiles.map(d => ({ ...d })),
-      oreStockpiles:   this.oreStockpiles.map(s => ({ ...s })),
-      woodStockpiles:  this.woodStockpiles.map(s => ({ ...s })),
-      weatherSeason:   this.weather.season,
-      weatherType:     this.weather.type,
-      rooms:           this.rooms.map(r => ({ ...r })),
+      overlayMode: this.overlayMode,
+      paused: this.paused,
+      speed: this.speedMultiplier,
+      colonyGoal: { ...this.colonyGoal },
+      foodStockpiles: this.foodStockpiles.map(d => ({ ...d })),
+      oreStockpiles: this.oreStockpiles.map(s => ({ ...s })),
+      woodStockpiles: this.woodStockpiles.map(s => ({ ...s })),
+      weatherSeason: this.weather.season,
+      weatherType: this.weather.type,
+      rooms: this.rooms.map(r => ({ ...r })),
     });
   }
 
@@ -1175,11 +1178,11 @@ export class WorldScene extends Phaser.Scene {
       d.morale = Math.min(100, d.morale + 15);
     }
     bus.emit('logEntry', {
-      tick:      this.tick,
-      goblinId:   'world',
+      tick: this.tick,
+      goblinId: 'world',
       goblinName: 'COLONY',
-      message:   `✓ Goal complete: ${this.colonyGoal.description}! Morale boost for all!`,
-      level:     'info',
+      message: `✓ Goal complete: ${this.colonyGoal.description}! Morale boost for all!`,
+      level: 'info',
     });
     const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_adventurers', 'enclose_fort'];
     const curr = GOAL_TYPES.indexOf(this.colonyGoal.type);
@@ -1197,8 +1200,8 @@ export class WorldScene extends Phaser.Scene {
     callStorytellerLLM(completedGoal, this.goblins, this.adventurers, significantEvents, snapshotTick)
       .then(text => {
         const chapter: Chapter = {
-          chapterNumber:  chapterNum,
-          goalType:       completedGoal.type,
+          chapterNumber: chapterNum,
+          goalType: completedGoal.type,
           goalGeneration: completedGoal.generation,
           text: text ?? buildFallbackChapter(completedGoal, alive, significantEvents),
           tick: snapshotTick,
@@ -1289,23 +1292,23 @@ export class WorldScene extends Phaser.Scene {
 
   /** Create Phaser graphics + sprite objects for a newly added food stockpile. */
   private addFoodStockpileGraphics(stockpile: FoodStockpile): void {
-    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
-    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
     this.foodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.foodStockpile));
     this.foodStockpileGfxList.push(this.add.graphics());
   }
 
   /** Create Phaser graphics + sprite objects for a newly added ore stockpile. */
   private addOreStockpileGraphics(stockpile: OreStockpile): void {
-    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
-    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
     this.oreStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile));
     this.oreStockpileGfxList.push(this.add.graphics());
   }
 
   private drawFoodStockpile() {
     for (let i = 0; i < this.foodStockpiles.length; i++) {
-      const d   = this.foodStockpiles[i];
+      const d = this.foodStockpiles[i];
       const gfx = this.foodStockpileGfxList[i];
       if (!gfx) continue;
       const px = d.x * TILE_SIZE, py = d.y * TILE_SIZE;
@@ -1317,7 +1320,7 @@ export class WorldScene extends Phaser.Scene {
 
   private drawOreStockpile() {
     for (let i = 0; i < this.oreStockpiles.length; i++) {
-      const s   = this.oreStockpiles[i];
+      const s = this.oreStockpiles[i];
       const gfx = this.oreStockpileGfxList[i];
       if (!gfx) continue;
       const px = s.x * TILE_SIZE, py = s.y * TILE_SIZE;
@@ -1329,15 +1332,15 @@ export class WorldScene extends Phaser.Scene {
 
   /** Create Phaser graphics + sprite objects for a newly added wood stockpile. */
   private addWoodStockpileGraphics(stockpile: WoodStockpile): void {
-    const cx  = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
-    const cy  = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
     this.woodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.woodStockpile));
     this.woodStockpileGfxList.push(this.add.graphics());
   }
 
   private drawWoodStockpile() {
     for (let i = 0; i < this.woodStockpiles.length; i++) {
-      const w   = this.woodStockpiles[i];
+      const w = this.woodStockpiles[i];
       const gfx = this.woodStockpileGfxList[i];
       if (!gfx) continue;
       const px = w.x * TILE_SIZE, py = w.y * TILE_SIZE;
@@ -1350,45 +1353,58 @@ export class WorldScene extends Phaser.Scene {
   // ── Rendering ──────────────────────────────────────────────────────────
 
   private drawTerrain() {
+    const OBJECT_TILES = new Set([
+      TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.Hearth, TileType.Fire,
+    ]);
+
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile = this.grid[y][x];
-        // Look up frame(s) from tileConfig. Multiple frames = noise-selected variation.
         const frames = TILE_CONFIG[tile.type] ?? [0];
-        const n      = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-        const noise  = n - Math.floor(n);
-        const frame  = frames.length === 1
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        const noise = n - Math.floor(n);
+        const frame = frames.length === 1
           ? frames[0]
           : frames[Math.floor(noise * frames.length)];
-        const t = this.terrainLayer.putTileAt(frame, x, y)!;
+
+        // Decide which layer this tile belongs to
+        const isObject = OBJECT_TILES.has(tile.type);
+        const targetLayer = isObject ? this.objectLayer : this.floorLayer;
+        const otherLayer = isObject ? this.floorLayer : this.objectLayer;
+
+        const t = targetLayer.putTileAt(frame, x, y)!;
+        otherLayer.removeTileAt(x, y); // clear the other layer at this spot
 
         // Tinting: food tiles dim as they deplete; player-built walls get a blue-gray
-        // tint to distinguish them from natural Stone (both use frame 103).
         if (tile.maxFood > 0) {
-          const ratio      = tile.foodValue / tile.maxFood;
+          const ratio = tile.foodValue / tile.maxFood;
           const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
           t.tint = (brightness << 16) | (brightness << 8) | brightness;
         } else if (tile.type === TileType.Wall) {
-          t.tint = 0x88aacc;  // blue-gray: player-built fort wall
+          t.tint = 0x88aacc;  // blue-gray
         } else if (tile.type === TileType.Hearth) {
-          t.tint = 0xff8844;  // warm orange: hearth fire
+          t.tint = 0xff8844;  // warm orange
         } else if (tile.type === TileType.Fire) {
           const phase = (this.tick + x * 3 + y * 7) % 3;
           t.tint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
         } else if (tile.type === TileType.Pool) {
-          t.tint = 0x44bbaa;  // teal-green — murky shallow puddle, distinct from deep Water
+          t.tint = 0x44bbaa;  // teal-green
         } else {
           t.tint = 0xffffff;
         }
 
-        // Room tint overlay — blend a color based on specialization
+        // Add dirt background under objects if needed (so we don't see black voids)
+        if (isObject) {
+          this.floorLayer.putTileAt(TILE_CONFIG[TileType.Dirt][0], x, y);
+        }
+
+        // Room tint overlay
         for (const room of this.rooms) {
           if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
             const roomTint = room.specialization === 'food' ? 0xccffcc
               : room.specialization === 'ore' ? 0xffddaa
-              : room.specialization === 'wood' ? 0xddffcc
-              : 0xccccff;
-            // Multiply tint: ((t.tint_channel * roomTint_channel) >> 8) per channel
+                : room.specialization === 'wood' ? 0xddffcc
+                  : 0xccccff;
             const tr = (t.tint >> 16) & 0xff, tg = (t.tint >> 8) & 0xff, tb = t.tint & 0xff;
             const rr = (roomTint >> 16) & 0xff, rg = (roomTint >> 8) & 0xff, rb = roomTint & 0xff;
             t.tint = (((tr * rr) >> 8) << 16) | (((tg * rg) >> 8) << 8) | ((tb * rb) >> 8);
@@ -1400,39 +1416,66 @@ export class WorldScene extends Phaser.Scene {
     this.terrainDirty = false;
   }
 
-  /** Colored semi-transparent overlay showing food or material density. */
+  /**
+   * Colored semi-transparent overlay showing density data.
+   * Renders subtle persistent warmth/danger tiles, and intensifies them (or adds cargo data)
+   * when a specific overlay mode is active.
+   */
   private drawOverlay() {
     this.overlayGfx.clear();
-    if (this.overlayMode === 'off') return;
+    this.ambientGfx.clear();
 
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         const tile = this.grid[y][x];
-        let alpha = 0;
-        let color = 0;
 
-        if (this.overlayMode === 'food' && tile.maxFood > 0) {
-          alpha = (tile.foodValue / tile.maxFood) * 0.65;
-          color = 0x00dd44; // green
-        } else if (this.overlayMode === 'material' && tile.maxMaterial > 0 && tile.type !== TileType.Forest) {
-          alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
-          color = 0xff8800; // amber
-        } else if (this.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
-          alpha = (tile.materialValue / tile.maxMaterial) * 0.65;
-          color = 0x56d973; // green
-        } else if (this.overlayMode === 'warmth') {
-          const w = this.warmthField[y * GRID_SIZE + x];
-          if (w > 0) { alpha = (w / 100) * 0.6; color = 0xff6600; } // orange-red
-        } else if (this.overlayMode === 'danger') {
-          const d = this.dangerField[y * GRID_SIZE + x];
-          if (d > 0) { alpha = (d / 100) * 0.6; color = 0xff2222; } // red
-        } else if (this.overlayMode === 'traffic') {
-          const tr = tile.trafficScore ?? 0;
-          if (tr > 0) { alpha = (tr / 100) * 0.6; color = 0xffee00; } // yellow
+        // ── 1. Persistent Ambient Glow (Tiled style) ───────────────────
+        // These are now rendered on ambientGfx, which sits BETWEEN floor and objects.
+        let ambientAlpha = 0;
+        let ambientColor = 0;
+
+        const w = this.warmthField[y * GRID_SIZE + x];
+        const d = this.dangerField[y * GRID_SIZE + x];
+
+        if (w > 0) {
+          ambientAlpha = Math.pow(w / 100, 2) * 0.5;
+          ambientColor = 0xff6600;
+        } else if (d > 0) {
+          ambientAlpha = Math.pow(d / 100, 2) * 0.5;
+          ambientColor = 0xff2222;
         }
 
-        if (alpha > 0.02) {
-          this.overlayGfx.fillStyle(color, alpha);
+        if (ambientAlpha > 0.02) {
+          this.ambientGfx.fillStyle(ambientColor, ambientAlpha);
+          this.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+
+        // ── 2. Tactical Overlay (Added on top) ─────────────────────────
+        if (this.overlayMode === 'off') continue;
+
+        let tacticalAlpha = 0;
+        let tacticalColor = 0;
+
+        if (this.overlayMode === 'food' && tile.maxFood > 0) {
+          tacticalAlpha = (tile.foodValue / tile.maxFood) * 0.65;
+          tacticalColor = 0x00dd44; // green
+        } else if (this.overlayMode === 'material' && tile.maxMaterial > 0 && tile.type !== TileType.Forest) {
+          tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+          tacticalColor = 0xff8800; // amber
+        } else if (this.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
+          tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+          tacticalColor = 0x56d973; // green
+        } else if (this.overlayMode === 'warmth') {
+          if (w > 0) { tacticalAlpha = (w / 100) * 0.5; tacticalColor = 0xff6600; }
+        } else if (this.overlayMode === 'danger') {
+          if (d > 0) { tacticalAlpha = (d / 100) * 0.5; tacticalColor = 0xff2222; }
+        } else if (this.overlayMode === 'traffic') {
+          const tr = tile.trafficScore ?? 0;
+          if (tr > 0) { tacticalAlpha = (tr / 100) * 0.6; tacticalColor = 0xffee00; } // yellow
+        }
+
+        if (tacticalAlpha > 0.02) {
+          this.overlayGfx.fillStyle(tacticalColor, tacticalAlpha);
           this.overlayGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
       }
@@ -1447,7 +1490,7 @@ export class WorldScene extends Phaser.Scene {
     const d = this.goblins.find(dw => dw.id === this.selectedGoblinId && dw.alive);
     if (!d) return;
 
-    const cam  = this.cameras.main;
+    const cam = this.cameras.main;
     const view = cam.worldView;
 
     // Screen position of goblin (world → screen)
@@ -1461,13 +1504,13 @@ export class WorldScene extends Phaser.Scene {
     if (sx >= margin && sx <= sw - margin && sy >= margin && sy <= sh - margin) return;
 
     // Clamp arrow tip to viewport edge with margin
-    const cx  = sw / 2;
-    const cy  = sh / 2;
-    const dx  = sx - cx;
-    const dy  = sy - cy;
+    const cx = sw / 2;
+    const cy = sh / 2;
+    const dx = sx - cx;
+    const dy = sy - cy;
     const len = Math.sqrt(dx * dx + dy * dy);
-    const nx  = dx / len;
-    const ny  = dy / len;
+    const nx = dx / len;
+    const ny = dy / len;
 
     // Clamp along the direction until we hit an edge
     const scaleX = Math.abs(nx) > 0.001 ? (nx > 0 ? (sw - margin - cx) : (cx - margin)) / Math.abs(dx) : Infinity;
@@ -1477,7 +1520,7 @@ export class WorldScene extends Phaser.Scene {
     const ay = cy + dy * t;
 
     // Draw filled triangle arrow pointing toward goblin
-    const angle   = Math.atan2(ny, nx);
+    const angle = Math.atan2(ny, nx);
     const tipSize = 10;
     const baseHalf = 6;
     const tx0 = ax + Math.cos(angle) * tipSize;
@@ -1541,8 +1584,8 @@ export class WorldScene extends Phaser.Scene {
         spr.setTint(phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400);
       } else {
         const hr = d.hunger / 100;
-        const r  = Math.floor(60 + hr * 195);
-        const g  = Math.floor(200 - hr * 150);
+        const r = Math.floor(60 + hr * 195);
+        const g = Math.floor(200 - hr * 150);
         spr.setTint((r << 16) | (g << 8) | 60);
       }
 
@@ -1578,7 +1621,7 @@ export class WorldScene extends Phaser.Scene {
 
   update(time: number, delta: number) {
     // WASD camera pan (only when keyboard is available)
-    const cam   = this.cameras.main;
+    const cam = this.cameras.main;
     if (this.wasd) {
       const speed = CAM_PAN_SPEED * (delta / 1000) / cam.zoom;
       if (this.wasd.W.isDown) cam.scrollY -= speed;
@@ -1593,9 +1636,9 @@ export class WorldScene extends Phaser.Scene {
       this.gameTick();
     }
 
-    if (this.terrainDirty) {
-      this.drawTerrain();
-      this.drawOverlay(); // refresh density whenever food values change
+    if (this.terrainDirty || !this.paused) {
+      if (this.terrainDirty) this.drawTerrain();
+      this.drawOverlay(); // refresh density + ambient glow
     }
     this.drawAgents();
     this.drawFoodStockpile();
