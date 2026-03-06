@@ -91,8 +91,8 @@ function updateNeeds(
     const coldPenalty = inverseSigmoid(warmth, 30, 0.12);
     if (coldPenalty > 0.05) {
       goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
-      goblin.morale  = Math.max(0, goblin.morale - 0.25 * coldPenalty);
-      goblin.hunger  = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
+      goblin.morale = Math.max(0, goblin.morale - 0.25 * coldPenalty);
+      goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
       if (shouldLog(goblin, 'freezing', currentTick, 150)) {
         onLog?.('🥶 freezing in the open', 'warn');
       }
@@ -124,9 +124,9 @@ function updateNeeds(
   goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
   const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
     bruised: 0.30,
-    leg:     0.15,
-    arm:     0.10,
-    eye:     0.05,
+    leg: 0.15,
+    arm: 0.10,
+    eye: 0.05,
   };
   const woundDrain = goblin.wound ? (WOUND_FATIGUE_DRAIN[goblin.wound.type] ?? 0) : 0;
   if (woundDrain > 0) {
@@ -148,7 +148,7 @@ function updateNeeds(
   // one stuck alone for hundreds of ticks starts suffering morale loss.
   if (goblins) {
     const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1; // helpful/cheerful trait widens this
-    const FRIEND_REL    = 40; // minimum relation score to count as "friendly"
+    const FRIEND_REL = 40; // minimum relation score to count as "friendly"
     const hasFriend = goblins.some(
       other => other.id !== goblin.id && other.alive &&
         Math.abs(other.x - goblin.x) <= FRIEND_RADIUS &&
@@ -177,45 +177,45 @@ function updateNeeds(
 // ── Narrative action names for log display ─────────────────────────────────────
 
 const ACTION_DISPLAY_NAMES: Record<string, string> = {
-  eat:          'eating',
-  rest:         'resting',
-  forage:       'foraging',
-  mine:         'mining',
-  chop:         'logging',
-  fight:        'fighting',
-  share:        'sharing food',
-  depositFood:  'stockpiling food',
+  eat: 'eating',
+  rest: 'resting',
+  forage: 'foraging',
+  mine: 'mining',
+  chop: 'logging',
+  fight: 'fighting',
+  share: 'sharing food',
+  depositFood: 'stockpiling food',
   withdrawFood: 'raiding the stockpile',
-  depositOre:   'hauling ore',
-  depositWood:  'hauling wood',
-  buildWall:    'building',
-  buildHearth:  'building a hearth',
-  seekWarmth:   'seeking warmth',
-  seekSafety:   'fleeing to safety',
-  socialize:    'socializing',
-  avoidRival:   'avoiding a rival',
-  wander:       'exploring',
-  commandMove:  'following orders',
+  depositOre: 'hauling ore',
+  depositWood: 'hauling wood',
+  buildWall: 'building',
+  buildHearth: 'building a hearth',
+  seekWarmth: 'seeking warmth',
+  seekSafety: 'fleeing to safety',
+  socialize: 'socializing',
+  avoidRival: 'avoiding a rival',
+  wander: 'exploring',
+  commandMove: 'following orders',
 };
 
 // ── Selector loop ──────────────────────────────────────────────────────────────
 
 export function tickAgentUtility(
-  goblin:              Goblin,
-  grid:               Tile[][],
-  currentTick:        number,
-  goblins?:           Goblin[],
-  onLog?:             LogFn,
-  foodStockpiles?:    FoodStockpile[],
-  adventurers?:           Adventurer[],
-  oreStockpiles?:     OreStockpile[],
-  colonyGoal?:        ColonyGoal,
-  woodStockpiles?:    WoodStockpile[],
+  goblin: Goblin,
+  grid: Tile[][],
+  currentTick: number,
+  goblins?: Goblin[],
+  onLog?: LogFn,
+  foodStockpiles?: FoodStockpile[],
+  adventurers?: Adventurer[],
+  oreStockpiles?: OreStockpile[],
+  colonyGoal?: ColonyGoal,
+  woodStockpiles?: WoodStockpile[],
   weatherMetabolismMod?: number,
-  warmthField?:       Float32Array,
-  dangerField?:       Float32Array,
-  weatherType?:       WeatherType,
-  rooms?:             Room[],
+  warmthField?: Float32Array,
+  dangerField?: Float32Array,
+  weatherType?: WeatherType,
+  rooms?: Room[],
 ): void {
   if (!goblin.alive) return;
 
@@ -252,12 +252,14 @@ export function tickAgentUtility(
   if (goblin.inventory.food === 0 && goblin.hunger >= 90) {
     const starveDmg = sigmoid(goblin.hunger, 95, 0.2) * 0.003 * goblin.maxHealth;
     goblin.health -= starveDmg;
-    goblin.morale  = Math.max(0, goblin.morale - starveDmg);
-    goblin.task    = 'starving!';
-    onLog?.(`is starving! (health ${goblin.health.toFixed(0)})`, 'warn');
+    goblin.morale = Math.max(0, goblin.morale - starveDmg);
+    goblin.task = 'starving!';
+    if (shouldLog(goblin, 'starving', currentTick, 150)) {
+      onLog?.(`is starving! (health ${goblin.health.toFixed(0)})`, 'warn');
+    }
     if (goblin.health <= 0) {
-      goblin.alive        = false;
-      goblin.task         = 'dead';
+      goblin.alive = false;
+      goblin.task = 'dead';
       goblin.causeOfDeath = 'starvation';
       onLog?.('has died of starvation!', 'error');
       return;
@@ -331,12 +333,12 @@ export function tickAgentUtility(
     }
     if (score > bestScore) {
       secondScore = bestScore;
-      secondName  = bestAction?.name ?? '';
-      bestScore   = score;
-      bestAction  = action;
+      secondName = bestAction?.name ?? '';
+      bestScore = score;
+      bestAction = action;
     } else if (score > secondScore) {
       secondScore = score;
-      secondName  = action.name;
+      secondName = action.name;
     }
   }
 
@@ -362,13 +364,13 @@ export function tickAgentUtility(
 
 /** Describe why a goblin is between actions — shown when execute returns early or nothing wins. */
 function idleDescription(goblin: Goblin): string {
-  if (goblin.fatigue > 60)              return 'exhausted, catching breath';
-  if (goblin.fatigue > 20)              return 'catching breath';
-  if ((goblin.warmth ?? 100) < 20)      return 'looking for warmth';
-  if (goblin.morale < 25)               return 'brooding';
-  if (goblin.hunger > 70)               return 'desperately hungry';
-  if (goblin.hunger > 50)               return 'hungry, looking for food';
-  if (goblin.social > 65)               return 'feeling lonely';
-  if ((goblin.warmth ?? 100) < 35)      return 'a bit chilly';
+  if (goblin.fatigue > 60) return 'exhausted, catching breath';
+  if (goblin.fatigue > 20) return 'catching breath';
+  if ((goblin.warmth ?? 100) < 20) return 'looking for warmth';
+  if (goblin.morale < 25) return 'brooding';
+  if (goblin.hunger > 70) return 'desperately hungry';
+  if (goblin.hunger > 50) return 'hungry, looking for food';
+  if (goblin.social > 65) return 'feeling lonely';
+  if ((goblin.warmth ?? 100) < 35) return 'a bit chilly';
   return 'idle';
 }

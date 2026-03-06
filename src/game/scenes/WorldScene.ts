@@ -238,7 +238,7 @@ export class WorldScene extends Phaser.Scene {
     this.objectLayer = this.map.createBlankLayer('objects', tileset)!.setDepth(2);
 
     // ── Graphics layers ─────────────────────────────────────────────────
-    this.ambientGfx = this.add.graphics().setDepth(1);
+    this.ambientGfx = this.add.graphics().setDepth(3);
     this.overlayGfx = this.add.graphics().setDepth(10);
     this.flagGfx = this.add.graphics().setDepth(11);
     this.selectionGfx = this.add.graphics().setDepth(12);
@@ -260,7 +260,7 @@ export class WorldScene extends Phaser.Scene {
       for (const d of this.goblins.filter(dw => !dw.alive)) {
         const px = d.x * TILE_SIZE + TILE_SIZE / 2;
         const py = d.y * TILE_SIZE + TILE_SIZE / 2;
-        const ghost = this.add.sprite(px, py, 'tiles', TOMBSTONE_FRAME);
+        const ghost = this.add.sprite(px, py, 'tiles', TOMBSTONE_FRAME).setDepth(4);
         ghost.setTint(0xaaaaaa);
         this.goblinGhostSprites.set(d.id, ghost);
       }
@@ -1291,16 +1291,16 @@ export class WorldScene extends Phaser.Scene {
   private addFoodStockpileGraphics(stockpile: FoodStockpile): void {
     const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
     const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
-    this.foodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.foodStockpile));
-    this.foodStockpileGfxList.push(this.add.graphics());
+    this.foodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.foodStockpile).setDepth(3));
+    this.foodStockpileGfxList.push(this.add.graphics().setDepth(3));
   }
 
   /** Create Phaser graphics + sprite objects for a newly added ore stockpile. */
   private addOreStockpileGraphics(stockpile: OreStockpile): void {
     const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
     const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
-    this.oreStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile));
-    this.oreStockpileGfxList.push(this.add.graphics());
+    this.oreStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile).setDepth(3));
+    this.oreStockpileGfxList.push(this.add.graphics().setDepth(3));
   }
 
   private drawFoodStockpile() {
@@ -1331,8 +1331,8 @@ export class WorldScene extends Phaser.Scene {
   private addWoodStockpileGraphics(stockpile: WoodStockpile): void {
     const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
     const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
-    this.woodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.woodStockpile));
-    this.woodStockpileGfxList.push(this.add.graphics());
+    this.woodStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.woodStockpile).setDepth(3));
+    this.woodStockpileGfxList.push(this.add.graphics().setDepth(3));
   }
 
   private drawWoodStockpile() {
@@ -1544,7 +1544,7 @@ export class WorldScene extends Phaser.Scene {
       const d = this.goblins.find(dw => dw.id === id);
       if (!d || !d.alive) {
         if (!this.goblinGhostSprites.has(id)) {
-          const ghost = this.add.sprite(spr.x, spr.y, 'tiles', TOMBSTONE_FRAME);
+          const ghost = this.add.sprite(spr.x, spr.y, 'tiles', TOMBSTONE_FRAME).setDepth(4);
           ghost.setTint(0xaaaaaa); // gray tombstone
           this.goblinGhostSprites.set(id, ghost);
         }
@@ -1570,7 +1570,7 @@ export class WorldScene extends Phaser.Scene {
       // Get or create sprite
       let spr = this.goblinSprites.get(d.id);
       if (!spr) {
-        spr = this.add.sprite(px, py, 'tiles', GOBLIN_FRAME);
+        spr = this.add.sprite(px, py, 'tiles', GOBLIN_FRAME).setDepth(5);
         this.goblinSprites.set(d.id, spr);
       } else {
         spr.setPosition(px, py);
@@ -1606,7 +1606,7 @@ export class WorldScene extends Phaser.Scene {
       const py = g.y * TILE_SIZE + TILE_SIZE / 2;
       let spr = this.adventurerSprites.get(g.id);
       if (!spr) {
-        spr = this.add.sprite(px, py, 'tiles', ADVENTURER_FRAME);
+        spr = this.add.sprite(px, py, 'tiles', ADVENTURER_FRAME).setDepth(5);
         spr.setTint(0xff6600); // bright orange — clearly hostile
         this.adventurerSprites.set(g.id, spr);
       } else {
