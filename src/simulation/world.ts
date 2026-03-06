@@ -337,20 +337,6 @@ export function generateWorld(seed?: string): WorldGenResult {
 
   const spawnZone = { x: bestSpawnX, y: bestSpawnY, w: SPAWN_W, h: SPAWN_H };
 
-  // Clear spawn zone to walkable dirt (always last for terrain)
-  for (let y = bestSpawnY; y < bestSpawnY + SPAWN_H; y++) {
-    for (let x = bestSpawnX; x < bestSpawnX + SPAWN_W; x++) {
-      if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
-        if (grid[y][x].type !== TileType.Water) {
-          grid[y][x] = {
-            type: TileType.Dirt, foodValue: 0, materialValue: 0,
-            maxFood: 0, maxMaterial: 0, growbackRate: 0,
-          };
-        }
-      }
-    }
-  }
-
   // ── Step 5: Validate food near spawn ───────────────────────────────────────
   const spawnCx = spawnZone.x + Math.floor(spawnZone.w / 2);
   const spawnCy = spawnZone.y + Math.floor(spawnZone.h / 2);

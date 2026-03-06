@@ -3,14 +3,15 @@ import { bus } from '../../shared/events';
 import type { RoomType } from '../../shared/types';
 
 interface BuildMenuProps {
-    onClose: () => void;
     activeType: RoomType | null;
 }
 
-export function BuildMenu({ onClose, activeType }: BuildMenuProps) {
+export function BuildMenu({ activeType }: BuildMenuProps) {
     const [pos, setPos] = useState({ x: 12, y: 60 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [hasMoved, setHasMoved] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const selectRoom = (type: RoomType) => {
         bus.emit('buildMode', { roomType: type });
@@ -18,63 +19,85 @@ export function BuildMenu({ onClose, activeType }: BuildMenuProps) {
 
     const cancelBuild = () => {
         bus.emit('buildMode', null);
-        onClose();
+    };
+
+    const toggleCollapse = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsCollapsed(!isCollapsed);
+    };
+
+    const onHeaderClick = () => {
+        if (!hasMoved) {
+            setIsCollapsed(!isCollapsed);
+        }
     };
 
     const startDrag = (e: React.MouseEvent) => {
         setIsDragging(true);
+        setHasMoved(false);
         setDragStart({ x: e.clientX - pos.x, y: e.clientY - pos.y });
     };
 
     useEffect(() => {
         if (!isDragging) return;
         const handleMove = (e: MouseEvent) => {
+            const dx = e.clientX - (dragStart.x + pos.x);
+            const dy = e.clientY - (dragStart.y + pos.y);
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                setHasMoved(true);
+            }
             setPos({
                 x: e.clientX - dragStart.x,
                 y: e.clientY - dragStart.y,
             });
         };
-        const handleUp = () => setIsDragging(false);
+        const handleUp = () => {
+            setIsDragging(false);
+        };
         window.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
         return () => {
             window.removeEventListener('mousemove', handleMove);
             window.removeEventListener('mouseup', handleUp);
         };
-    }, [isDragging, dragStart]);
+    }, [isDragging, dragStart, pos.x, pos.y]);
 
     return (
-        <div style={{ ...styles.container, left: pos.x, top: pos.y }}>
-            <div style={styles.header} onMouseDown={startDrag}>
+        <div style={{ ...styles.container, left: pos.x, top: pos.y, height: isCollapsed ? 'auto' : undefined }}>
+            <div style={styles.header} onMouseDown={startDrag} onClick={onHeaderClick}>
                 <span>DESIGNATE ZONE</span>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onClose(); }}
-                    style={styles.closeBtn}
-                >×</button>
+                    onClick={toggleCollapse}
+                    style={styles.collapseBtn}
+                >{isCollapsed ? '□' : '−'}</button>
             </div>
 
-            <div style={styles.section}>
-                <div style={styles.sectionLabel}>Storage</div>
-                <button
-                    onClick={() => selectRoom('storage')}
-                    style={{
-                        ...styles.buildBtn,
-                        ...(activeType === 'storage' ? styles.buildBtnActive : {})
-                    }}
-                >
-                    <span style={styles.icon}>📦</span>
-                    <div style={styles.btnText}>
-                        <div style={styles.btnTitle}>Storage Room</div>
-                        <div style={styles.btnDesc}>5×5 zone for stockpiles</div>
+            {!isCollapsed && (
+                <>
+                    <div style={styles.section}>
+                        <div style={styles.sectionLabel}>Storage</div>
+                        <button
+                            onClick={() => selectRoom('storage')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'storage' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>📦</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Storage Room</div>
+                                <div style={styles.btnDesc}>5×5 zone for stockpiles</div>
+                            </div>
+                        </button>
                     </div>
-                </button>
-            </div>
 
-            <div style={styles.footer}>
-                <button onClick={cancelBuild} style={styles.cancelBtn}>
-                    STOP BUILDING
-                </button>
-            </div>
+                    <div style={styles.footer}>
+                        <button onClick={cancelBuild} style={styles.cancelBtn}>
+                            STOP BUILDING
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
@@ -110,13 +133,18 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: 'grab',
         userSelect: 'none',
     },
-    closeBtn: {
+    collapseBtn: {
         background: 'none',
         border: 'none',
-        color: '#666',
-        fontSize: 16,
+        color: '#888',
+        fontSize: 14,
         cursor: 'pointer',
         padding: '0 4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 20,
+        height: 20,
     },
     section: {
         padding: 12,

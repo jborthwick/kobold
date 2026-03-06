@@ -92,9 +92,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [provider, setProvider] = useState<LLMProvider>('groq');
   const [confirmNew, setConfirmNew] = useState(false);
-  const [showBuildMenu, setShowBuildMenu] = useState(false);
   const [activeBuildType, setActiveBuildType] = useState<RoomType | null>(null);
-  const [hintDismissed, setHintDismissed] = useState(false);
 
   useEffect(() => {
     bus.on('gameState', setState);
@@ -109,10 +107,6 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     return () => bus.off('buildMode', handleBuildMode);
   }, []);
 
-  // Dismiss hint when first room is placed
-  useEffect(() => {
-    if (state && state.rooms.length > 0 && !hintDismissed) setHintDismissed(true);
-  }, [state?.rooms.length, hintDismissed]);
 
   const toggleLLM = () => {
     const next = !llmEnabled;
@@ -126,9 +120,6 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     bus.emit('settingsChange', { llmProvider: next });
   };
 
-  const toggleBuild = () => {
-    setShowBuildMenu(!showBuildMenu);
-  };
 
   if (!state) return null;
 
@@ -162,30 +153,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
       {isDesktop && <PauseSpeed paused={state.paused} speed={state.speed} />}
       {isDesktop && <OverlayIndicator mode={state.overlayMode} />}
 
-      {/* Build Menu Toggle */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-        <button
-          onClick={toggleBuild}
-          style={{
-            ...styles.llmToggle,
-            ...(showBuildMenu ? styles.buildBtnActive : styles.llmToggleOff),
-            ...(activeBuildType ? { borderColor: '#00ff88', border: '1px solid' } : {})
-          }}
-        >
-          {activeBuildType ? `Building: ${activeBuildType}` : 'Build'}
-        </button>
-        {showBuildMenu && (
-          <BuildMenu
-            activeType={activeBuildType}
-            onClose={() => setShowBuildMenu(false)}
-          />
-        )}
-        {!hintDismissed && state.rooms.length === 0 && state.tick > 200 && !showBuildMenu && (
-          <span style={styles.buildHint} onClick={() => setHintDismissed(true)}>
-            Open Build Menu!
-          </span>
-        )}
-      </div>
+      {/* Build Menu (Permanent) */}
+      <BuildMenu activeType={activeBuildType} />
 
       {/* LLM toggle: desktop only (LLM disabled on mobile) */}
       {isDesktop && (
@@ -349,25 +318,5 @@ const styles: Record<string, React.CSSProperties> = {
   newColonyBtnNo: {
     background: 'rgba(120,120,120,0.2)',
     color: '#aaa',
-  },
-  buildBtnActive: {
-    background: 'rgba(220,60,60,0.25)',
-    color: '#e74c3c',
-  },
-  buildHint: {
-    position: 'absolute' as const,
-    top: -22,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    whiteSpace: 'nowrap' as const,
-    fontSize: 9,
-    fontWeight: 'bold' as const,
-    color: '#f0c040',
-    background: 'rgba(0,0,0,0.7)',
-    padding: '2px 6px',
-    borderRadius: 4,
-    cursor: 'pointer',
-    animation: 'pulse 1.5s infinite',
-    pointerEvents: 'auto' as const,
   },
 };

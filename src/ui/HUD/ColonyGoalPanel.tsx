@@ -5,84 +5,84 @@ import type { GameState, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile 
 const styles: Record<string, React.CSSProperties> = {
   goalPanel: {
     background: 'rgba(0,0,0,0.75)',
-    padding:    '8px 12px',
+    padding: '8px 12px',
     fontFamily: 'monospace',
-    fontSize:   11,
-    color:      '#ccc',
+    fontSize: 11,
+    color: '#ccc',
     userSelect: 'none',
     pointerEvents: 'none',
     flexShrink: 0,
     borderBottom: '1px solid #333',
   } as React.CSSProperties,
   goalTitle: {
-    fontSize:      8,
-    color:         '#888',
+    fontSize: 8,
+    color: '#888',
     letterSpacing: '0.1em',
     textTransform: 'uppercase' as const,
-    marginBottom:  4,
+    marginBottom: 4,
   },
   goalDesc: {
-    color:        '#f0c040',
-    fontSize:     11,
+    color: '#f0c040',
+    fontSize: 11,
     marginBottom: 5,
-    fontWeight:   'bold',
+    fontWeight: 'bold',
   },
   goalProgress: {
-    fontSize:  9,
-    color:     '#999',
+    fontSize: 9,
+    color: '#999',
     marginTop: 3,
   },
   goalDepot: {
-    display:    'flex',
+    display: 'flex',
     alignItems: 'center',
-    marginTop:  6,
-    fontSize:   9,
+    marginTop: 6,
+    fontSize: 9,
   },
   barTrack: {
-    background:   '#333',
-    height:       7,
+    background: '#333',
+    height: 7,
     borderRadius: 4,
-    overflow:     'hidden',
+    overflow: 'hidden',
   },
   barFill: {
-    height:       '100%',
+    height: '100%',
     borderRadius: 4,
-    transition:   'width 0.15s ease',
+    transition: 'width 0.15s ease',
   },
 };
 
 export function ColonyGoalPanel() {
-  const [goal,           setGoal]           = useState<ColonyGoal | null>(null);
+  const [goal, setGoal] = useState<ColonyGoal | null>(null);
   const [foodStockpiles, setFoodStockpiles] = useState<FoodStockpile[]>([]);
-  const [oreStockpiles,  setOreStockpiles]  = useState<OreStockpile[]>([]);
+  const [oreStockpiles, setOreStockpiles] = useState<OreStockpile[]>([]);
   const [woodStockpiles, setWoodStockpiles] = useState<WoodStockpile[]>([]);
 
   useEffect(() => {
     const onState = (s: GameState) => {
-      if (s.colonyGoal)      setGoal({ ...s.colonyGoal });
-      if (s.foodStockpiles)  setFoodStockpiles(s.foodStockpiles.map(d => ({ ...d })));
-      if (s.oreStockpiles)   setOreStockpiles(s.oreStockpiles.map(sp => ({ ...sp })));
-      if (s.woodStockpiles)  setWoodStockpiles(s.woodStockpiles.map(sp => ({ ...sp })));
+      if (s.colonyGoal) setGoal({ ...s.colonyGoal });
+      if (s.foodStockpiles) setFoodStockpiles(s.foodStockpiles.map(d => ({ ...d })));
+      if (s.oreStockpiles) setOreStockpiles(s.oreStockpiles.map(sp => ({ ...sp })));
+      if (s.woodStockpiles) setWoodStockpiles(s.woodStockpiles.map(sp => ({ ...sp })));
     };
     bus.on('gameState', onState);
     return () => bus.off('gameState', onState);
   }, []);
 
-  if (!goal || foodStockpiles.length === 0 || oreStockpiles.length === 0) return null;
+  if (!goal) return null;
 
-  const pct              = Math.min(1, goal.progress / goal.target);
-  const totalFood        = foodStockpiles.reduce((s, d) => s + d.food, 0);
-  const maxFood          = foodStockpiles.reduce((s, d) => s + d.maxFood, 0);
-  const totalOre         = oreStockpiles.reduce((s, sp) => s + sp.ore, 0);
-  const maxOre           = oreStockpiles.reduce((s, sp) => s + sp.maxOre, 0);
-  const totalWood        = woodStockpiles.reduce((s, sp) => s + sp.wood, 0);
-  const maxWood          = woodStockpiles.reduce((s, sp) => s + sp.maxWood, 0);
+  const pct = Math.min(1, goal.progress / goal.target);
+  const totalFood = foodStockpiles.reduce((s, d) => s + d.food, 0);
+  const maxFood = foodStockpiles.reduce((s, d) => s + d.maxFood, 0);
+  const totalOre = oreStockpiles.reduce((s, sp) => s + sp.ore, 0);
+  const maxOre = oreStockpiles.reduce((s, sp) => s + sp.maxOre, 0);
+  const totalWood = woodStockpiles.reduce((s, sp) => s + sp.wood, 0);
+  const maxWood = woodStockpiles.reduce((s, sp) => s + sp.maxWood, 0);
   const foodStockpilePct = maxFood > 0 ? Math.min(1, totalFood / maxFood) : 0;
-  const oreStockpilePct  = maxOre  > 0 ? Math.min(1, totalOre  / maxOre)  : 0;
-  const woodStockpilePct = maxWood > 0 ? Math.min(1, totalWood / maxWood)  : 0;
-  const foodLabel        = foodStockpiles.length > 1 ? `×${foodStockpiles.length}` : '';
-  const oreLabel         = oreStockpiles.length  > 1 ? `×${oreStockpiles.length}`  : '';
-  const woodLabel        = woodStockpiles.length > 1 ? `×${woodStockpiles.length}` : '';
+  const oreStockpilePct = maxOre > 0 ? Math.min(1, totalOre / maxOre) : 0;
+  const woodStockpilePct = maxWood > 0 ? Math.min(1, totalWood / maxWood) : 0;
+  const foodLabel = foodStockpiles.length > 1 ? `×${foodStockpiles.length}` : '';
+  const oreLabel = oreStockpiles.length > 1 ? `×${oreStockpiles.length}` : '';
+  const woodLabel = woodStockpiles.length > 1 ? `×${woodStockpiles.length}` : '';
 
   return (
     <div style={styles.goalPanel}>
@@ -91,7 +91,7 @@ export function ColonyGoalPanel() {
       <div style={styles.barTrack}>
         <div style={{
           ...styles.barFill,
-          width:      `${pct * 100}%`,
+          width: `${pct * 100}%`,
           background: pct >= 1 ? '#56d973' : '#f0c040',
         }} />
       </div>

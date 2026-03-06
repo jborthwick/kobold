@@ -11,9 +11,13 @@ First iteration of player build tools:
 [X] Goblins shouldn't start new lumber storage rooms if there's already one thats elligible
 [X] Allow rooms to be buildable anywhere, not just in the spawn area
 [X] Move the build menu out of the world hud. Assume we'll have more room types and update the menu accordingly
-[X] Plan: investigate adding weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
+[ ] Plan: investigate adding weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
 [X] Shrink the minimap by half
 [X] Draggable build menu: Reposition the "Designate Zone" panel.
+[X] Set build menu to always be visible
+[X] Set build menu to be collapsible
+[X] Remove build menu button from top world stats hud
+
 
 
 ## Bugs:
