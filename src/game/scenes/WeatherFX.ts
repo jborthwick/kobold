@@ -151,8 +151,17 @@ const CONFIGS: Partial<Record<WeatherType, WeatherConfig>> = {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function initWeatherFX(scene: WorldScene) {
-    scene.weatherTintGfx = scene.add.graphics().setScrollFactor(0).setDepth(199);
-    scene.weatherGfx = scene.add.graphics().setScrollFactor(0).setDepth(200);
+    scene.weatherTintGfx = scene.add.graphics().setDepth(199);
+    scene.weatherGfx = scene.add.graphics().setDepth(200);
+
+    // Dedicated camera that never zooms or scrolls — only renders weather layers
+    const weatherCam = scene.cameras.add(0, 0, undefined, undefined, false, 'weatherCam');
+    weatherCam.ignore(scene.children.list.filter(
+        c => c !== scene.weatherTintGfx && c !== scene.weatherGfx,
+    ));
+    // Main camera ignores weather layers so they don't zoom/scroll
+    scene.cameras.main.ignore([scene.weatherTintGfx, scene.weatherGfx]);
+
     particles = [];
     currentWeather = null;
     flashAlpha = 0;
