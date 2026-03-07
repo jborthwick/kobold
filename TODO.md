@@ -1,7 +1,8 @@
 ## Features
-[ ] Plan: investigate adding weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
-[ ] Update build menu user flow to be: 1. click room type to build. 2. stamp room 3. stop building automatically. And then remove the stop building button since it will no longer be needed.
-[ ] Allow the player to cancel a build with ESC or by clicking the selected room again in the build menu.
+[ ] Plan: investigate adding visual weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
+[X] Update build menu user flow to be: 1. click room type to build. 2. stamp room 3. stop building automatically. And then remove the stop building button since it will no longer be needed.
+[X] Allow the player to cancel a build with ESC or by clicking the selected room again in the build menu.
+[X] Update zooming to be much more responsive. its very slow.
 
 
 ## Bugs:
@@ -16,5 +17,5 @@
 [X] The wild fire sprite is no longer visible when a fire is spreading
 [X] Overlay no longer can be activated by pressing O
 [X] Can no longer cycle through goblins with brackets
-[ ] Loop: goblins sometimes move between two tiles in a loop for a long while, between "remembering site" and "foraging"
-[ ] Fix very slow zoom on desktop
+[X] Loop: goblins sometimes move between two tiles in a loop for a long while, between "remembering site" and "foraging"
+

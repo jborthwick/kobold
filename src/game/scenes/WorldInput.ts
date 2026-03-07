@@ -60,6 +60,18 @@ export function setupInput(scene: WorldScene) {
             scene.input.keyboard.addKey(code).on('down', () => scene.adjustSpeed(-1));
         }
 
+        // ── ESC: cancel build mode
+        scene.input.keyboard
+            .addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+            .on('down', () => {
+                if (scene.buildMode) {
+                    scene.buildMode = null;
+                    scene.buildPreview = null;
+                    scene.buildPreviewGfx.clear();
+                    bus.emit('buildMode', null);
+                }
+            });
+
         // ── T: tile picker
         // The TilePicker React component handles its own toggle via a window-level
         // keydown listener. We just need to make sure Phaser doesn't capture it.
@@ -275,8 +287,8 @@ export function setupInput(scene: WorldScene) {
             // Clamp deltaY to ±100 so a single trackpad flick doesn't jump the full range.
             // Then use a small logarithmic step (3% per 100px of delta) so the zoom feels
             // proportional rather than jumping 10% per tick.
-            const clampedDelta = Phaser.Math.Clamp(deltaY, -100, 100);
-            const factor = 1 - clampedDelta * 0.0003;   // e.g. deltaY=100 → factor=0.97 (−3%)
+            const clampedDelta = Phaser.Math.Clamp(deltaY, -300, 300);
+            const factor = 1 - clampedDelta * 0.003;   // e.g. deltaY=100 → factor=0.7 (−30%)
             const newZoom = Phaser.Math.Clamp(oldZoom * factor, scene.minZoom, 5);
             if (newZoom === oldZoom) return;
 

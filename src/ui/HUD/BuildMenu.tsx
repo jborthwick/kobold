@@ -14,11 +14,11 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const selectRoom = (type: RoomType) => {
-        bus.emit('buildMode', { roomType: type });
-    };
-
-    const cancelBuild = () => {
-        bus.emit('buildMode', null);
+        if (activeType === type) {
+            bus.emit('buildMode', null);
+        } else {
+            bus.emit('buildMode', { roomType: type });
+        }
     };
 
     const toggleCollapse = (e: React.MouseEvent) => {
@@ -88,12 +88,6 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                                 <div style={styles.btnTitle}>Storage Room</div>
                                 <div style={styles.btnDesc}>5×5 zone for stockpiles</div>
                             </div>
-                        </button>
-                    </div>
-
-                    <div style={styles.footer}>
-                        <button onClick={cancelBuild} style={styles.cancelBtn}>
-                            STOP BUILDING
                         </button>
                     </div>
                 </>
@@ -190,21 +184,5 @@ const styles: Record<string, React.CSSProperties> = {
     btnDesc: {
         fontSize: 9,
         color: '#666',
-    },
-    footer: {
-        padding: 12,
-        borderTop: '1px solid #222',
-    },
-    cancelBtn: {
-        width: '100%',
-        padding: '8px',
-        background: 'rgba(220, 60, 60, 0.15)',
-        border: '1px solid #c0392b',
-        borderRadius: 4,
-        color: '#e74c3c',
-        fontSize: 10,
-        fontWeight: 'bold',
-        cursor: 'pointer',
-        letterSpacing: '0.05em',
     },
 };

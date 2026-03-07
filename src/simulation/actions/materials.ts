@@ -29,7 +29,7 @@ export const mine: Action = {
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * oreNeed;
-    const momentum = (goblin.task.includes('mining')) ? 0.15 : 0;
+    const momentum = (goblin.task.includes('mining') || goblin.task.includes('remembered ore')) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
   execute: (ctx) => {
@@ -114,7 +114,7 @@ export const chop: Action = {
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * woodNeed;
-    const momentum = (goblin.task.includes('logging') || goblin.task.includes('forest')) ? 0.15 : 0;
+    const momentum = (goblin.task.includes('logging') || goblin.task.includes('forest') || goblin.task.includes('remembered forest')) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
   execute: (ctx) => {

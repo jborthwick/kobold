@@ -172,6 +172,12 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.terrainDirty = true;
+
+    // Auto-exit build mode after placing a room
+    this.buildMode = null;
+    this.buildPreview = null;
+    this.buildPreviewGfx.clear();
+    bus.emit('buildMode', null);
   }
 
   // ── Simulation tick ────────────────────────────────────────────────────
