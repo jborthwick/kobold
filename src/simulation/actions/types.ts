@@ -1,4 +1,4 @@
-import type { Goblin, Tile, LLMIntent, Adventurer, FoodStockpile, OreStockpile, WoodStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
+import type { Goblin, Tile, LLMIntent, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -9,6 +9,7 @@ export interface ActionContext {
   goblins?:        Goblin[];
   onLog?:          LogFn;
   foodStockpiles?: FoodStockpile[];
+  mealStockpiles?: MealStockpile[];
   adventurers?:        Adventurer[];
   oreStockpiles?:  OreStockpile[];
   woodStockpiles?: WoodStockpile[];

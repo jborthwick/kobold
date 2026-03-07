@@ -201,25 +201,47 @@ export const depositFood: Action = {
 // --- withdrawFood: run to stockpile when hungry and low on food ---
 export const withdrawFood: Action = {
   name: 'withdrawFood',
-  eligible: ({ goblin, foodStockpiles }) => {
-    if (goblin.inventory.food >= 4) return false; // already have enough
-    return nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
+  eligible: ({ goblin, foodStockpiles, mealStockpiles }) => {
+    if (goblin.inventory.food >= 4 || goblin.inventory.meals >= 4) return false; // already have enough
+    const hasMeals = mealStockpiles?.some(m => m.meals > 0) ?? false;
+    const hasFood = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
+    return hasMeals || hasFood;
   },
-  score: ({ goblin, foodStockpiles }) => {
-    const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    // Midpoint 45 (was 60) so goblins head to the depot when moderately hungry (≈35+),
-    // not just when desperate. Stockpile remains secondary to foraging.
-    // Boosted base multiplier to 0.75 (was 0.55) to compete better with active foraging.
+  score: ({ goblin, foodStockpiles, mealStockpiles }) => {
+    const onFoodStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
+    const onMealStockpile = mealStockpiles?.some(m => m.x === goblin.x && m.y === goblin.y) ?? false;
+    const onStockpile = onFoodStockpile || onMealStockpile;
     return sigmoid(goblin.hunger, 45) * 0.75 * (onStockpile ? 2.5 : 1.0);
   },
-  execute: ({ goblin, grid, foodStockpiles }) => {
+  execute: ({ goblin, grid, foodStockpiles, mealStockpiles }) => {
+    // Prefer meals from kitchen meal stockpiles over raw food
+    if (mealStockpiles && goblin.inventory.meals < 4) {
+      const nearestMeal = mealStockpiles
+        .filter(m => m.meals > 0)
+        .sort((a, b) => (Math.abs(a.x - goblin.x) + Math.abs(a.y - goblin.y)) - (Math.abs(b.x - goblin.x) + Math.abs(b.y - goblin.y)))[0];
+      if (nearestMeal) {
+        if (goblin.x === nearestMeal.x && goblin.y === nearestMeal.y) {
+          const amount = Math.min(4, nearestMeal.meals);
+          nearestMeal.meals -= amount;
+          goblin.inventory.meals += Math.min(amount, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
+          goblin.task = `withdrew ${amount.toFixed(0)} meals`;
+          return;
+        } else {
+          moveTo(goblin, nearestMeal, grid);
+          goblin.task = `→ kitchen (${nearestMeal.meals.toFixed(0)} meals)`;
+          return;
+        }
+      }
+    }
+
+    // Fallback: raw food from food stockpile
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
       const amount = Math.min(4, target.food);
       target.food -= amount;
       goblin.inventory.food += Math.min(amount, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
-      goblin.task = `withdrew ${amount.toFixed(0)} from stockpile`;
+      goblin.task = `withdrew ${amount.toFixed(0)} food`;
     } else {
       moveTo(goblin, target, grid);
       goblin.task = `→ stockpile (${target.food.toFixed(0)} food)`;

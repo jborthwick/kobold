@@ -80,7 +80,7 @@ export function gameTick(scene: WorldScene) {
             scene.foodStockpiles, scene.adventurers, scene.oreStockpiles,
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
             metabolismModifier(scene.weather), scene.warmthField, scene.dangerField,
-            scene.weather.type, scene.rooms
+            scene.weather.type, scene.rooms, scene.mealStockpiles
         );
 
         // Fire async LLM crisis check — never blocks the game loop
@@ -299,6 +299,9 @@ export function gameTick(scene: WorldScene) {
     // ── Sync stockpile graphics (actions may have added new stockpiles) ─────
     while (scene.foodStockpileGfxList.length < scene.foodStockpiles.length) {
         scene.addFoodStockpileGraphics(scene.foodStockpiles[scene.foodStockpileGfxList.length]);
+    }
+    while (scene.mealStockpileGfxList.length < scene.mealStockpiles.length) {
+        scene.addMealStockpileGraphics(scene.mealStockpiles[scene.mealStockpileGfxList.length]);
     }
     while (scene.oreStockpileGfxList.length < scene.oreStockpiles.length) {
         scene.addOreStockpileGraphics(scene.oreStockpiles[scene.oreStockpileGfxList.length]);

@@ -126,10 +126,10 @@ export function detectCrisis(
   // still time to act (go harvest, steal from rival, etc.).
   // Paranoid goblins have a lower hungerCrisisThreshold (55 vs 65), which shifts low-supplies too
   const lowSuppliesHunger = Math.max(25, traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD) - 25);
-  if (goblin.inventory.food <= LOW_SUPPLIES_FOOD && goblin.hunger >= lowSuppliesHunger) {
+  if (goblin.inventory.food + goblin.inventory.meals <= LOW_SUPPLIES_FOOD && goblin.hunger >= lowSuppliesHunger) {
     return {
       type: 'low_supplies',
-      description: `You are running out of food (only ${goblin.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${goblin.hunger.toFixed(0)}/100).`,
+      description: `You are running out of food (only ${goblin.inventory.food.toFixed(0)} food and ${goblin.inventory.meals.toFixed(0)} meals left) and getting hungry (hunger ${goblin.hunger.toFixed(0)}/100).`,
       colonyContext: ctx,
     };
   }
@@ -138,7 +138,7 @@ export function detectCrisis(
   if (goblin.hunger >= traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD)) {
     return {
       type: 'hunger',
-      description: `You are very hungry (hunger ${goblin.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${goblin.inventory.food.toFixed(0)} units).`,
+      description: `You are very hungry (hunger ${goblin.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${goblin.inventory.food.toFixed(0)} food and ${goblin.inventory.meals.toFixed(0)} meals).`,
       colonyContext: ctx,
     };
   }
@@ -176,33 +176,33 @@ export function detectCrisis(
   const contestRadius = CONTEST_RADIUS
     + (goblin.role === 'scout' ? 2 : 0)
     + traitMod(goblin, 'perceptiveness', 0);
-  const rival = goblin.hunger > 50 && goblin.inventory.food < 5 ? alive.find(d =>
+  const rival = goblin.hunger > 50 && (goblin.inventory.food + goblin.inventory.meals) < 5 ? alive.find(d =>
     d.id !== goblin.id &&
     Math.abs(d.x - goblin.x) <= contestRadius &&
     Math.abs(d.y - goblin.y) <= contestRadius &&
-    d.inventory.food < 3,
+    (d.inventory.food + d.inventory.meals) < 3,
   ) : null;
   if (rival) {
     return {
       type: 'resource_contest',
       description: `${rival.name} is nearby (${Math.abs(rival.x - goblin.x) + Math.abs(rival.y - goblin.y)} tiles away) competing for the same scarce food.`,
-      colonyContext: `You carry ${goblin.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
+      colonyContext: `You carry ${goblin.inventory.food.toFixed(0)} food and ${goblin.inventory.meals.toFixed(0)} meals; ${rival.name} carries ${rival.inventory.food.toFixed(0)} food and ${rival.inventory.meals.toFixed(0)} meals. ${ctx}`,
     };
   }
 
   // Resource sharing — fires when well-fed AND a nearby goblin is struggling
   const SHARE_RADIUS = 2;
-  if (goblin.inventory.food >= 8) {
+  if (goblin.inventory.food + goblin.inventory.meals >= 8) {
     const needyNeighbor = alive.find(d =>
       d.id !== goblin.id &&
       Math.abs(d.x - goblin.x) <= SHARE_RADIUS &&
       Math.abs(d.y - goblin.y) <= SHARE_RADIUS &&
-      d.hunger > 60 && d.inventory.food < 3,
+      d.hunger > 60 && (d.inventory.food + d.inventory.meals) < 3,
     );
     if (needyNeighbor) {
       return {
         type: 'resource_sharing',
-        description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food). You are well-supplied with ${goblin.inventory.food.toFixed(0)} units.`,
+        description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food and ${needyNeighbor.inventory.meals.toFixed(0)} meals). You are well-supplied with ${goblin.inventory.food.toFixed(0)} food and ${goblin.inventory.meals.toFixed(0)} meals.`,
         colonyContext: ctx,
       };
     }
@@ -263,7 +263,7 @@ function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin
   return `You are ${goblin.name}, a ${faction.llmSpecies} ${roleLabel(goblin)}
 Personality: ${goblin.trait}. "${goblin.bio}". Personal goal: ${goblin.goal}.
 Status — Health: ${goblin.health}/${goblin.maxHealth}, Hunger: ${goblin.hunger.toFixed(0)}/100, Morale: ${goblin.morale.toFixed(0)}/100, Fatigue: ${goblin.fatigue.toFixed(0)}/100, Social need: ${goblin.social.toFixed(0)}/100
-Food carried: ${goblin.inventory.food.toFixed(0)} units. Current task: ${goblin.task}. ${homeStr}${skillLine}${woundLine}
+Food carried: ${goblin.inventory.food.toFixed(0)} food, ${goblin.inventory.meals.toFixed(0)} meals. Current task: ${goblin.task}. ${homeStr}${skillLine}${woundLine}
 
 CRISIS: ${situation.description}
 Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}

@@ -70,7 +70,7 @@ export function expandStockpilesInRooms(
             if (last && last.food >= last.maxFood) {
                 const pos = findRoomStockpileSlot(grid, room, allOccupied);
                 if (pos) {
-                    const nd: FoodStockpile = { ...pos, food: 0, maxFood: 200 };
+                    const nd: FoodStockpile = { ...pos, food: 0, meals: 0, maxFood: 200 };
                     foodStockpiles.push(nd);
                     onAddFood(nd);
                     allOccupied.add(`${pos.x},${pos.y}`);

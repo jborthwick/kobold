@@ -1,4 +1,4 @@
-import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
+import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
 
 export interface SaveData {
@@ -29,6 +29,8 @@ export interface SaveData {
   goalStartTick?: number;
   /** Player-placed rooms — optional for backward compat. */
   rooms?: Room[];
+  /** Meal stockpiles inside kitchens — optional for backward compat. */
+  mealStockpiles?: MealStockpile[];
 }
 
 const KEY = 'kobold_save_v2';
@@ -62,6 +64,12 @@ export function loadGame(): SaveData | null {
       if (d.inventory.wood === undefined) d.inventory.wood = 0;
     }
     data.rooms ??= [];
+    data.mealStockpiles ??= [];
+    // Migrate: remove legacy meals field from food stockpiles
+    for (const sp of data.foodStockpiles) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (sp as any).meals;
+    }
     return data;
   } catch {
     return null;

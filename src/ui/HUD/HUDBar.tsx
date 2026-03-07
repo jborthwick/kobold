@@ -143,6 +143,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     <div style={topBarStyle}>
       <Stat label={isPhone ? 'g' : getActiveFaction().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
       <Stat label={isPhone ? 'f' : 'food'} value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
+      <Stat label={isPhone ? 'm' : 'meals'} value={(state.totalMeals ?? 0).toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'o' : 'ore'} value={state.totalOre.toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'w' : 'wood'} value={state.totalWood.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}

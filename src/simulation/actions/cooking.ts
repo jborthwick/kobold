@@ -1,0 +1,151 @@
+import { TileType } from '../../shared/types';
+import type { MealStockpile } from '../../shared/types';
+import { GRID_SIZE } from '../../shared/constants';
+import { inverseSigmoid, ramp } from '../utilityAI';
+import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
+import type { Action, ActionContext } from './types';
+
+const MEALS_PER_BATCH = 5;
+const FOOD_COST = 5;
+const WOOD_COST = 1;
+const COOKING_TICKS_REQUIRED = 50;
+const FIRE_CHANCE_PER_TICK = 0.015; // 1.5% chance per tick to start a fire
+const MAX_MEALS_STORED = 50;
+
+/** Find or auto-create a MealStockpile at the center of the given kitchen. */
+function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
+  const kitchen = ctx.rooms?.find(r => r.type === 'kitchen');
+  if (!kitchen || !ctx.mealStockpiles) return null;
+  const cx = kitchen.x + Math.floor(kitchen.w / 2);
+  const cy = kitchen.y + Math.floor(kitchen.h / 2);
+  let pile = ctx.mealStockpiles.find(m => m.x === cx && m.y === cy);
+  if (!pile) {
+    pile = { x: cx, y: cy, meals: 0, maxMeals: MAX_MEALS_STORED };
+    ctx.mealStockpiles.push(pile);
+  }
+  return pile;
+}
+
+export const cook: Action = {
+    name: 'cook',
+    eligible: ({ rooms, foodStockpiles, woodStockpiles, goblin, grid, mealStockpiles }) => {
+        if (!rooms || rooms.length === 0) return false;
+
+        // Must have a kitchen
+        const hasKitchen = rooms.some(r => r.type === 'kitchen');
+        if (!hasKitchen) return false;
+
+        // Don't cook if meals are full
+        const totalMeals = mealStockpiles?.reduce((s, m) => s + m.meals, 0) ?? 0;
+        if (totalMeals >= MAX_MEALS_STORED) return false;
+
+        // Must have resources OR be already cooking
+        const hasFood = foodStockpiles?.some(s => s.food >= FOOD_COST);
+        const hasWood = woodStockpiles?.some(s => s.wood >= WOOD_COST);
+
+        // We also require at least one Hearth tile in or adjacent to the kitchen
+        let kitchenHasHearth = false;
+        for (const r of rooms) {
+            if (r.type !== 'kitchen') continue;
+            // check the room and a 1-tile buffer
+            for (let y = Math.max(0, r.y - 1); y <= Math.min(GRID_SIZE - 1, r.y + r.h); y++) {
+                for (let x = Math.max(0, r.x - 1); x <= Math.min(GRID_SIZE - 1, r.x + r.w); x++) {
+                    if (grid[y] && grid[y][x] && grid[y][x].type === TileType.Hearth) {
+                        kitchenHasHearth = true;
+                        break;
+                    }
+                }
+                if (kitchenHasHearth) break;
+            }
+            if (kitchenHasHearth) break;
+        }
+
+        if (!kitchenHasHearth) return false;
+
+        return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
+    },
+
+    score: ({ goblin, foodStockpiles, mealStockpiles }) => {
+        // If already cooking, strong momentum to finish
+        if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
+            return 0.95;
+        }
+
+        // Score based on raw food surplus and lack of meals
+        const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
+        const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
+
+        if (totalFood < 10) return 0; // Don't cook if food is scarce
+
+        // Base score peaks when there's lots of food and no meals
+        const foodAbundance = ramp(totalFood, 10, 50);
+        const mealScarcity = inverseSigmoid(totalMeals, 20);
+
+        const base = foodAbundance * mealScarcity * 0.5 * inverseSigmoid(goblin.hunger, 50);
+
+        const traitMultiplier = goblin.trait === 'helpful' ? 1.5 : 1.0;
+
+        // Momentum for walking to the kitchen
+        const momentum = goblin.task.includes('kitchen') ? 0.15 : 0;
+
+        return Math.min(1.0, base * traitMultiplier + momentum);
+    },
+
+    execute: (ctx) => {
+        const { goblin, grid, rooms, foodStockpiles, woodStockpiles, onLog } = ctx;
+        const kitchen = rooms!.find(r => r.type === 'kitchen');
+        if (!kitchen) return;
+
+        // 1. Walk to the kitchen
+        if (goblin.x < kitchen.x || goblin.x >= kitchen.x + kitchen.w || goblin.y < kitchen.y || goblin.y >= kitchen.y + kitchen.h) {
+            // Find a walkable spot inside the kitchen
+            const targetX = kitchen.x + Math.floor(kitchen.w / 2);
+            const targetY = kitchen.y + Math.floor(kitchen.h / 2);
+
+            moveTo(goblin, { x: targetX, y: targetY }, grid);
+            goblin.task = '→ kitchen';
+            return;
+        }
+
+        // 2. Start cooking if not started
+        if (goblin.cookingProgress === undefined) {
+            const foodSource = nearestFoodStockpile(goblin, foodStockpiles, s => s.food >= FOOD_COST);
+            const woodSource = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood >= WOOD_COST);
+
+            if (!foodSource || !woodSource) {
+                goblin.task = 'kitchen is missing ingredients';
+                return; // Wait for ingredients
+            }
+
+            foodSource.food -= FOOD_COST;
+            woodSource.wood -= WOOD_COST;
+            goblin.cookingProgress = 1;
+            goblin.task = `cooking (starting...)`;
+            return;
+        }
+
+        // 3. Process cooking
+        goblin.cookingProgress += 1;
+
+        // Cooking accident chance
+        if (Math.random() < FIRE_CHANCE_PER_TICK) {
+            grid[goblin.y][goblin.x].type = TileType.Fire;
+            onLog?.(`🔥 ${goblin.name} started a grease fire!`, 'warn');
+            // Fire mechanic will naturally interrupt them next utility sweep
+        }
+
+        const pct = Math.floor((goblin.cookingProgress / COOKING_TICKS_REQUIRED) * 100);
+        goblin.task = `cooking (${pct}%)`;
+
+        // 4. Finish cooking
+        if (goblin.cookingProgress >= COOKING_TICKS_REQUIRED) {
+            const mealPile = getOrCreateMealStockpile(ctx);
+            if (mealPile) {
+                mealPile.meals = Math.min(mealPile.maxMeals, mealPile.meals + MEALS_PER_BATCH);
+                onLog?.(`🍲 ${goblin.name} cooked ${MEALS_PER_BATCH} meals!`, 'info');
+            }
+            goblin.cookingProgress = undefined;
+            addWorkFatigue(goblin);
+        }
+    }
+};

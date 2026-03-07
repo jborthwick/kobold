@@ -1,4 +1,5 @@
 import { TileType } from '../../shared/types';
+import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
@@ -73,13 +74,38 @@ export const buildWall: Action = {
 // stay warm and won't build another. Only goblins cold in a different location build elsewhere.
 const HEARTH_COVERAGE_RADIUS = 8;  // matches warmth BFS radius — if a hearth covers you, don't build
 const HEARTH_BUILD_COOLDOWN = 300; // personal cooldown after placing, prevents back-to-back builds
+
+function getUnfurnishedKitchen(rooms: Room[] | undefined, grid: Tile[][]): Room | null {
+  if (!rooms) return null;
+  for (const r of rooms) {
+    if (r.type !== 'kitchen') continue;
+    let hasHearth = false;
+    for (let dy = 0; dy < r.h; dy++) {
+      for (let dx = 0; dx < r.w; dx++) {
+        const ny = r.y + dy, nx = r.x + dx;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+          if (grid[ny][nx].type === TileType.Hearth || grid[ny][nx].type === TileType.Fire) hasHearth = true;
+        }
+      }
+    }
+    if (!hasHearth) return r;
+  }
+  return null;
+}
+
 export const buildHearth: Action = {
   name: 'buildHearth',
-  eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick }) => {
+  eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick, rooms }) => {
     const totalFood = foodStockpiles?.reduce((s, f) => s + f.food, 0) ?? 0;
     if (totalFood < 20) return false;
-    const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
+    // Count wood in stockpiles OR goblin's own inventory — so they can build before a wood room is set up
+    const stockpileWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
+    const totalWood = stockpileWood + goblin.inventory.wood;
     if (totalWood < 2) return false;
+    
+    // A kitchen always needs a hearth if it doesn't have one — bypass cooldown
+    if (getUnfurnishedKitchen(rooms, grid)) return true;
+
     // Personal cooldown — prevents a goblin from placing one then immediately starting another
     if (currentTick - (goblin.lastLoggedTicks['builtHearth'] ?? 0) < HEARTH_BUILD_COOLDOWN) return false;
     // A hearth already within coverage radius means this area is served — building would be wasteful
@@ -92,42 +118,61 @@ export const buildHearth: Action = {
     }
     return true;
   },
-  score: ({ goblin, woodStockpiles }) => {
-    const totalWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
-    const warmth = goblin.warmth ?? 100;
-    const base = inverseSigmoid(warmth, 25, 0.12)
-      * ramp(totalWood, 2, 20)
-      * inverseSigmoid(goblin.hunger, 60)
-      * 0.5;
+  score: ({ goblin, woodStockpiles, rooms, grid }) => {
+    const stockpileWood = woodStockpiles?.reduce((s, w) => s + w.wood, 0) ?? 0;
+    const totalWood = stockpileWood + goblin.inventory.wood;
+    
+    let base = 0;
+    if (getUnfurnishedKitchen(rooms, grid)) {
+      // High priority task if a kitchen is lacking a hearth
+      base = 0.8 * ramp(totalWood, 2, 20);
+    } else {
+      const warmth = goblin.warmth ?? 100;
+      base = inverseSigmoid(warmth, 25, 0.12)
+        * ramp(totalWood, 2, 20)
+        * inverseSigmoid(goblin.hunger, 60)
+        * 0.5;
+    }
+
     // Momentum: already en route → commit, but only while base conditions still hold
     const momentum = (goblin.task.includes('hearth') && base > 0) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
-  execute: ({ goblin, grid, woodStockpiles, currentTick, onLog }) => {
-    if (!woodStockpiles) return;
+  execute: ({ goblin, grid, woodStockpiles, currentTick, onLog, rooms }) => {
+    // Consume wood from inventory first, then pull from nearest stockpile
+    const inventoryWood = goblin.inventory.wood;
+    const needFromStockpile = Math.max(0, 2 - inventoryWood);
+    const buildStockpile = needFromStockpile > 0
+      ? nearestWoodStockpile(goblin, woodStockpiles ?? [], s => s.wood >= needFromStockpile)
+      : null;
+    // If we need stockpile wood but don't have it, bail
+    if (needFromStockpile > 0 && !buildStockpile) return;
 
-    // Find nearest wood stockpile with surplus
-    const buildStockpile = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood >= 2);
-    if (!buildStockpile) return;
-
-    // Find best buildable Dirt/Grass tile near goblin's current position.
-    // Soft home bias: score = distToGoblin + 0.2 × distToHome, so tiles toward home are preferred
-    // without being forced. When the goblin is already near home, fires cluster there naturally.
     let buildTarget: { x: number; y: number } | null = null;
-    let bestScore = Infinity;
-    const RADIUS = 5;
-    for (let dy = -RADIUS; dy <= RADIUS; dy++) {
-      for (let dx = -RADIUS; dx <= RADIUS; dx++) {
-        const nx = goblin.x + dx, ny = goblin.y + dy;
-        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-        const t = grid[ny][nx];
-        if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
-        const distToGoblin = Math.abs(dx) + Math.abs(dy);
-        const distToHome = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
-        const siteScore = distToGoblin + 0.2 * distToHome;
-        if (siteScore < bestScore) { bestScore = siteScore; buildTarget = { x: nx, y: ny }; }
+    const unfurnishedKitchen = getUnfurnishedKitchen(rooms, grid);
+
+    if (unfurnishedKitchen) {
+       buildTarget = { x: unfurnishedKitchen.x + Math.floor(unfurnishedKitchen.w / 2), y: unfurnishedKitchen.y + Math.floor(unfurnishedKitchen.h / 2) };
+    } else {
+      // Find best buildable Dirt/Grass tile near goblin's current position.
+      // Soft home bias: score = distToGoblin + 0.2 × distToHome, so tiles toward home are preferred
+      // without being forced. When the goblin is already near home, fires cluster there naturally.
+      let bestScore = Infinity;
+      const RADIUS = 5;
+      for (let dy = -RADIUS; dy <= RADIUS; dy++) {
+        for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+          const nx = goblin.x + dx, ny = goblin.y + dy;
+          if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+          const t = grid[ny][nx];
+          if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+          const distToGoblin = Math.abs(dx) + Math.abs(dy);
+          const distToHome = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
+          const siteScore = distToGoblin + 0.2 * distToHome;
+          if (siteScore < bestScore) { bestScore = siteScore; buildTarget = { x: nx, y: ny }; }
+        }
       }
     }
+    
     if (!buildTarget) return;
 
     // Move toward build site
@@ -143,7 +188,11 @@ export const buildHearth: Action = {
       ...t, type: TileType.Hearth,
       foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
     };
-    buildStockpile.wood -= 2;
+    // Deduct wood: use inventory first, then pull remainder from stockpile
+    const useFromInv = Math.min(goblin.inventory.wood, 2);
+    goblin.inventory.wood -= useFromInv;
+    const useFromStockpile = 2 - useFromInv;
+    if (buildStockpile && useFromStockpile > 0) buildStockpile.wood -= useFromStockpile;
     addWorkFatigue(goblin);
     goblin.lastLoggedTicks['builtHearth'] = currentTick;
     recordSite(goblin.knownHearthSites ?? (goblin.knownHearthSites = []), buildTarget.x, buildTarget.y, 1, currentTick);

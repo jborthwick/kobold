@@ -76,7 +76,13 @@ export const mine: Action = {
 
     // No ore visible — try remembered ore site
     if (goblin.knownOreSites.length > 0) {
-      const best = goblin.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
+      const best = goblin.knownOreSites.reduce((a, b) => {
+        const distA = Math.abs(a.x - goblin.x) + Math.abs(a.y - goblin.y);
+        const distB = Math.abs(b.x - goblin.x) + Math.abs(b.y - goblin.y);
+        const scoreA = distA - a.value * 2;
+        const scoreB = distB - b.value * 2;
+        return scoreA < scoreB ? a : b;
+      });
       if (goblin.x === best.x && goblin.y === best.y) {
         // We reached the remembered site but it's not visible in oreTarget?
         // This implies it's no longer Ore or has 0 material. Clear it.
@@ -163,7 +169,13 @@ export const chop: Action = {
 
     // No wood visible — try remembered wood site
     if (goblin.knownWoodSites.length > 0) {
-      const best = goblin.knownWoodSites.reduce((a, b) => b.value > a.value ? b : a);
+      const best = goblin.knownWoodSites.reduce((a, b) => {
+        const distA = Math.abs(a.x - goblin.x) + Math.abs(a.y - goblin.y);
+        const distB = Math.abs(b.x - goblin.x) + Math.abs(b.y - goblin.y);
+        const scoreA = distA - a.value * 2;
+        const scoreB = distB - b.value * 2;
+        return scoreA < scoreB ? a : b;
+      });
       if (goblin.x === best.x && goblin.y === best.y) {
         const tileHere = grid[goblin.y][goblin.x];
         if (tileHere.type !== TileType.Forest || tileHere.materialValue < 1) {

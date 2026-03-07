@@ -14,7 +14,7 @@
  *   5. execute highest-scoring action
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
 import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
@@ -216,6 +216,7 @@ export function tickAgentUtility(
   dangerField?: Float32Array,
   weatherType?: WeatherType,
   rooms?: Room[],
+  mealStockpiles?: MealStockpile[],
 ): void {
   if (!goblin.alive) return;
 
@@ -249,7 +250,7 @@ export function tickAgentUtility(
   // Not an action — runs unconditionally if the goblin has no food and hunger ≥ 90.
   // Damage is sigmoid-smoothed so it accelerates as hunger approaches 100, not a hard cliff.
   // A goblin with food in their inventory avoids this entirely — eat() fires before they hit 90.
-  if (goblin.inventory.food === 0 && goblin.hunger >= 90) {
+  if (goblin.inventory.food === 0 && goblin.inventory.meals === 0 && goblin.hunger >= 90) {
     const starveDmg = sigmoid(goblin.hunger, 95, 0.2) * 0.003 * goblin.maxHealth;
     goblin.health -= starveDmg;
     goblin.morale = Math.max(0, goblin.morale - starveDmg);
@@ -308,7 +309,7 @@ export function tickAgentUtility(
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
-    warmthField, dangerField, weatherType, rooms,
+    warmthField, dangerField, weatherType, rooms, mealStockpiles,
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────
@@ -359,6 +360,16 @@ export function tickAgentUtility(
   goblin.task = idleDescription(goblin);
   if (bestAction) {
     bestAction.execute(ctx);
+  }
+
+  // ── Step 7: Handle Interrupted Cooking ────────────────────────────────────────
+  // If a goblin was cooking but their newly assigned task is NOT cooking, they lose all progress.
+  // We check if the task string includes "cooking" since that's what we set in `actions/cooking.ts`.
+  if (goblin.cookingProgress !== undefined && !goblin.task.includes('cooking')) {
+    goblin.cookingProgress = undefined;
+    if (shouldLog(goblin, 'cooking_interrupted', currentTick, 100)) {
+      onLog?.(`🔥 ${goblin.name} abandoned their cooking! The food is ruined!`, 'warn');
+    }
   }
 }
 

@@ -38,6 +38,7 @@ export function initializeWorld(scene: WorldScene) {
     scene.colonyGoal = save.colonyGoal;
     scene.goalStartTick = save.goalStartTick ?? 0;
     scene.foodStockpiles = save.foodStockpiles;
+    scene.mealStockpiles = save.mealStockpiles ?? [];
     scene.oreStockpiles = save.oreStockpiles;
     scene.woodStockpiles = save.woodStockpiles ?? [];
     scene.adventurerKillCount = save.adventurerKillCount;
@@ -71,6 +72,7 @@ export function initializeWorld(scene: WorldScene) {
     const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
     const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
     scene.foodStockpiles = [];
+    scene.mealStockpiles = [];
     scene.oreStockpiles = [];
     scene.woodStockpiles = [];
     scene.rooms = [];
@@ -108,6 +110,7 @@ export function initializeWorld(scene: WorldScene) {
   scene.selectionGfx = scene.add.graphics().setDepth(12);
 
   for (const sp of scene.foodStockpiles) scene.addFoodStockpileGraphics(sp);
+  for (const sp of scene.mealStockpiles) scene.addMealStockpileGraphics(sp);
   for (const sp of scene.oreStockpiles) scene.addOreStockpileGraphics(sp);
   for (const sp of scene.woodStockpiles) scene.addWoodStockpileGraphics(sp);
 

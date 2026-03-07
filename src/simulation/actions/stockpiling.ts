@@ -41,8 +41,8 @@ export const establishStockpile: Action = {
   name: 'establishStockpile',
   eligible: ({ rooms, foodStockpiles, goblins }) => {
     if (!rooms || rooms.length === 0) return false;
-    // Need at least one unspecialized room
-    if (!rooms.some(r => r.specialization === undefined)) return false;
+    // Need at least one unspecialized storage room
+    if (!rooms.some(r => r.type === 'storage' && r.specialization === undefined)) return false;
     // Colony not starving — don't divert from foraging
     const totalFood = (foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0)
       + (goblins?.reduce((s, g) => g.alive ? s + g.inventory.food : s, 0) ?? 0);
@@ -60,7 +60,7 @@ export const establishStockpile: Action = {
     let nearest: Room | null = null;
     let nearDist = Infinity;
     for (const r of rooms) {
-      if (r.specialization !== undefined) continue;
+      if (r.type !== 'storage' || r.specialization !== undefined) continue;
       const cx = r.x + 2, cy = r.y + 2;
       const dist = Math.abs(cx - goblin.x) + Math.abs(cy - goblin.y);
       if (dist < nearDist) { nearDist = dist; nearest = r; }
@@ -81,7 +81,7 @@ export const establishStockpile: Action = {
     nearest.specialization = specType;
 
     if (specType === 'food' && foodStockpiles) {
-      foodStockpiles.push({ x: cx, y: cy, food: 0, maxFood: 200 } as FoodStockpile);
+      foodStockpiles.push({ x: cx, y: cy, food: 0, meals: 0, maxFood: 200 } as FoodStockpile);
     } else if (specType === 'ore' && oreStockpiles) {
       oreStockpiles.push({ x: cx, y: cy, ore: 0, maxOre: 200 } as OreStockpile);
     } else if (specType === 'wood' && woodStockpiles) {

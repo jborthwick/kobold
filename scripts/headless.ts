@@ -154,9 +154,13 @@ const rooms: Room[] = [
   { id: 'room-food', type: 'storage', x: depotX - 2, y: depotY - 2, w: 5, h: 5, specialization: 'food' },
   { id: 'room-ore', type: 'storage', x: depotX + 6, y: depotY - 2, w: 5, h: 5, specialization: 'ore' },
   { id: 'room-wood', type: 'storage', x: depotX - 10, y: depotY - 2, w: 5, h: 5, specialization: 'wood' },
+  { id: 'room-kitchen', type: 'kitchen', x: depotX + 6, y: depotY + 6, w: 5, h: 5 },
 ];
 
-const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, maxFood: 200 }];
+// Give them a hearth right in the middle of the kitchen!
+grid[depotY + 8][depotX + 8].type = TileType.Hearth;
+
+const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, meals: 0, maxFood: 200 }];
 const oreStockpiles: OreStockpile[] = [{ x: depotX + 8, y: depotY, ore: 150, maxOre: 200 }];
 const woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0, maxWood: 200 }];
 
@@ -297,7 +301,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
   if (lastFood.food >= lastFood.maxFood) {
     const all = [...foodStockpiles, ...oreStockpiles, ...woodStockpiles];
     const pos = findNextStockpileSlot(foodStockpiles, all, grid, oreStockpiles);
-    if (pos) foodStockpiles.push({ ...pos, food: 0, maxFood: 200 });
+    if (pos) foodStockpiles.push({ ...pos, food: 0, meals: 0, maxFood: 200 });
   }
   const lastOre = oreStockpiles[oreStockpiles.length - 1];
   if (lastOre.ore >= lastOre.maxOre) {

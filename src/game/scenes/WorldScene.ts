@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { canPlaceRoom } from '../../simulation/rooms';
-import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
+import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
 import * as WorldGoals from './WorldGoals';
@@ -72,10 +72,13 @@ export class WorldScene extends Phaser.Scene {
   public goalStartTick = 0;
   public adventurerKillCount = 0;
   public foodStockpiles: FoodStockpile[] = [];
+  public mealStockpiles: MealStockpile[] = [];
   public oreStockpiles: OreStockpile[] = [];
   public woodStockpiles: WoodStockpile[] = [];
   public foodStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
   public foodStockpileImgList: Phaser.GameObjects.Image[] = [];
+  public mealStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  public mealStockpileImgList: Phaser.GameObjects.Image[] = [];
   public oreStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
   public oreStockpileImgList: Phaser.GameObjects.Image[] = [];
   public woodStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
@@ -168,11 +171,12 @@ export class WorldScene extends Phaser.Scene {
     };
     this.rooms.push(room);
 
+    const roomName = this.buildMode === 'storage' ? 'Storage zone' : 'Kitchen';
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',
       goblinName: 'COLONY',
-      message: `Storage zone designated at(${x}, ${y})!`,
+      message: `${roomName} designated at (${x}, ${y})!`,
       level: 'info',
     });
 
@@ -237,6 +241,14 @@ export class WorldScene extends Phaser.Scene {
     this.woodStockpileGfxList.push(this.add.graphics().setDepth(3));
   }
 
+  /** Create Phaser graphics + sprite objects for a newly added meal stockpile (inside kitchen). */
+  public addMealStockpileGraphics(stockpile: MealStockpile): void {
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.mealStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.foodStockpile).setDepth(3).setTint(0xff9900));
+    this.mealStockpileGfxList.push(this.add.graphics().setDepth(3));
+  }
+
 
 
   // ── Main loop ──────────────────────────────────────────────────────────
@@ -256,6 +268,7 @@ export class WorldScene extends Phaser.Scene {
     }
     drawAgents(this);
     drawFoodStockpile(this);
+    drawMealStockpile(this);
     drawOreStockpile(this);
     drawWoodStockpile(this);
     drawOffScreenIndicator(this);

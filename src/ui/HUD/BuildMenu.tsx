@@ -90,6 +90,23 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                             </div>
                         </button>
                     </div>
+
+                    <div style={styles.section}>
+                        <div style={styles.sectionLabel}>Food</div>
+                        <button
+                            onClick={() => selectRoom('kitchen')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'kitchen' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>🍳</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Kitchen</div>
+                                <div style={styles.btnDesc}>5×5 zone where meals are cooked</div>
+                            </div>
+                        </button>
+                    </div>
                 </>
             )}
         </div>

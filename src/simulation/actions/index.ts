@@ -9,6 +9,7 @@ import { buildWall, buildHearth } from './building';
 import { seekWarmth, wander } from './exploration';
 import { fightFire } from './firefighting';
 import { establishStockpile } from './stockpiling';
+import { cook } from './cooking';
 import type { Action } from './types';
 
 export const ALL_ACTIONS: Action[] = [
@@ -21,6 +22,7 @@ export const ALL_ACTIONS: Action[] = [
   fight,
   buildHearth,
   establishStockpile,
+  cook,
   forage,
   depositFood,
   withdrawFood,

@@ -12,7 +12,7 @@ export const commandMove: Action = {
   score: ({ goblin, adventurers }) => {
     // Drop to 0.8 during extreme starvation or active raid — survival instincts can override
     const raid = adventurers && adventurers.length > 0;
-    const starving = goblin.hunger >= 95 && goblin.inventory.food === 0;
+    const starving = goblin.hunger >= 95 && goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     return (raid || starving) ? 0.8 : 1.0;
   },
   execute: ({ goblin, grid, onLog }) => {
@@ -33,7 +33,7 @@ export const eat: Action = {
   name: 'eat',
   intentMatch: 'eat',
   eligible: ({ goblin, grid }) => {
-    if (goblin.inventory.food > 0) return true;
+    if (goblin.inventory.food > 0 || goblin.inventory.meals > 0) return true;
     // Graze: standing on a forageable tile with food
     const tile = grid[goblin.y]?.[goblin.x];
     return !!tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
@@ -47,7 +47,13 @@ export const eat: Action = {
   execute: ({ goblin, grid, currentTick, onLog }) => {
     const wasDesperatelyHungry = goblin.hunger > 80;
 
-    if (goblin.inventory.food > 0) {
+    if (goblin.inventory.meals > 0) {
+      // Eat a meal
+      goblin.inventory.meals -= 1;
+      goblin.hunger = Math.max(0, goblin.hunger - 50);
+      goblin.morale = Math.min(100, goblin.morale + 10);
+      goblin.task = 'eating a meal';
+    } else if (goblin.inventory.food > 0) {
       // Eat from inventory (normal path)
       const bite = Math.min(goblin.inventory.food, 3);
       goblin.inventory.food -= bite;

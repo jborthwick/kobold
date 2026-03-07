@@ -50,6 +50,18 @@ export function drawWoodStockpile(scene: WorldScene) {
     }
 }
 
+export function drawMealStockpile(scene: WorldScene) {
+    for (let i = 0; i < scene.mealStockpiles.length; i++) {
+        const m = scene.mealStockpiles[i];
+        const gfx = scene.mealStockpileGfxList[i];
+        if (!gfx) continue;
+        const px = m.x * TILE_SIZE, py = m.y * TILE_SIZE;
+        gfx.clear();
+        gfx.lineStyle(2, 0xff9900, 0.9);  // orange border — meals
+        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+}
+
 export function drawTerrain(scene: WorldScene) {
     const OBJECT_TILES = new Set([
         TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.Hearth, TileType.Fire,
@@ -109,10 +121,11 @@ export function drawTerrain(scene: WorldScene) {
 
             for (const room of scene.rooms) {
                 if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
-                    const roomTint = room.specialization === 'food' ? 0xccffcc
-                        : room.specialization === 'ore' ? 0xffddaa
-                            : room.specialization === 'wood' ? 0xddffcc
-                                : 0xccccff;
+                    const roomTint = room.type === 'kitchen' ? 0xffbb88
+                        : room.specialization === 'food' ? 0xccffcc
+                            : room.specialization === 'ore' ? 0xffddaa
+                                : room.specialization === 'wood' ? 0xddffcc
+                                    : 0xccccff;
                     const tr = (t.tint >> 16) & 0xff, tg = (t.tint >> 8) & 0xff, tb = t.tint & 0xff;
                     const rr = (roomTint >> 16) & 0xff, rg = (roomTint >> 8) & 0xff, rb = roomTint & 0xff;
                     t.tint = (((tr * rr) >> 8) << 16) | (((tg * rg) >> 8) << 8) | ((tb * rb) >> 8);
