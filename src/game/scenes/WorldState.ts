@@ -1,6 +1,5 @@
 import { bus } from '../../shared/events';
 import { getNextEventTick } from '../../simulation/events';
-import { getActiveFaction } from '../../shared/factions';
 import { TILE_SIZE } from '../../shared/constants';
 import type { SaveData } from '../../shared/save';
 import type { MiniMapData } from '../../shared/types';
@@ -30,7 +29,6 @@ export function buildSaveData(scene: WorldScene): SaveData {
         worldSeed: scene.worldSeed,
         chapters: [...scene.chapters],
         goalStartTick: scene.goalStartTick,
-        faction: getActiveFaction().id,
         rooms: scene.rooms.map(r => ({ ...r })),
     };
 }

@@ -104,7 +104,7 @@ const CONFIGS: Partial<Record<WeatherType, WeatherConfig>> = {
         color: 0xbb9966,
         tintColor: 0xcc8844,
         tintAlpha: 0.04,
-        spawn: (w, h) => ({
+        spawn: (_w, h) => ({
             x: -10,
             y: Math.random() * h,
             speed: randRange(40, 90),
