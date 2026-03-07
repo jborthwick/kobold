@@ -94,7 +94,7 @@ const CONFIGS: Partial<Record<WeatherType, WeatherConfig>> = {
         },
         step: (p, w, h, dt) => {
             p.y += p.speed * dt;
-            p.x += p.drift * dt + Math.sin(p.y * 0.02) * 0.5;
+            p.x += (p.drift + Math.sin(p.y * 0.02) * 30) * dt;
             return p.y > h + 10 || p.x < -10 || p.x > w + 10;
         },
     },
@@ -118,7 +118,7 @@ const CONFIGS: Partial<Record<WeatherType, WeatherConfig>> = {
         },
         step: (p, w, _h, dt) => {
             p.x += p.speed * dt;
-            p.y += p.drift * dt + Math.sin(p.x * 0.01) * 0.3;
+            p.y += (p.drift + Math.sin(p.x * 0.01) * 20) * dt;
             return p.x > w + 10;
         },
     },
@@ -164,7 +164,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     const cam = scene.cameras.main;
     const w = cam.width;
     const h = cam.height;
-    const dt = delta / 1000; // seconds
+    const dt = scene.paused ? 0 : delta / 1000; // freeze particles when paused
 
     // ── Weather changed — rebuild particle pool ─────────────────────────
     if (weather !== currentWeather) {
