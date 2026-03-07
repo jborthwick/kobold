@@ -123,7 +123,7 @@ export const chop: Action = {
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * woodNeed;
-    const momentum = (goblin.task.includes('logging') || goblin.task.includes('forest') || goblin.task.includes('remembered forest')) ? 0.15 : 0;
+    const momentum = (goblin.task.includes('logging') || goblin.task.includes('forest') || goblin.task.includes('remembered forest') || goblin.task.includes('stump')) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
   execute: (ctx) => {
@@ -142,21 +142,34 @@ export const chop: Action = {
     if (woodTarget) {
       if (goblin.x === woodTarget.x && goblin.y === woodTarget.y) {
         const here = grid[goblin.y][goblin.x];
-        if (here.type === TileType.Forest && here.materialValue >= 1) {
+        const isWoodSource = here.type === TileType.Forest ||
+          (here.type === TileType.TreeStump && here.materialValue >= 1);
+        if (isWoodSource && here.materialValue >= 1) {
           const hadWood = here.materialValue;
           const roleChopBonus = goblin.role === 'lumberjack' ? 15 : 0;
           const baseChop = 5 + roleChopBonus + traitMod(goblin, 'chopPower', 0) + skillYieldBonus(goblin);
           const chopYield = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
           const chopped = Math.min(hadWood, chopYield);
           here.materialValue = Math.max(0, hadWood - chopped);
-          if (here.materialValue === 0) {
+          if (here.type === TileType.Forest && here.materialValue === 0) {
+            // Forest becomes stump when fully harvested — stumps have small wood yield
             here.type = TileType.TreeStump;
+            here.maxMaterial = 4;  // Stump provides a little wood
+            here.materialValue = 4;
+            here.growbackRate = 0;
+            goblin.task = `logging (felled tree)`;
+          } else if (here.type === TileType.TreeStump && here.materialValue === 0) {
+            // Stump becomes dirt when fully harvested
+            here.type = TileType.Dirt;
             here.maxMaterial = 0;
+            here.growbackRate = 0;
+            goblin.task = `cleared stump`;
+          } else {
+            goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
           }
           goblin.inventory.wood += Math.min(chopped, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
           addWorkFatigue(goblin);
           grantXp(goblin, currentTick, onLog);
-          goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
         } else {
           goblin.task = 'logging… looking for tree';
         }
@@ -178,7 +191,8 @@ export const chop: Action = {
       });
       if (goblin.x === best.x && goblin.y === best.y) {
         const tileHere = grid[goblin.y][goblin.x];
-        if (tileHere.type !== TileType.Forest || tileHere.materialValue < 1) {
+        const hasWood = (tileHere.type === TileType.Forest || tileHere.type === TileType.TreeStump) && tileHere.materialValue >= 1;
+        if (!hasWood) {
           goblin.knownWoodSites = goblin.knownWoodSites.filter(s => !(s.x === best.x && s.y === best.y));
           goblin.task = 'searching for forest…';
         } else {

@@ -363,6 +363,9 @@ export function generateWorld(seed?: string): WorldGenResult {
 /** Wood grows back much more slowly than food — trees take time to regenerate. */
 const WOOD_GROWBACK_RATE = 0.02;
 
+/** Stump seedling growth threshold — when materialValue reaches this, seedling becomes a tree. */
+const SEEDLING_GROWTH_THRESHOLD = 6;
+
 /**
  * Ticks for one full 4-season year. Seasonal growback peaks in summer and
  * troughs in winter — a slow macro-cycle layered on top of weather variation.
@@ -386,6 +389,17 @@ export function growback(grid: Tile[][], growbackMod: number = 1, tick: number =
       }
       if (t.type === TileType.Forest && t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
         t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE * effectiveMod);
+      }
+      // Stump seedlings regrow into Forest when mature
+      if (t.type === TileType.TreeStump && t.growbackRate > 0 && t.materialValue < t.maxMaterial) {
+        t.materialValue = Math.min(t.maxMaterial, t.materialValue + t.growbackRate * effectiveMod);
+        // Once seedling reaches threshold, it becomes a young Forest
+        if (t.materialValue >= SEEDLING_GROWTH_THRESHOLD) {
+          t.type = TileType.Forest;
+          t.maxMaterial = 10;  // Young tree max
+          t.materialValue = Math.min(t.materialValue, t.maxMaterial);
+          t.growbackRate = WORLD_CONFIG.forestGrowback;  // Normal forest growback
+        }
       }
     }
   }

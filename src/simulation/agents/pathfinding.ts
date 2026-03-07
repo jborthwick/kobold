@@ -70,10 +70,16 @@ export function bestWoodTile(
       const nx = goblin.x + dx;
       const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-      if (grid[ny][nx].type !== TileType.Forest) continue;
-      if (grid[ny][nx].materialValue < 1) continue;
+      const tile = grid[ny][nx];
+      // Forest and TreeStump both provide wood; stumps yield less
+      const isWoodSource = tile.type === TileType.Forest ||
+        (tile.type === TileType.TreeStump && tile.materialValue >= 1);
+      if (!isWoodSource) continue;
+      if (tile.materialValue < 1) continue;
       const dist = Math.abs(dx) + Math.abs(dy);
-      const v = grid[ny][nx].materialValue - dist;
+      // Stumps have lower base value (50%) to prioritize full trees
+      const baseValue = tile.type === TileType.TreeStump ? tile.materialValue * 0.5 : tile.materialValue;
+      const v = baseValue - dist;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
   }
