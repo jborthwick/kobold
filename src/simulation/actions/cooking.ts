@@ -12,15 +12,16 @@ const COOKING_TICKS_REQUIRED = 50;
 const FIRE_CHANCE_PER_TICK = 0.015; // 1.5% chance per tick to start a fire
 const MAX_MEALS_STORED = 50;
 
-/** Find or auto-create a MealStockpile at the center of the given kitchen. */
+/** Find or auto-create a MealStockpile at the top-left corner of the given kitchen. */
 function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
   const kitchen = ctx.rooms?.find(r => r.type === 'kitchen');
   if (!kitchen || !ctx.mealStockpiles) return null;
-  const cx = kitchen.x + Math.floor(kitchen.w / 2);
-  const cy = kitchen.y + Math.floor(kitchen.h / 2);
-  let pile = ctx.mealStockpiles.find(m => m.x === cx && m.y === cy);
+  // Place in the top-left corner tile (1 in from edge) — center is reserved for the hearth
+  const px = kitchen.x + 1;
+  const py = kitchen.y + 1;
+  let pile = ctx.mealStockpiles.find(m => m.x === px && m.y === py);
   if (!pile) {
-    pile = { x: cx, y: cy, meals: 0, maxMeals: MAX_MEALS_STORED };
+    pile = { x: px, y: py, meals: 0, maxMeals: MAX_MEALS_STORED };
     ctx.mealStockpiles.push(pile);
   }
   return pile;

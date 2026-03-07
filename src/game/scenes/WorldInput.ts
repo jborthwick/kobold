@@ -249,6 +249,13 @@ export function setupInput(scene: WorldScene) {
             bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
             return;
         }
+        const mealIdx = findStockpile(scene.mealStockpiles);
+        if (mealIdx >= 0) {
+            scene.selectedGoblinId = null;
+            bus.emit('adventurerSelect', null);
+            bus.emit('stockpileSelect', { kind: 'meal', idx: mealIdx });
+            return;
+        }
 
         // Check for adventurer click (with snap on touch)
         const findNearest = <T extends { x: number; y: number }>(list: T[]) => {

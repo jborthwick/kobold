@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
 import { getActiveFaction } from '../../shared/factions';
-import type { GameState, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
+import type { GameState, FoodStockpile, OreStockpile, WoodStockpile, MealStockpile } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
   panel: {
@@ -43,7 +43,7 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export function StockpilePanel() {
-  const [sel,   setSel]   = useState<{ kind: 'food' | 'ore' | 'wood'; idx: number } | null>(null);
+  const [sel,   setSel]   = useState<{ kind: 'food' | 'ore' | 'wood' | 'meal'; idx: number } | null>(null);
   const [state, setState] = useState<GameState | null>(null);
 
   useEffect(() => {
@@ -57,32 +57,38 @@ export function StockpilePanel() {
 
   if (!sel || !state) return null;
 
-  const stockpile: FoodStockpile | OreStockpile | WoodStockpile | undefined =
+  const stockpile: FoodStockpile | OreStockpile | WoodStockpile | MealStockpile | undefined =
     sel.kind === 'food' ? state.foodStockpiles[sel.idx]
   : sel.kind === 'ore'  ? state.oreStockpiles[sel.idx]
+  : sel.kind === 'meal' ? state.mealStockpiles[sel.idx]
   :                       state.woodStockpiles[sel.idx];
 
   if (!stockpile) return null;
 
   const isFoodSp = sel.kind === 'food';
   const isOreSp  = sel.kind === 'ore';
+  const isMealSp = sel.kind === 'meal';
   const amount   = isFoodSp ? (stockpile as FoodStockpile).food
                  : isOreSp  ? (stockpile as OreStockpile).ore
+                 : isMealSp ? (stockpile as MealStockpile).meals
                  :             (stockpile as WoodStockpile).wood;
   const max      = isFoodSp ? (stockpile as FoodStockpile).maxFood
                  : isOreSp  ? (stockpile as OreStockpile).maxOre
+                 : isMealSp ? (stockpile as MealStockpile).maxMeals
                  :             (stockpile as WoodStockpile).maxWood;
   const pct      = max > 0 ? Math.min(1, amount / max) : 0;
-  const color    = isFoodSp ? '#f0c040' : isOreSp ? '#ff8800' : '#8bc34a';
-  const icon     = isFoodSp ? '🏠' : isOreSp ? '⛏' : '🪵';
-  const label    = isFoodSp ? 'Food Stockpile' : isOreSp ? 'Ore Stockpile' : 'Wood Stockpile';
-  const resource = isFoodSp ? 'food' : isOreSp ? 'ore' : 'wood';
+  const color    = isFoodSp ? '#f0c040' : isOreSp ? '#ff8800' : isMealSp ? '#ff9900' : '#8bc34a';
+  const icon     = isFoodSp ? '🏠' : isOreSp ? '⛏' : isMealSp ? '🍲' : '🪵';
+  const label    = isFoodSp ? 'Food Stockpile' : isOreSp ? 'Ore Stockpile' : isMealSp ? 'Meal Stockpile' : 'Wood Stockpile';
+  const resource = isFoodSp ? 'food' : isOreSp ? 'ore' : isMealSp ? 'meals' : 'wood';
 
   const carriers = isFoodSp
     ? state.goblins.filter(d => d.alive && d.inventory.food > 0).length
     : isOreSp
       ? state.goblins.filter(d => d.alive && d.inventory.ore > 0).length
-      : state.goblins.filter(d => d.alive && d.inventory.wood > 0).length;
+      : isMealSp
+        ? state.goblins.filter(d => d.alive && d.inventory.meals > 0).length
+        : state.goblins.filter(d => d.alive && d.inventory.wood > 0).length;
 
   return (
     <div style={{ ...styles.panel, borderLeft: `2px solid ${color}` }}>
