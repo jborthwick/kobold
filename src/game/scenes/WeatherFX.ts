@@ -166,6 +166,9 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     const h = cam.height;
     const dt = scene.paused ? 0 : delta / 1000; // freeze particles when paused
 
+    // scrollFactor(0) objects still get zoomed — divide by zoom to stay viewport-sized
+    const z = cam.zoom;
+
     // ── Weather changed — rebuild particle pool ─────────────────────────
     if (weather !== currentWeather) {
         currentWeather = weather;
@@ -187,7 +190,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     scene.weatherTintGfx.clear();
     if (cfg) {
         scene.weatherTintGfx.fillStyle(cfg.tintColor, cfg.tintAlpha);
-        scene.weatherTintGfx.fillRect(0, 0, w, h);
+        scene.weatherTintGfx.fillRect(0, 0, w / z, h / z);
     }
 
     // ── Lightning flash (storm only) ────────────────────────────────────
@@ -199,7 +202,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
         }
         if (flashAlpha > 0) {
             scene.weatherTintGfx.fillStyle(0xffffff, flashAlpha);
-            scene.weatherTintGfx.fillRect(0, 0, w, h);
+            scene.weatherTintGfx.fillRect(0, 0, w / z, h / z);
             flashAlpha *= 0.85; // rapid decay
             if (flashAlpha < 0.02) flashAlpha = 0;
         }
@@ -226,6 +229,19 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
                 fresh.x = Math.random() * (w + 60) - 30;
             }
         }
-        cfg.draw(scene.weatherGfx, particles[i]);
+        // Draw at zoom-compensated coordinates so particles stay pixel-sized
+        const pp = particles[i];
+        const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
+        if (cfg === CONFIGS.rain || cfg === CONFIGS.storm) {
+            const lw = cfg === CONFIGS.storm ? 1.5 / z : 1 / z;
+            scene.weatherGfx.lineStyle(lw, cfg.color, pp.alpha);
+            scene.weatherGfx.lineBetween(sx, sy, sx - ss * 0.3, sy + ss);
+        } else if (cfg === CONFIGS.cold) {
+            scene.weatherGfx.fillStyle(0xffffff, pp.alpha);
+            scene.weatherGfx.fillCircle(sx, sy, ss);
+        } else if (cfg === CONFIGS.drought) {
+            scene.weatherGfx.fillStyle(0xbb9966, pp.alpha);
+            scene.weatherGfx.fillRect(sx, sy, ss, ss * 0.6);
+        }
     }
 }

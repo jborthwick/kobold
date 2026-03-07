@@ -17,8 +17,8 @@ import type { WeatherType, Season } from '../shared/types';
 export type { WeatherType, Season };
 
 export interface Weather {
-  type:     WeatherType;
-  season:   Season;
+  type: WeatherType;
+  season: Season;
   /** Tick at which we entered this season (for UI progress display). */
   seasonStart: number;
 }
@@ -33,29 +33,29 @@ const WEATHER_SHIFT_CHANCE = 0.002;
 
 /** Growback multipliers by weather type. */
 const GROWBACK_MODS: Record<WeatherType, number> = {
-  clear:   1.0,
-  rain:    1.8,    // food grows almost twice as fast
+  clear: 1.0,
+  rain: 1.8,    // food grows almost twice as fast
   drought: 0.25,   // food barely regenerates
-  cold:    0.5,    // slow growth
-  storm:   2.5,    // torrential rain — fastest growback, offset by lightning risk
+  cold: 0.5,    // slow growth
+  storm: 2.5,    // torrential rain — fastest growback, offset by lightning risk
 };
 
 /** Metabolism multipliers by weather type. */
 const METABOLISM_MODS: Record<WeatherType, number> = {
-  clear:   1.0,
-  rain:    1.0,
+  clear: 1.0,
+  rain: 1.0,
   drought: 1.0,
-  cold:    1.4,    // burn calories faster in cold
-  storm:   1.2,    // stressful conditions burn extra energy
+  cold: 1.4,    // burn calories faster in cold
+  storm: 1.2,    // stressful conditions burn extra energy
 };
 
 /** Weighted weather distributions per season.
  *  Each array: [clear, rain, drought, cold, storm] weights (sum to 1). */
 const SEASON_WEIGHTS: Record<Season, [number, number, number, number, number]> = {
-  spring:  [0.25, 0.35, 0.05, 0.10, 0.25],  // stormy spring
-  summer:  [0.40, 0.05, 0.35, 0.05, 0.15],  // summer thunderstorms
-  autumn:  [0.35, 0.25, 0.10, 0.15, 0.15],  // mixed, moderate storms
-  winter:  [0.15, 0.10, 0.05, 0.70, 0.00],  // cold dominates; no storms
+  spring: [0.25, 0.35, 0.05, 0.10, 0.25],  // stormy spring
+  summer: [0.45, 0.05, 0.35, 0.00, 0.15],  // summer thunderstorms; no cold
+  autumn: [0.35, 0.25, 0.10, 0.15, 0.15],  // mixed, moderate storms
+  winter: [0.15, 0.10, 0.00, 0.75, 0.00],  // cold dominates; no storms or drought
 };
 
 const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
@@ -85,7 +85,7 @@ function nextSeason(current: Season): Season {
 export function createWeather(tick: number): Weather {
   const season = SEASONS[0];
   return {
-    type:        pickWeather(season),
+    type: pickWeather(season),
     season,
     seasonStart: tick,
   };
@@ -101,9 +101,9 @@ export function tickWeather(weather: Weather, tick: number): string | null {
   // Season transition
   if (ticksInSeason >= SEASON_LENGTH) {
     const oldSeason = weather.season;
-    weather.season      = nextSeason(oldSeason);
+    weather.season = nextSeason(oldSeason);
     weather.seasonStart = tick;
-    weather.type        = pickWeather(weather.season);
+    weather.type = pickWeather(weather.season);
     return `Season changed: ${oldSeason} → ${weather.season} (${weather.type})`;
   }
 
