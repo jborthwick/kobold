@@ -14,6 +14,7 @@ import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG } from '../tileConfig';
 
 import { initializeWorld } from './WorldInit';
+import { updateWeatherFX } from './WeatherFX';
 
 export class WorldScene extends Phaser.Scene {
   public grid: Tile[][] = [];
@@ -95,6 +96,10 @@ export class WorldScene extends Phaser.Scene {
   public buildMode: RoomType | null = null;
   public buildPreview: { x: number; y: number } | null = null;
   public buildPreviewGfx!: Phaser.GameObjects.Graphics;
+
+  // Weather visual effects (camera-fixed particle + tint layers)
+  public weatherGfx!: Phaser.GameObjects.Graphics;
+  public weatherTintGfx!: Phaser.GameObjects.Graphics;
 
   // WASD keys (null when keyboard unavailable on touch devices)
   public wasd: {
@@ -254,5 +259,6 @@ export class WorldScene extends Phaser.Scene {
     drawOreStockpile(this);
     drawWoodStockpile(this);
     drawOffScreenIndicator(this);
+    updateWeatherFX(this, delta);
   }
 }

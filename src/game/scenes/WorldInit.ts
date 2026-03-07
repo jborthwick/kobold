@@ -17,6 +17,7 @@ import { drawFlag } from './WorldOverlays';
 import { drawOverlay } from './WorldRender';
 import { setupInput } from './WorldInput';
 import { setupCamera } from './WorldCamera';
+import { initWeatherFX } from './WeatherFX';
 
 export function initializeWorld(scene: WorldScene) {
   const mode = (scene.game.registry.get('startMode') as string) ?? 'new';
@@ -185,4 +186,5 @@ export function initializeWorld(scene: WorldScene) {
 
   setupCamera(scene);
   setupInput(scene);
+  initWeatherFX(scene);
 }

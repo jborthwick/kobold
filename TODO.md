@@ -1,5 +1,5 @@
 ## Features
-[ ] Plan: investigate adding visual weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
+[X] Plan: investigate adding visual weather effects (rain, snow, storms, lightning, etc) -- rain/storm/lightning/cold in
 [X] Update build menu user flow to be: 1. click room type to build. 2. stamp room 3. stop building automatically. And then remove the stop building button since it will no longer be needed.
 [X] Allow the player to cancel a build with ESC or by clicking the selected room again in the build menu.
 [X] Update zooming to be much more responsive. its very slow.
