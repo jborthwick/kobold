@@ -1,7 +1,15 @@
 import { TILE_SIZE, GRID_SIZE } from '../../shared/constants';
 import { TileType } from '../../shared/types';
+import type { Season } from '../../shared/types';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import type { WorldScene } from './WorldScene';
+
+const SEASON_TINTS: Record<Season, number> = {
+    spring: 0xddffcc,
+    summer: 0xffffff,
+    autumn: 0xffbb77,
+    winter: 0xddddff,
+};
 
 const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
 const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;
@@ -64,26 +72,39 @@ export function drawTerrain(scene: WorldScene) {
             const t = targetLayer.putTileAt(frame, x, y)!;
             otherLayer.removeTileAt(x, y);
 
+            let baseTint = 0xffffff;
             if (tile.maxFood > 0) {
                 const ratio = tile.foodValue / tile.maxFood;
                 const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
-                t.tint = (brightness << 16) | (brightness << 8) | brightness;
+                baseTint = (brightness << 16) | (brightness << 8) | brightness;
             } else if (tile.type === TileType.Wall) {
-                t.tint = 0x88aacc;
+                baseTint = 0x88aacc;
             } else if (tile.type === TileType.Hearth) {
-                t.tint = 0xff8844;
+                baseTint = 0xff8844;
             } else if (tile.type === TileType.Fire) {
                 const phase = (scene.tick + x * 3 + y * 7) % 3;
-                t.tint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
+                baseTint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
             } else if (tile.type === TileType.Pool) {
-                t.tint = 0x44bbaa;
+                baseTint = 0x44bbaa;
+            }
+
+            const seasonTint = scene.weather?.season ? SEASON_TINTS[scene.weather.season] : 0xffffff;
+
+            const isVegetation = tile.type === TileType.Dirt || tile.type === TileType.Grass || tile.type === TileType.Forest || tile.type === TileType.Farmland || tile.type === TileType.TreeStump;
+            if (isVegetation && seasonTint !== 0xffffff) {
+                const br = (baseTint >> 16) & 0xff, bg = (baseTint >> 8) & 0xff, bb = baseTint & 0xff;
+                const sr = (seasonTint >> 16) & 0xff, sg = (seasonTint >> 8) & 0xff, sb = seasonTint & 0xff;
+                t.tint = (((br * sr) >> 8) << 16) | (((bg * sg) >> 8) << 8) | ((bb * sb) >> 8);
             } else {
-                t.tint = 0xffffff;
+                t.tint = baseTint;
             }
 
             if (isObject) {
                 const dirtFrames = TILE_CONFIG[TileType.Dirt] ?? [0];
-                scene.floorLayer.putTileAt(dirtFrames[0], x, y);
+                const dt = scene.floorLayer.putTileAt(dirtFrames[0], x, y);
+                if (dt && seasonTint !== 0xffffff) {
+                    dt.tint = seasonTint;
+                }
             }
 
             for (const room of scene.rooms) {

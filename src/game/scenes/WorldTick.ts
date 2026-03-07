@@ -63,8 +63,9 @@ export function gameTick(scene: WorldScene) {
         });
     }
 
+    const aliveBeforeTick = new Set(scene.goblins.filter(g => g.alive).map(g => g.id));
+
     for (const d of scene.goblins) {
-        const wasAlive = d.alive;
         tickAgentUtility(
             d, scene.grid, scene.tick, scene.goblins,
             (message, level) => {
@@ -81,9 +82,6 @@ export function gameTick(scene: WorldScene) {
             metabolismModifier(scene.weather), scene.warmthField, scene.dangerField,
             scene.weather.type, scene.rooms
         );
-        if (wasAlive && !d.alive) {
-            scene.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: scene.tick + SUCCESSION_DELAY });
-        }
 
         // Fire async LLM crisis check — never blocks the game loop
         llmSystem.requestDecision(d, scene.goblins, scene.grid, scene.tick, scene.adventurers,
@@ -150,15 +148,14 @@ export function gameTick(scene: WorldScene) {
                 if (d.health <= 0) {
                     d.alive = false;
                     d.task = 'dead';
-                    d.causeOfDeath = `killed by ${enemyNoun} `;
+                    d.causeOfDeath = `killed by ${enemyNoun}`;
                     bus.emit('logEntry', {
                         tick: scene.tick,
                         goblinId: d.id,
                         goblinName: d.name,
-                        message: `killed by ${enemyNoun} !`,
+                        message: `killed by ${enemyNoun}!`,
                         level: 'error',
                     });
-                    scene.pendingSuccessions.push({ deadGoblinId: d.id, spawnAtTick: scene.tick + SUCCESSION_DELAY });
                 } else {
                     const enemySing = enemyNoun.replace(/s$/, '');
                     // Survived — batch hits to reduce log noise (log every 3rd hit)
@@ -253,6 +250,14 @@ export function gameTick(scene: WorldScene) {
     // Small steady mushroom sprouting — every 150 ticks, a fresh 1–4 tile patch
     // (no log — too routine, clutters the event feed)
     tickMushroomSprout(scene.grid, scene.tick);
+
+    // ── Check for any deaths this tick to queue successions ────────────────
+    for (const id of aliveBeforeTick) {
+        const g = scene.goblins.find(d => d.id === id);
+        if (g && !g.alive) {
+            scene.pendingSuccessions.push({ deadGoblinId: g.id, spawnAtTick: scene.tick + SUCCESSION_DELAY });
+        }
+    }
 
     // ── Succession — spawn queued replacements ──────────────────────────────
     for (let i = scene.pendingSuccessions.length - 1; i >= 0; i--) {

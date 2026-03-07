@@ -8,7 +8,7 @@
  */
 
 import type { WorldScene } from './WorldScene';
-import type { WeatherType } from '../../shared/types';
+import type { WeatherType, Season } from '../../shared/types';
 
 // ── Particle pool ────────────────────────────────────────────────────────────
 
@@ -25,6 +25,9 @@ interface Particle {
 
 let particles: Particle[] = [];
 let currentWeather: WeatherType | null = null;
+
+let seasonParticles: Particle[] = [];
+let currentSeason: Season | null = null;
 
 // Lightning flash state
 let flashAlpha = 0;
@@ -148,6 +151,92 @@ const CONFIGS: Partial<Record<WeatherType, WeatherConfig>> = {
     },
 };
 
+// ── Season Particle configs ──────────────────────────────────────────────────
+
+const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
+    spring: {
+        count: 35,
+        color: 0xffbbdd,
+        tintColor: 0x000000,
+        tintAlpha: 0,
+        spawn: (w, h) => ({
+            x: Math.random() * w,
+            y: -10,
+            speed: randRange(15, 30),
+            alpha: randRange(0.4, 0.7),
+            drift: randRange(-15, 15),
+            size: randRange(2, 4),
+        }),
+        draw: () => { },
+        step: (p, w, h, dt) => {
+            p.y += p.speed * dt;
+            p.x += (p.drift + Math.sin(p.y * 0.05) * 15) * dt;
+            return p.y > h + 10 || p.x < -10 || p.x > w + 10;
+        },
+    },
+    summer: {
+        count: 45,
+        color: 0xffffaa,
+        tintColor: 0x000000,
+        tintAlpha: 0,
+        spawn: (w, h) => ({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            speed: randRange(-5, 5),
+            alpha: randRange(0.3, 0.7),
+            drift: randRange(-5, 5),
+            size: randRange(1, 2.5),
+        }),
+        draw: () => { },
+        step: (p, w, h, dt) => {
+            p.y += (p.speed + Math.sin(p.x * 0.03) * 10) * dt;
+            p.x += (p.drift + Math.cos(p.y * 0.03) * 10) * dt;
+            p.alpha = Math.max(0.1, Math.min(0.8, p.alpha + (Math.random() - 0.5) * dt));
+            return p.y > h + 10 || p.y < -10 || p.x < -10 || p.x > w + 10;
+        },
+    },
+    autumn: {
+        count: 40,
+        color: 0xdd8822,
+        tintColor: 0x000000,
+        tintAlpha: 0,
+        spawn: (w, h) => ({
+            x: Math.random() * w,
+            y: -10,
+            speed: randRange(30, 60),
+            alpha: randRange(0.5, 0.9),
+            drift: randRange(10, 30),
+            size: randRange(2.5, 4.5),
+        }),
+        draw: () => { },
+        step: (p, w, h, dt) => {
+            p.y += p.speed * dt;
+            p.x += (p.drift + Math.cos(p.y * 0.02) * 20) * dt;
+            return p.y > h + 10 || p.x < -10 || p.x > w + 10;
+        },
+    },
+    winter: {
+        count: 25,
+        color: 0xffffff,
+        tintColor: 0x000000,
+        tintAlpha: 0,
+        spawn: (w, h) => ({
+            x: Math.random() * w,
+            y: -10,
+            speed: randRange(10, 25),
+            alpha: randRange(0.2, 0.4),
+            drift: randRange(-10, 10),
+            size: randRange(1, 2),
+        }),
+        draw: () => { },
+        step: (p, w, h, dt) => {
+            p.y += p.speed * dt;
+            p.x += (p.drift + Math.sin(p.y * 0.02) * 10) * dt;
+            return p.y > h + 10 || p.x < -10 || p.x > w + 10;
+        },
+    },
+};
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function initWeatherFX(scene: WorldScene) {
@@ -155,6 +244,8 @@ export function initWeatherFX(scene: WorldScene) {
     scene.weatherGfx = scene.add.graphics().setScrollFactor(0).setDepth(200);
     particles = [];
     currentWeather = null;
+    seasonParticles = [];
+    currentSeason = null;
     flashAlpha = 0;
     flashCooldown = 0;
 }
@@ -213,35 +304,80 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
 
     // ── Particles ───────────────────────────────────────────────────────
     scene.weatherGfx.clear();
-    if (!cfg || particles.length === 0) return;
 
-    for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        const needsRespawn = cfg.step(p, w, h, dt);
-        if (needsRespawn) {
-            particles[i] = cfg.spawn(w, h);
-            // Reset to top/edge for continuous flow
-            const fresh = particles[i];
-            if (weather === 'drought') {
-                fresh.x = -10;
-            } else {
-                fresh.y = -10;
-                fresh.x = Math.random() * (w + 60) - 30;
+    if (cfg && particles.length > 0) {
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            const needsRespawn = cfg.step(p, w, h, dt);
+            if (needsRespawn) {
+                particles[i] = cfg.spawn(w, h);
+                // Reset to top/edge for continuous flow
+                const fresh = particles[i];
+                if (weather === 'drought') {
+                    fresh.x = -10;
+                } else {
+                    fresh.y = -10;
+                    fresh.x = Math.random() * (w + 60) - 30;
+                }
+            }
+            // Draw at zoom-compensated coordinates so particles stay pixel-sized
+            const pp = particles[i];
+            const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
+            if (cfg === CONFIGS.rain || cfg === CONFIGS.storm) {
+                const lw = cfg === CONFIGS.storm ? 1.5 / z : 1 / z;
+                scene.weatherGfx.lineStyle(lw, cfg.color, pp.alpha);
+                scene.weatherGfx.lineBetween(sx, sy, sx - ss * 0.3, sy + ss);
+            } else if (cfg === CONFIGS.cold) {
+                scene.weatherGfx.fillStyle(0xffffff, pp.alpha);
+                scene.weatherGfx.fillCircle(sx, sy, ss);
+            } else if (cfg === CONFIGS.drought) {
+                scene.weatherGfx.fillStyle(0xbb9966, pp.alpha);
+                scene.weatherGfx.fillRect(sx, sy, ss, ss * 0.6);
             }
         }
-        // Draw at zoom-compensated coordinates so particles stay pixel-sized
-        const pp = particles[i];
-        const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
-        if (cfg === CONFIGS.rain || cfg === CONFIGS.storm) {
-            const lw = cfg === CONFIGS.storm ? 1.5 / z : 1 / z;
-            scene.weatherGfx.lineStyle(lw, cfg.color, pp.alpha);
-            scene.weatherGfx.lineBetween(sx, sy, sx - ss * 0.3, sy + ss);
-        } else if (cfg === CONFIGS.cold) {
-            scene.weatherGfx.fillStyle(0xffffff, pp.alpha);
-            scene.weatherGfx.fillCircle(sx, sy, ss);
-        } else if (cfg === CONFIGS.drought) {
-            scene.weatherGfx.fillStyle(0xbb9966, pp.alpha);
-            scene.weatherGfx.fillRect(sx, sy, ss, ss * 0.6);
+    }
+
+    // ── Season Particles ────────────────────────────────────────────────
+    const season = scene.weather.season;
+    if (season !== currentSeason) {
+        currentSeason = season;
+        const sCfg = season ? SEASON_CONFIGS[season] : undefined;
+        if (sCfg) {
+            seasonParticles = [];
+            for (let i = 0; i < sCfg.count; i++) {
+                const sp = sCfg.spawn(w, h);
+                sp.y = Math.random() * h;
+                seasonParticles.push(sp);
+            }
+        } else {
+            seasonParticles = [];
+        }
+    }
+
+    const sCfg = season ? SEASON_CONFIGS[season] : undefined;
+    if (sCfg && seasonParticles.length > 0) {
+        for (let i = 0; i < seasonParticles.length; i++) {
+            const p = seasonParticles[i];
+            const needsRespawn = sCfg.step(p, w, h, dt);
+            if (needsRespawn) {
+                seasonParticles[i] = sCfg.spawn(w, h);
+            }
+            const pp = seasonParticles[i];
+            const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
+
+            if (season === 'spring') {
+                scene.weatherGfx.fillStyle(sCfg.color, pp.alpha);
+                scene.weatherGfx.fillCircle(sx, sy, ss);
+            } else if (season === 'summer') {
+                scene.weatherGfx.fillStyle(sCfg.color, Math.max(0, pp.alpha));
+                scene.weatherGfx.fillCircle(sx, sy, ss);
+            } else if (season === 'autumn') {
+                scene.weatherGfx.fillStyle(sCfg.color, pp.alpha);
+                scene.weatherGfx.fillRect(sx, sy, ss, ss);
+            } else if (season === 'winter') {
+                scene.weatherGfx.fillStyle(sCfg.color, pp.alpha);
+                scene.weatherGfx.fillCircle(sx, sy, ss);
+            }
         }
     }
 }
