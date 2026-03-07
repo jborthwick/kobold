@@ -23,7 +23,8 @@ export const mine: Action = {
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
-    const target = bestMaterialTile(goblin, grid, effectiveVision(goblin));
+    const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
+    const target = bestMaterialTile(goblin, grid, radius);
     if (!target) {
       if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * oreNeed;
       return 0;
@@ -34,7 +35,8 @@ export const mine: Action = {
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
-    const oreTarget = bestMaterialTile(goblin, grid, effectiveVision(goblin));
+    const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
+    const oreTarget = bestMaterialTile(goblin, grid, radius);
 
     // Record visible ore sites
     if (oreTarget) {
@@ -108,7 +110,8 @@ export const chop: Action = {
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
-    const target = bestWoodTile(goblin, grid, effectiveVision(goblin));
+    const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
+    const target = bestWoodTile(goblin, grid, radius);
     if (!target) {
       if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * woodNeed;
       return 0;
@@ -119,7 +122,8 @@ export const chop: Action = {
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
-    const woodTarget = bestWoodTile(goblin, grid, effectiveVision(goblin));
+    const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
+    const woodTarget = bestWoodTile(goblin, grid, radius);
 
     // Record visible wood sites
     if (woodTarget) {

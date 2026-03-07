@@ -36,42 +36,44 @@ export function bestFoodTile(
   return best;
 }
 
-/** Scan for richest ore/material tile (excludes Forest). */
 export function bestMaterialTile(
   goblin: Goblin,
   grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
-  let bestValue = 1;
+  let bestValue = 0;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const nx = goblin.x + dx;
       const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (grid[ny][nx].type === TileType.Forest) continue;
-      const v = grid[ny][nx].materialValue;
+      if (grid[ny][nx].materialValue < 1) continue;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      const v = grid[ny][nx].materialValue - dist;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
   }
   return best;
 }
 
-/** Scan for richest Forest tile with wood. */
 export function bestWoodTile(
   goblin: Goblin,
   grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
-  let bestValue = 1;
+  let bestValue = 0;
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const nx = goblin.x + dx;
       const ny = goblin.y + dy;
       if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
       if (grid[ny][nx].type !== TileType.Forest) continue;
-      const v = grid[ny][nx].materialValue;
+      if (grid[ny][nx].materialValue < 1) continue;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      const v = grid[ny][nx].materialValue - dist;
       if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
     }
   }
