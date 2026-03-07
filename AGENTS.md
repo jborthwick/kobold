@@ -113,7 +113,7 @@ Agent data model is in `src/shared/types.ts` (plain interfaces, no ECS). Roles a
 Every tick: `updateNeeds()` → starvation damage → expire LLM intent → stockpile
 deposit/withdraw → score all eligible actions (0–1 via sigmoid/ramp curves) → execute
 highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action scores.
-17 actions defined in `actions/`; see files for scoring formulas.
+Actions defined in `actions/`; see files for scoring formulas.
 
 **Close-call logging:** top two actions within 0.03 → "⚖ agonizing over X vs Y".
 **Fatigue:** 0–100; >70 → 30% skip action; >90 → morale decay. Rest recovers 1.5/tick.
@@ -128,7 +128,7 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 - **Weather** (`weather.ts`): clear/rain/drought/cold/storm modify growback + metabolism. Seasons cycle every 600 ticks. Storm = heavy rain + lightning strikes.
 - **Skills** (`skills.ts`): one skill per role, level = `floor(sqrt(xp/10))`. XP on primary action, +0.3 yield or +3 dmg per level.
 - **Wounds** (`wounds.ts`): single slot, 60% chance on hit. 4 types (bruised/leg/arm/eye). `effectiveVision()` replaces raw vision everywhere.
-- **Factions** (`factions.ts`): cosmetic only — `getActiveFaction()` returns display config. Goblins (default) or Dwarves. Persists in save.
+- **Factions** (`factions.ts`): cosmetic only — `getActiveFaction()` returns display config. Goblins only. Persists in save.
 - **Storyteller** (`events.ts`): tension-aware event distribution — struggling colonies get relief, thriving colonies get challenged.
 - **Warmth diffusion** (`diffusion.ts`): BFS from `TileType.Hearth` and `TileType.Fire` tiles; walls block propagation entirely. Goblin `warmth` smoothed in WorldScene (0.95/0.05 blend — no Math.round or it fixed-points at 10%). Use entry/exit hysteresis in eligible checks to prevent oscillation.
 - **Fire system** (`fire.ts`): hearths ignite adjacent flammable tiles (Grass/Forest/Mushroom/Farmland/TreeStump). Slow-wave spread: high probability per attempt but long interval between attempts, staggered by `fireTick`. Rain/storm extinguishes. Burnout→Dirt. Goblins on fire tiles take damage and can catch fire. Fire tiles are danger and warmth sources in diffusion.
@@ -136,7 +136,7 @@ highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action
 - **Rain pooling** (`pooling.ts`): during rain, Dirt/Grass/Farmland adjacent to Water/Pool can flood to `TileType.Pool`. Pools evaporate back to `priorType` when dry (drought accelerates). Storms pool faster. Pools extinguish burning goblins.
 - **Lightning** (`lightning.ts`): during storms, chance per tick to strike a random tile. Flammable → ignite; Water/Pool/Fire → absorb silently; else → scorch to Dirt.
 - **Firefighting action** (`actions/firefighting.ts`): two-phase — fetch water from lake/pool → douse fire tile. Small chance of getting singed (sets `onFire=true`) on a failed douse.
-- **Storage rooms** (`actions/stockpiling.ts`): player places 5×5 zones via Build button; goblins auto-specialize (food/ore/wood) based on colony need. Walls built on 7×7 perimeter ring with 4 doorways. Stockpiles expand within room bounds only. Room data: `Room` in `types.ts`, stored in `WorldScene.rooms`, persisted in save.
+- **Rooms** (`actions/stockpiling.ts`, `actions/cooking.ts`): player places 5×5 zones via Build button; goblins auto-specialize (food/ore/wood/kitchen) based on colony need. Kitchens hold meals. Walls built on 7×7 perimeter ring with 4 doorways. Stockpiles expand within room bounds only. Room data: `Room` in `types.ts`, stored in `WorldScene.rooms`, persisted in save.
 
 ---
 
@@ -173,7 +173,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Key directories
 
-- `src/game/` — Phaser scenes (WorldScene.ts is the main game loop), tileConfig
+- `src/game/` — Phaser scenes (split into `WorldScene.ts`, `WorldTick.ts`, etc. for main game loop), tileConfig
 - `src/simulation/` — game logic: agents, actions, utilityAI, world, weather, skills, wounds, events, adventurers, fire, pooling, lightning
 - `src/ai/` — LLM integration: crisis detection, storyteller chapters
 - `src/ui/` — React overlay: HUD, EventLog, MiniMap, StartMenu, TilePicker
@@ -183,7 +183,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Implementation status
 
-**Current: Iteration 27.** See `git log` for full changelog. Key milestones:
+**Current: Iteration 28.** See `git log` for full changelog. Key milestones:
 1–3: World gen, tileset, pathfinding, BT, LLM crisis detection.
 4–6: Camera, LLM execution, memory, roles, VERIFY, procedural world, scarcity.
 7–9: Colony goals, depot, fighter role, succession, traits/weather/storyteller, dual-noise biomes.
@@ -201,6 +201,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 25: Thunderstorms — new weather type; 3× faster pooling; lightning strikes ignite/scorch tiles.
 26: Player-placed storage rooms — build mode UI, room placement, goblin-chosen specialization, room-aware walls.
 27: Persistent tiled glow; terrain layering (floor/object) for depth occlusion; AI momentum fixes for 2-tile loops.
+28: Kitchen rooms with cooking system and separate meal stockpiles; dwarf faction removal; visual seasons.
 
 ---
 
@@ -214,7 +215,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - **Tile picker writes source files.** `POST /api/write-tile-config` → Vite plugin → `tileConfig.ts`. Restart not needed (HMR picks it up).
 - **Kenney assets are CC0.** Use freely including for commercial release.
 - **Save migration:** new optional `Goblin` fields need `if (d.field === undefined) d.field = default;` in `loadGame()` (`save.ts`). See existing migrations (skillXp, knownHearthSites) as template.
-- **Runtime stockpile creation:** actions may push to `foodStockpiles`/`oreStockpiles`/`woodStockpiles` during `tickAgentUtility`. WorldScene syncs graphics arrays each tick (`while gfxList.length < stockpiles.length`).
+- **Runtime stockpile creation:** actions may push to `foodStockpiles`/`oreStockpiles`/`woodStockpiles`/`mealStockpiles` during `tickAgentUtility`. WorldScene syncs graphics arrays each tick (`while gfxList.length < stockpiles.length`).
 - **No hardcoded stockpiles:** new games start with empty stockpile arrays. Code referencing `foodStockpiles[0]` must fallback to spawn zone center.
 
 ---
