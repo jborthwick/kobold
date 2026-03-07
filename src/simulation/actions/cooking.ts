@@ -9,7 +9,7 @@ const MEALS_PER_BATCH = 5;
 const FOOD_COST = 5;
 const WOOD_COST = 1;
 const COOKING_TICKS_REQUIRED = 50;
-const FIRE_CHANCE_PER_TICK = 0.015; // 1.5% chance per tick to start a fire
+const FIRE_CHANCE_PER_TICK = 0.001; // 0.1% chance per tick to start a fire (~5% per batch)
 const MAX_MEALS_STORED = 50;
 
 /** Find or auto-create a MealStockpile at the top-left corner of the given kitchen. */
