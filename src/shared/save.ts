@@ -62,6 +62,7 @@ export function loadGame(): SaveData | null {
       }
       if (d.inventory.ore === undefined) d.inventory.ore = 0;
       if (d.inventory.wood === undefined) d.inventory.wood = 0;
+      if (d.inventory.meals === undefined) d.inventory.meals = 0;
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];
