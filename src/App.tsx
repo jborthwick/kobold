@@ -10,10 +10,9 @@ import { MobileBottomSheet } from './ui/MobileBottomSheet';
 import { useLayoutMode } from './shared/useViewport';
 import { bus } from './shared/events';
 import { deleteSave } from './shared/save';
-import { type FactionId, setActiveFaction } from './shared/factions';
 
 export default function App() {
-  const [gameMode,  setGameMode]  = useState<'menu' | 'playing'>('menu');
+  const [gameMode, setGameMode] = useState<'menu' | 'playing'>('menu');
   const [startMode, setStartMode] = useState<'new' | 'load'>('new');
   const layout = useLayoutMode();
 
@@ -31,8 +30,7 @@ export default function App() {
   if (gameMode === 'menu') {
     return (
       <StartMenu
-        onStart={(mode, faction?: FactionId) => {
-          if (faction) setActiveFaction(faction);
+        onStart={(mode) => {
           setStartMode(mode);
           setGameMode('playing');
         }}
@@ -40,7 +38,7 @@ export default function App() {
     );
   }
 
-  const isPhone  = layout === 'phone';
+  const isPhone = layout === 'phone';
   const isDesktop = layout === 'desktop';
   const sidebarWidth = isPhone ? 0 : layout === 'tablet' ? 280 : 360;
 
@@ -56,12 +54,12 @@ export default function App() {
       {/* Desktop/tablet: right sidebar */}
       {!isPhone && (
         <div style={{
-          position:      'absolute',
-          top:           8,
-          right:         0,
-          bottom:        0,
-          width:         sidebarWidth,
-          display:       'flex',
+          position: 'absolute',
+          top: 8,
+          right: 0,
+          bottom: 0,
+          width: sidebarWidth,
+          display: 'flex',
           flexDirection: 'column',
           pointerEvents: 'none',
         }}>

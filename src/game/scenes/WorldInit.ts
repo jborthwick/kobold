@@ -6,7 +6,6 @@ import { resetAdventurers, spawnInitialAdventurers } from '../../simulation/adve
 import { createWeather } from '../../simulation/weather';
 import { llmSystem } from '../../ai/crisis';
 import { loadGame } from '../../shared/save';
-import { setActiveFaction } from '../../shared/factions';
 import { bus } from '../../shared/events';
 import { setNextEventTick } from '../../simulation/events';
 import * as WorldGoals from './WorldGoals';
@@ -24,7 +23,6 @@ export function initializeWorld(scene: WorldScene) {
   const save = mode === 'load' ? loadGame() : null;
 
   if (save) {
-    setActiveFaction(save.faction ?? 'goblins');
     bus.emit('restoreLog', save.logHistory ?? []);
     scene.grid = save.grid;
     scene.spawnZone = save.spawnZone;
