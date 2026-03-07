@@ -21,46 +21,46 @@ import { traitMod, ROLE_COMBAT_APT } from '../simulation/agents';
 export type LLMProvider = 'anthropic' | 'groq';
 
 export interface ProviderConfig {
-  url:          string;
-  model:        string;
-  maxTokens:    number;
+  url: string;
+  model: string;
+  maxTokens: number;
   /** Client-side rate limits — 0 = unlimited (e.g. Anthropic). */
-  rateLimit:    { maxRPM: number; maxRPD: number };
+  rateLimit: { maxRPM: number; maxRPD: number };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extractText:  (data: any) => string;
+  extractText: (data: any) => string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extractUsage: (data: any) => { input: number; output: number };
 }
 
 export const PROVIDERS: Record<LLMProvider, ProviderConfig> = {
   anthropic: {
-    url:          '/api/llm-proxy',
-    model:        'claude-haiku-4-5',
-    maxTokens:    256,
-    rateLimit:    { maxRPM: 0, maxRPD: 0 },  // Anthropic limits are generous; no client gating
-    extractText:  (d) => d?.content?.[0]?.text ?? '',
+    url: '/api/llm-proxy',
+    model: 'claude-haiku-4-5',
+    maxTokens: 256,
+    rateLimit: { maxRPM: 0, maxRPD: 0 },  // Anthropic limits are generous; no client gating
+    extractText: (d) => d?.content?.[0]?.text ?? '',
     extractUsage: (d) => ({ input: d?.usage?.input_tokens ?? 0, output: d?.usage?.output_tokens ?? 0 }),
   },
   groq: {
-    url:          '/api/groq-proxy',
-    model:        'meta-llama/llama-4-scout-17b-16e-instruct',
-    maxTokens:    256,
-    rateLimit:    { maxRPM: 25, maxRPD: 900 },  // free tier: 30 RPM / 1K RPD — leave headroom
-    extractText:  (d) => d?.choices?.[0]?.message?.content ?? '',
+    url: '/api/groq-proxy',
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    maxTokens: 256,
+    rateLimit: { maxRPM: 25, maxRPD: 900 },  // free tier: 30 RPM / 1K RPD — leave headroom
+    extractText: (d) => d?.choices?.[0]?.message?.content ?? '',
     extractUsage: (d) => ({ input: d?.usage?.prompt_tokens ?? 0, output: d?.usage?.completion_tokens ?? 0 }),
   },
 };
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 
-const HUNGER_CRISIS_THRESHOLD   = 65;  // % hunger — fires when eating is due (eating now at > 70)
-const MORALE_CRISIS_THRESHOLD   = 40;  // morale ≤ this (morale decays in utilityAI updateNeeds)
-const CONTEST_RADIUS            = 2;   // tiles — contest triggers when rival is this close
-const LOW_SUPPLIES_FOOD         = 2;   // units — fires when carrying almost nothing
+const HUNGER_CRISIS_THRESHOLD = 65;  // % hunger — fires when eating is due (eating now at > 70)
+const MORALE_CRISIS_THRESHOLD = 40;  // morale ≤ this (morale decays in utilityAI updateNeeds)
+const CONTEST_RADIUS = 2;   // tiles — contest triggers when rival is this close
+const LOW_SUPPLIES_FOOD = 2;   // units — fires when carrying almost nothing
 const ADVENTURER_RAID_AWARENESS = 8;   // base radius — scales with wariness trait
-const EXHAUSTION_THRESHOLD      = 80;  // fatigue ≥ this triggers exhaustion crisis
-const LONELINESS_THRESHOLD      = 70;  // social ≥ this triggers loneliness crisis
-const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/goblin/hour
+const EXHAUSTION_THRESHOLD = 80;  // fatigue ≥ this triggers exhaustion crisis
+const LONELINESS_THRESHOLD = 70;  // social ≥ this triggers loneliness crisis
+const COOLDOWN_TICKS = 280; // ~40 s at ~7 ticks/s — targets ~3-5 calls/goblin/hour
 
 // ── Crisis priority ──────────────────────────────────────────────────────────
 //
@@ -76,29 +76,29 @@ const COOLDOWN_TICKS            = 280; // ~40 s at ~7 ticks/s — targets ~3-5 c
 type CrisisPriority = 'high' | 'medium' | 'low';
 
 const CRISIS_PRIORITY: Record<string, CrisisPriority> = {
-  goblin_raid:      'high',    // fight-or-flee dilemma, personality-dependent
-  low_supplies:     'high',    // genuine decision point — forage, share, depot?
+  goblin_raid: 'high',    // fight-or-flee dilemma, personality-dependent
+  low_supplies: 'high',    // genuine decision point — forage, share, depot?
   resource_contest: 'medium',  // utility AI resolves mechanically; LLM adds flavor only
   resource_sharing: 'high',    // greedy vs helpful — key personality tension
-  morale:           'medium',  // flavor value, but BT handles the mechanics
-  hunger:           'low',     // always "eat" — no decision space
-  exhaustion:       'low',     // always "rest" — no decision space
-  loneliness:       'low',     // always "socialize" — no decision space
+  morale: 'medium',  // flavor value, but BT handles the mechanics
+  hunger: 'low',     // always "eat" — no decision space
+  exhaustion: 'low',     // always "rest" — no decision space
+  loneliness: 'low',     // always "socialize" — no decision space
 };
 
 // ── Crisis detection (deterministic, runs every tick) ─────────────────────────
 
 export function detectCrisis(
-  goblin:    Goblin,
-  goblins:  Goblin[],
-  _grid:    Tile[][],
+  goblin: Goblin,
+  goblins: Goblin[],
+  _grid: Tile[][],
   adventurers?: Adventurer[],
 ): CrisisSituation | null {
   if (!goblin.alive) return null;
 
-  const alive      = goblins.filter(d => d.alive);
+  const alive = goblins.filter(d => d.alive);
   const colonyFood = alive.reduce((s, d) => s + d.inventory.food, 0);
-  const ctx        = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} goblins. Health: ${goblin.health}/${goblin.maxHealth}.`;
+  const ctx = `Colony food: ${colonyFood.toFixed(0)} units across ${alive.length} goblins. Health: ${goblin.health}/${goblin.maxHealth}.`;
 
   // ── Adventurer raid — checked first (most urgent) ─────────────────────────────
   // Only fighters and brave goblins get LLM raid calls — everyone else always
@@ -112,10 +112,10 @@ export function detectCrisis(
     }, null);
     if (nearest && nearest.dist <= raidRadius) {
       const enemyPlural = getActiveFaction().enemyNounPlural;
-      const enemyCap    = enemyPlural.charAt(0).toUpperCase() + enemyPlural.slice(1);
+      const enemyCap = enemyPlural.charAt(0).toUpperCase() + enemyPlural.slice(1);
       return {
-        type:          'adventurer_raid',
-        description:   `${enemyCap} are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
+        type: 'adventurer_raid',
+        description: `${enemyCap} are raiding! An enemy is ${nearest.dist} tile${nearest.dist !== 1 ? 's' : ''} away — fight or flee!`,
         colonyContext: `${adventurers.length} ${enemyPlural} in the area. ${ctx}`,
       };
     }
@@ -128,7 +128,7 @@ export function detectCrisis(
   const lowSuppliesHunger = Math.max(25, traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD) - 25);
   if (goblin.inventory.food <= LOW_SUPPLIES_FOOD && goblin.hunger >= lowSuppliesHunger) {
     return {
-      type:        'low_supplies',
+      type: 'low_supplies',
       description: `You are running out of food (only ${goblin.inventory.food.toFixed(0)} units left) and getting hungry (hunger ${goblin.hunger.toFixed(0)}/100).`,
       colonyContext: ctx,
     };
@@ -137,7 +137,7 @@ export function detectCrisis(
   // Hunger crisis — fires when hungry, regardless of whether they still have some food
   if (goblin.hunger >= traitMod(goblin, 'hungerCrisisThreshold', HUNGER_CRISIS_THRESHOLD)) {
     return {
-      type:        'hunger',
+      type: 'hunger',
       description: `You are very hungry (hunger ${goblin.hunger.toFixed(0)}/100) and your food supply is running low (carrying ${goblin.inventory.food.toFixed(0)} units).`,
       colonyContext: ctx,
     };
@@ -146,7 +146,7 @@ export function detectCrisis(
   // Morale breaking point (morale decays in utilityAI updateNeeds when hungry)
   if (goblin.morale <= traitMod(goblin, 'moraleCrisisThreshold', MORALE_CRISIS_THRESHOLD)) {
     return {
-      type:        'morale',
+      type: 'morale',
       description: `Your morale has fallen to ${goblin.morale.toFixed(0)}/100. You are struggling to keep going.`,
       colonyContext: ctx,
     };
@@ -155,7 +155,7 @@ export function detectCrisis(
   // Exhaustion — fires when fatigue is critically high
   if (goblin.fatigue >= traitMod(goblin, 'exhaustionThreshold', EXHAUSTION_THRESHOLD)) {
     return {
-      type:        'exhaustion',
+      type: 'exhaustion',
       description: `You are exhausted (fatigue ${goblin.fatigue.toFixed(0)}/100). Your body aches and you can barely keep moving.`,
       colonyContext: ctx,
     };
@@ -164,7 +164,7 @@ export function detectCrisis(
   // Loneliness — fires when social need is critically high
   if (goblin.social >= traitMod(goblin, 'lonelinessCrisisThreshold', LONELINESS_THRESHOLD)) {
     return {
-      type:        'loneliness',
+      type: 'loneliness',
       description: `You feel lonely and isolated (social need ${goblin.social.toFixed(0)}/100). You haven't been near a friend in a long time.`,
       colonyContext: ctx,
     };
@@ -184,7 +184,7 @@ export function detectCrisis(
   ) : null;
   if (rival) {
     return {
-      type:        'resource_contest',
+      type: 'resource_contest',
       description: `${rival.name} is nearby (${Math.abs(rival.x - goblin.x) + Math.abs(rival.y - goblin.y)} tiles away) competing for the same scarce food.`,
       colonyContext: `You carry ${goblin.inventory.food.toFixed(0)} food; ${rival.name} carries ${rival.inventory.food.toFixed(0)}. ${ctx}`,
     };
@@ -201,7 +201,7 @@ export function detectCrisis(
     );
     if (needyNeighbor) {
       return {
-        type:        'resource_sharing',
+        type: 'resource_sharing',
         description: `${needyNeighbor.name} is nearby and starving (hunger ${needyNeighbor.hunger.toFixed(0)}/100, only ${needyNeighbor.inventory.food.toFixed(0)} food). You are well-supplied with ${goblin.inventory.food.toFixed(0)} units.`,
         colonyContext: ctx,
       };
@@ -221,9 +221,9 @@ function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin
   // PIANO step 2 — inject short-term memory if present (cap at 5 entries; with VERIFY outcomes)
   const memBlock = goblin.memory.length > 0
     ? `\nRECENT DECISIONS:\n${goblin.memory.slice(-5).map(m => {
-        const out = m.outcome ? ` → OUTCOME: ${m.outcome}` : '';
-        return `  [tick ${m.tick}] ${m.crisis}: "${m.action}"${out}`;
-      }).join('\n')}`
+      const out = m.outcome ? ` → OUTCOME: ${m.outcome}` : '';
+      return `  [tick ${m.tick}] ${m.crisis}: "${m.action}"${out}`;
+    }).join('\n')}`
     : '';
 
   // Relationship context — include all goblins whose relation has meaningfully diverged from neutral
@@ -244,13 +244,13 @@ function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin
     : '';
 
   const homeDist = Math.round(Math.hypot(goblin.x - goblin.homeTile.x, goblin.y - goblin.homeTile.y));
-  const homeStr  = `Fort home at (${goblin.homeTile.x},${goblin.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
+  const homeStr = `Fort home at (${goblin.homeTile.x},${goblin.homeTile.y}), ${homeDist} tile${homeDist !== 1 ? 's' : ''} away.`;
 
   const WOUND_EFFECTS: Record<string, string> = {
     bruised: 'tiring faster',
-    leg:     'limping, moving slowly',
-    arm:     'weak arm, reduced harvesting and combat',
-    eye:     'impaired vision, can\'t see far',
+    leg: 'limping, moving slowly',
+    arm: 'weak arm, reduced harvesting and combat',
+    eye: 'impaired vision, can\'t see far',
   };
   const skillLine = (goblin.skillLevel ?? 0) > 0
     ? `\nSkill: Level ${goblin.skillLevel} ${goblin.role} (${goblin.skillXp} XP).`
@@ -282,17 +282,17 @@ intent meanings: eat=eat from inventory now, forage=seek food aggressively, rest
 // ── LLM Decision System ───────────────────────────────────────────────────────
 
 type DecisionCallback = (
-  goblin:     Goblin,
-  decision:  LLMDecision,
+  goblin: Goblin,
+  decision: LLMDecision,
   situation: CrisisSituation,
 ) => void;
 
 interface VerifySnapshot {
-  goblinId:          string;
-  verifyAtTick:     number;        // currentTick + 40
-  intent:           LLMIntent;
+  goblinId: string;
+  verifyAtTick: number;        // currentTick + 40
+  intent: LLMIntent;
   hungerAtDecision: number;
-  foodAtDecision:   number;
+  foodAtDecision: number;
   memoryEntryIndex: number;        // index into goblin.memory to backfill
 }
 
@@ -305,7 +305,7 @@ export class LLMDecisionSystem {
   // One Promise per agent — prevents duplicate in-flight calls
   private pendingRequests = new Map<string, Promise<LLMDecision | null>>();
   // Per-agent cooldown: don't fire again until this tick
-  private cooldownUntil       = new Map<string, number>();
+  private cooldownUntil = new Map<string, number>();
   // Medium-priority crises use a longer cooldown (2×) to save budget
   private mediumCooldownUntil = new Map<string, number>();
   // Colony-wide raid cooldown — only one goblin responds via LLM per raid wave
@@ -314,9 +314,9 @@ export class LLMDecisionSystem {
   private pendingVerifications = new Map<string, VerifySnapshot>();
 
   // Session-level token counters
-  public sessionInputTokens  = 0;
+  public sessionInputTokens = 0;
   public sessionOutputTokens = 0;
-  public sessionCallCount    = 0;
+  public sessionCallCount = 0;
 
   // ── Wall-clock rate limiter (protects Groq free-tier limits) ──────────────
   /** Timestamps (Date.now()) of recent calls — pruned to last 60 s. */
@@ -324,7 +324,7 @@ export class LLMDecisionSystem {
   /** Running daily call counter — resets after 24 h. */
   private dailyCallCount = 0;
   /** Wall-clock time when dailyCallCount was last reset. */
-  private dailyResetAt   = Date.now() + 86_400_000; // +24 h
+  private dailyResetAt = Date.now() + 86_400_000; // +24 h
 
   /**
    * Returns true if the current provider's rate limits allow another call.
@@ -339,7 +339,7 @@ export class LLMDecisionSystem {
     // Reset daily counter every 24 h
     if (now >= this.dailyResetAt) {
       this.dailyCallCount = 0;
-      this.dailyResetAt   = now + 86_400_000;
+      this.dailyResetAt = now + 86_400_000;
     }
 
     // RPD check
@@ -368,25 +368,25 @@ export class LLMDecisionSystem {
   }
 
   /** Public wrappers — used by callSuccessionLLM (standalone function). */
-  public canCallNowPublic(): boolean  { return this.canCallNow(); }
-  public recordCallPublic(): void     { this.recordCall(); }
+  public canCallNowPublic(): boolean { return this.canCallNow(); }
+  public recordCallPublic(): void { this.recordCall(); }
 
   /**
    * Check for a crisis, fire an async LLM call if one is found and the agent
    * isn't on cooldown.  Never awaited — the game loop must not block.
    */
   requestDecision(
-    goblin:       Goblin,
-    goblins:     Goblin[],
-    grid:        Tile[][],
+    goblin: Goblin,
+    goblins: Goblin[],
+    grid: Tile[][],
     currentTick: number,
-    adventurers:     Adventurer[],
-    onDecision:  DecisionCallback,
+    adventurers: Adventurer[],
+    onDecision: DecisionCallback,
     colonyGoal?: ColonyGoal,
   ): void {
-    if (!this.enabled)                                         return;
-    if (!goblin.alive)                                          return;
-    if (this.pendingRequests.has(goblin.id))                    return;
+    if (!this.enabled) return;
+    if (!goblin.alive) return;
+    if (this.pendingRequests.has(goblin.id)) return;
     if ((this.cooldownUntil.get(goblin.id) ?? 0) > currentTick) return;
 
     const situation = detectCrisis(goblin, goblins, grid, adventurers);
@@ -424,11 +424,11 @@ export class LLMDecisionSystem {
         // PIANO step 6 — schedule outcome verification after 40 ticks
         if (decision.intent && decision.intent !== 'none') {
           this.pendingVerifications.set(goblin.id, {
-            goblinId:          goblin.id,
-            verifyAtTick:     currentTick + 40,
-            intent:           decision.intent,
+            goblinId: goblin.id,
+            verifyAtTick: currentTick + 40,
+            intent: decision.intent,
             hungerAtDecision: goblin.hunger,
-            foodAtDecision:   goblin.inventory.food,
+            foodAtDecision: goblin.inventory.food,
             memoryEntryIndex: goblin.memory.length - 1,
           });
         }
@@ -459,39 +459,39 @@ export class LLMDecisionSystem {
 
   private evaluateOutcome(goblin: Goblin, snap: VerifySnapshot): string | null {
     const hungerDelta = goblin.hunger - snap.hungerAtDecision;
-    const foodDelta   = goblin.inventory.food - snap.foodAtDecision;
+    const foodDelta = goblin.inventory.food - snap.foodAtDecision;
     switch (snap.intent) {
-      case 'eat':    return hungerDelta >= 0
+      case 'eat': return hungerDelta >= 0
         ? `eating failed — hunger rose ${hungerDelta.toFixed(0)}`
         : null;
       case 'forage': return foodDelta <= 0
         ? `foraging failed — no food collected`
         : null;
-      case 'rest':   return goblin.hunger > 80
+      case 'rest': return goblin.hunger > 80
         ? `resting while starving (hunger ${goblin.hunger.toFixed(0)})`
         : null;
       case 'socialize': return goblin.social > 70
         ? `socializing failed — still lonely (social ${goblin.social.toFixed(0)})`
         : null;
-      default:       return null;
+      default: return null;
     }
   }
 
   private async callLLM(
-    goblin:      Goblin,
-    situation:  CrisisSituation,
-    goblins:    Goblin[],
+    goblin: Goblin,
+    situation: CrisisSituation,
+    goblins: Goblin[],
     colonyGoal?: ColonyGoal,
   ): Promise<LLMDecision | null> {
     const cfg = PROVIDERS[this.provider];
     try {
       this.recordCall();
       const res = await fetch(cfg.url, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'content-type': 'application/json' },
-        signal:  AbortSignal.timeout(5_000),
+        signal: AbortSignal.timeout(5_000),
         body: JSON.stringify({
-          model:      cfg.model,
+          model: cfg.model,
           max_tokens: cfg.maxTokens,
           messages: [{ role: 'user', content: buildPrompt(goblin, situation, goblins, colonyGoal) }],
         }),
@@ -506,8 +506,8 @@ export class LLMDecisionSystem {
         return null;
       }
 
-      const data    = await res.json();
-      const raw     = cfg.extractText(data);
+      const data = await res.json();
+      const raw = cfg.extractText(data);
       // Some models wrap JSON in markdown fences — strip them before parsing
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const decision = JSON.parse(cleaned) as LLMDecision;
@@ -515,19 +515,19 @@ export class LLMDecisionSystem {
       if (!decision?.action || !decision?.reasoning) return null;
       // Provide defaults for optional fields
       decision.emotional_state ??= 'uncertain';
-      decision.expectedOutcome  ??= 'unknown outcome';
+      decision.expectedOutcome ??= 'unknown outcome';
 
       // Track token usage and broadcast to UI
-      const usage  = cfg.extractUsage(data);
-      this.sessionInputTokens  += usage.input;
+      const usage = cfg.extractUsage(data);
+      this.sessionInputTokens += usage.input;
       this.sessionOutputTokens += usage.output;
       this.sessionCallCount++;
       bus.emit('tokenUsage', {
-        inputTotal:  this.sessionInputTokens,
+        inputTotal: this.sessionInputTokens,
         outputTotal: this.sessionOutputTokens,
-        callCount:   this.sessionCallCount,
-        lastInput:   usage.input,
-        lastOutput:  usage.output,
+        callCount: this.sessionCallCount,
+        lastInput: usage.input,
+        lastOutput: usage.output,
       });
 
       return decision;
@@ -566,28 +566,28 @@ export async function callSuccessionLLM(dead: Goblin, successor: Goblin): Promis
   try {
     llmSystem.recordCallPublic();
     const res = await fetch(cfg.url, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
-      signal:  AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(5_000),
       body: JSON.stringify({
-        model:      cfg.model,
+        model: cfg.model,
         max_tokens: 60,
-        messages:   [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: prompt }],
       }),
     });
     if (res.status === 429) return null; // rate-limited by server
     if (!res.ok) return null;
-    const data  = await res.json();
+    const data = await res.json();
     const usage = cfg.extractUsage(data);
-    llmSystem.sessionInputTokens  += usage.input;
+    llmSystem.sessionInputTokens += usage.input;
     llmSystem.sessionOutputTokens += usage.output;
     llmSystem.sessionCallCount++;
     bus.emit('tokenUsage', {
-      inputTotal:  llmSystem.sessionInputTokens,
+      inputTotal: llmSystem.sessionInputTokens,
       outputTotal: llmSystem.sessionOutputTokens,
-      callCount:   llmSystem.sessionCallCount,
-      lastInput:   usage.input,
-      lastOutput:  usage.output,
+      callCount: llmSystem.sessionCallCount,
+      lastInput: usage.input,
+      lastOutput: usage.output,
     });
     return cfg.extractText(data)?.trim().slice(0, 120) ?? null;
   } catch {

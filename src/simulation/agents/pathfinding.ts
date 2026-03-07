@@ -15,8 +15,8 @@ import { FORAGEABLE_TILES } from './sites';
  * two adjacent patches with similar food values.
  */
 export function bestFoodTile(
-  goblin:  Goblin,
-  grid:   Tile[][],
+  goblin: Goblin,
+  grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
@@ -38,8 +38,8 @@ export function bestFoodTile(
 
 /** Scan for richest ore/material tile (excludes Forest). */
 export function bestMaterialTile(
-  goblin:  Goblin,
-  grid:   Tile[][],
+  goblin: Goblin,
+  grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
@@ -59,8 +59,8 @@ export function bestMaterialTile(
 
 /** Scan for richest Forest tile with wood. */
 export function bestWoodTile(
-  goblin:  Goblin,
-  grid:   Tile[][],
+  goblin: Goblin,
+  grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
@@ -83,7 +83,7 @@ export function bestWoodTile(
  */
 export function pathNextStep(
   from: { x: number; y: number },
-  to:   { x: number; y: number },
+  to: { x: number; y: number },
   grid: Tile[][],
 ): { x: number; y: number } {
   if (from.x === to.x && from.y === to.y) return from;

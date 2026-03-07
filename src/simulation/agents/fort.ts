@@ -14,10 +14,10 @@ import { GRID_SIZE } from '../../shared/constants';
  * 4 doorways (center of each side) are excluded.
  */
 export function roomWallSlots(
-  rooms:       Room[],
-  grid:        Tile[][],
-  goblins:     Goblin[] | undefined,
-  selfId:      string,
+  rooms: Room[],
+  grid: Tile[][],
+  goblins: Goblin[] | undefined,
+  selfId: string,
   adventurers?: Adventurer[],
 ): Array<{ x: number; y: number }> {
   const slots: Array<{ x: number; y: number }> = [];
@@ -34,7 +34,7 @@ export function roomWallSlots(
     const key = `${x},${y}`;
     if (added.has(key)) return;
     const t = grid[y][x];
-    if (t.type === TileType.Wall || t.type === TileType.Water || t.type === TileType.Ore) return;
+    if (t.type === TileType.Wall || t.type === TileType.Water || t.type === TileType.Ore || t.type === TileType.Stone || t.type === TileType.Pool) return;
     if (blocked(x, y)) return;
     added.add(key);
     slots.push({ x, y });
@@ -42,10 +42,10 @@ export function roomWallSlots(
 
   for (const room of rooms) {
     // Doorway positions (center of each side, in perimeter ring)
-    const doorTop    = { x: room.x + 2, y: room.y - 1 };
+    const doorTop = { x: room.x + 2, y: room.y - 1 };
     const doorBottom = { x: room.x + 2, y: room.y + room.h };
-    const doorLeft   = { x: room.x - 1, y: room.y + 2 };
-    const doorRight  = { x: room.x + room.w, y: room.y + 2 };
+    const doorLeft = { x: room.x - 1, y: room.y + 2 };
+    const doorRight = { x: room.x + room.w, y: room.y + 2 };
     const isDoor = (x: number, y: number): boolean =>
       (x === doorTop.x && y === doorTop.y) ||
       (x === doorBottom.x && y === doorBottom.y) ||
@@ -74,24 +74,10 @@ export function roomWallSlots(
 }
 
 // Keep old exports as aliases for backward compat (headless sim, goal progress)
-export function fortWallSlots(
-  _foodStockpiles: Array<{ x: number; y: number }>,
-  _oreStockpiles:  Array<{ x: number; y: number }>,
-  _grid:           Tile[][],
-  _goblins:        Goblin[] | undefined,
-  _selfId:         string,
-  _adventurers?:   Adventurer[],
-): Array<{ x: number; y: number }> {
+export function fortWallSlots(): Array<{ x: number; y: number }> {
   return [];
 }
 
-export function fortEnclosureSlots(
-  _foodStockpiles: Array<{ x: number; y: number }>,
-  _oreStockpiles:  Array<{ x: number; y: number }>,
-  _grid:           Tile[][],
-  _goblins:        Goblin[] | undefined,
-  _selfId:         string,
-  _adventurers?:   Adventurer[],
-): Array<{ x: number; y: number }> {
+export function fortEnclosureSlots(): Array<{ x: number; y: number }> {
   return [];
 }

@@ -21,7 +21,7 @@ const SIG_NAMES = new Set(['WEATHER', 'world', 'COLONY', 'RAID']);
  * last chapter tick. Returns condensed strings for the LLM prompt.
  */
 export function filterSignificantEvents(
-  logHistory:      LogEntry[],
+  logHistory: LogEntry[],
   lastChapterTick: number,
 ): string[] {
   const recent = logHistory.filter(e => e.tick > lastChapterTick);
@@ -55,18 +55,17 @@ export function filterSignificantEvents(
  * game loop. Returns narrator prose (2-4 sentences) or null on failure.
  */
 export async function callStorytellerLLM(
-  completedGoal:     ColonyGoal,
-  goblins:           Goblin[],
-  adventurers:           Adventurer[],
+  completedGoal: ColonyGoal,
+  goblins: Goblin[],
+  adventurers: Adventurer[],
   significantEvents: string[],
-  _tick:             number,
 ): Promise<string | null> {
   if (!llmSystem.enabled) return null;
   if (!llmSystem.canCallNowPublic()) return null;
 
-  const cfg   = PROVIDERS[llmSystem.provider];
+  const cfg = PROVIDERS[llmSystem.provider];
   const alive = goblins.filter(d => d.alive);
-  const dead  = goblins.filter(d => !d.alive);
+  const dead = goblins.filter(d => !d.alive);
 
   // Tension (same formula as events.ts colonyTension — not exported)
   const avgHunger = alive.length > 0
@@ -78,15 +77,15 @@ export async function callStorytellerLLM(
   );
 
   const tone = tension > 70 ? 'grim, tense, survival-focused'
-             : tension < 30 ? 'hopeful, triumphant, warm'
-             :                'neutral, matter-of-fact';
+    : tension < 30 ? 'hopeful, triumphant, warm'
+      : 'neutral, matter-of-fact';
 
   const roster = alive.map(d => `${d.name} (${d.role}, ${d.trait})`).join(', ');
   const eventBlock = significantEvents.length > 0
     ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
     : '\nA quiet chapter with no major events.';
 
-  const faction    = getActiveFaction();
+  const faction = getActiveFaction();
   const chapterNum = completedGoal.generation + 1;
   const prompt =
     `You are the narrator of a ${faction.unitNoun} colony survival story — ${faction.narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
@@ -99,29 +98,29 @@ export async function callStorytellerLLM(
   try {
     llmSystem.recordCallPublic();
     const res = await fetch(cfg.url, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
-      signal:  AbortSignal.timeout(8_000), // slightly longer than crisis calls
+      signal: AbortSignal.timeout(8_000), // slightly longer than crisis calls
       body: JSON.stringify({
-        model:      cfg.model,
+        model: cfg.model,
         max_tokens: 200,
-        messages:   [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: prompt }],
       }),
     });
     if (res.status === 429) return null;
     if (!res.ok) return null;
 
-    const data  = await res.json();
+    const data = await res.json();
     const usage = cfg.extractUsage(data);
-    llmSystem.sessionInputTokens  += usage.input;
+    llmSystem.sessionInputTokens += usage.input;
     llmSystem.sessionOutputTokens += usage.output;
     llmSystem.sessionCallCount++;
     bus.emit('tokenUsage', {
-      inputTotal:  llmSystem.sessionInputTokens,
+      inputTotal: llmSystem.sessionInputTokens,
       outputTotal: llmSystem.sessionOutputTokens,
-      callCount:   llmSystem.sessionCallCount,
-      lastInput:   usage.input,
-      lastOutput:  usage.output,
+      callCount: llmSystem.sessionCallCount,
+      lastInput: usage.input,
+      lastOutput: usage.output,
     });
 
     const raw = cfg.extractText(data)?.trim() ?? '';
@@ -144,18 +143,18 @@ export async function callStorytellerLLM(
  * or fails. Always returns a non-empty string.
  */
 export function buildFallbackChapter(
-  goal:   ColonyGoal,
-  alive:  Goblin[],
+  goal: ColonyGoal,
+  alive: Goblin[],
   events: string[],
 ): string {
   const deathCount = events.filter(e => e.includes('killed') || e.includes('dead') || e.includes('died')).length;
-  const raidCount  = events.filter(e => e.includes('storm') || e.includes('RAID')).length;
-  const names      = alive.slice(0, 3).map(d => d.name).join(', ');
+  const raidCount = events.filter(e => e.includes('storm') || e.includes('RAID')).length;
+  const names = alive.slice(0, 3).map(d => d.name).join(', ');
 
   const faction = getActiveFaction();
   let text = `The colony completed "${goal.description}" after ${goal.generation + 1} cycle${goal.generation > 0 ? 's' : ''}.`;
   if (deathCount > 0) text += ` ${deathCount} ${faction.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
-  if (raidCount > 0)  text += ` The colony endured ${raidCount} ${faction.enemyNounPlural.slice(0, 1).toUpperCase() + faction.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
+  if (raidCount > 0) text += ` The colony endured ${raidCount} ${faction.enemyNounPlural.slice(0, 1).toUpperCase() + faction.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
   if (names) text += ` ${names} and the others press on.`;
   return text;
 }

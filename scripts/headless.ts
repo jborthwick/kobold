@@ -22,7 +22,7 @@ import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
 import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
-import { tickWorldEvents, getNextEventTick, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
+import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
 import { rollWound } from '../src/simulation/wounds';
 import { getActiveFaction } from '../src/shared/factions';
 import { GRID_SIZE } from '../src/shared/constants';
@@ -32,59 +32,59 @@ import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
-const TICKS      = parseInt(process.argv[2] ?? '2000', 10);
-const SEED_ARG   = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;
-const DUMP_JSON  = process.env['DUMP_JSON'] === '1';
+const TICKS = parseInt(process.argv[2] ?? '2000', 10);
+const SEED_ARG = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;
+const DUMP_JSON = process.env['DUMP_JSON'] === '1';
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 interface TickSnapshot {
-  tick:        number;
-  alive:       number;
-  totalFood:   number;
-  totalOre:    number;
-  totalWood:   number;
-  avgHunger:   number;
-  avgMorale:   number;
-  avgFatigue:  number;
-  raiders:     number;
+  tick: number;
+  alive: number;
+  totalFood: number;
+  totalOre: number;
+  totalWood: number;
+  avgHunger: number;
+  avgMorale: number;
+  avgFatigue: number;
+  raiders: number;
 }
 
-const snapshots:     TickSnapshot[] = [];
-const actionCounts:  Record<string, number> = {};
-const deathLog:      { tick: number; name: string; cause: string }[] = [];
-const raidLog:       { tick: number; count: number }[] = [];
-const goalLog:       { tick: number; type: string; generation: number }[] = [];
-const warnLog:       { tick: number; name: string; message: string }[] = [];
-const fireLog:       { tick: number; message: string }[] = [];
-let   fireTilesMax   = 0;  // peak simultaneous fire tile count
-let   fireTilesTotal     = 0;  // cumulative tiles that burned or were extinguished
-let   fireTilesRainedOut = 0;  // tiles extinguished by rain
+const snapshots: TickSnapshot[] = [];
+const actionCounts: Record<string, number> = {};
+const deathLog: { tick: number; name: string; cause: string }[] = [];
+const raidLog: { tick: number; count: number }[] = [];
+const goalLog: { tick: number; type: string; generation: number }[] = [];
+const warnLog: { tick: number; name: string; message: string }[] = [];
+const fireLog: { tick: number; message: string }[] = [];
+let fireTilesMax = 0;  // peak simultaneous fire tile count
+let fireTilesTotal = 0;  // cumulative tiles that burned or were extinguished
+let fireTilesRainedOut = 0;  // tiles extinguished by rain
 
 function recordAction(task: string) {
   // Normalise task string to a bare action label.
   // Tasks starting with → are navigation steps (traveling), not idle.
   const key = task.startsWith('→')
     ? 'traveling'
-    : task.replace(/\s*[\(→].*/, '').trim() || 'idle';
+    : task.replace(/\s*[(→].*/, '').trim() || 'idle';
   actionCounts[key] = (actionCounts[key] ?? 0) + 1;
 }
 
 // ── Stockpile expansion (replicated from WorldScene.findNextStockpileSlot) ────
 
 function findNextStockpileSlot(
-  existing:    Array<{ x: number; y: number }>,
+  existing: Array<{ x: number; y: number }>,
   allOccupied: Array<{ x: number; y: number }>,
-  grid:        Tile[][],
+  grid: Tile[][],
   otherGroup?: Array<{ x: number; y: number }>,
 ): { x: number; y: number } | null {
-  const anchor      = existing[0];
+  const anchor = existing[0];
   const occupiedSet = new Set(allOccupied.map(p => `${p.x},${p.y}`));
-  const expandDir   = (!otherGroup || otherGroup.length === 0)
+  const expandDir = (!otherGroup || otherGroup.length === 0)
     ? -1
     : (otherGroup[0].x > anchor.x ? -1 : 1);
-  const colOffsets  = [0, expandDir * 1, expandDir * 2];
-  const isValid     = (x: number, y: number) =>
+  const colOffsets = [0, expandDir * 1, expandDir * 2];
+  const isValid = (x: number, y: number) =>
     x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE
     && !occupiedSet.has(`${x},${y}`)
     && grid[y][x].type !== TileType.Water
@@ -109,12 +109,12 @@ const GOAL_CYCLE: GoalType[] = ['stockpile_food', 'survive_ticks', 'defeat_adven
 
 function makeGoal(type: GoalType, generation: number): ColonyGoal {
   const scale = 1 + generation * 0.6;
-  const desc  = getActiveFaction().goalDescriptions;
+  const desc = getActiveFaction().goalDescriptions;
   switch (type) {
-    case 'stockpile_food':     return { type, description: desc.stockpile_food(Math.round(80 * scale)),      progress: 0, target: Math.round(80 * scale),  generation };
-    case 'survive_ticks':      return { type, description: desc.survive_ticks(Math.round(800 * scale)),      progress: 0, target: Math.round(800 * scale), generation };
-    case 'defeat_adventurers': return { type, description: desc.defeat_adventurers(Math.round(5 * scale)),   progress: 0, target: Math.round(5 * scale),   generation };
-    case 'enclose_fort':       return { type, description: desc.enclose_fort(),                               progress: 0, target: 1,                        generation };
+    case 'stockpile_food': return { type, description: desc.stockpile_food(Math.round(80 * scale)), progress: 0, target: Math.round(80 * scale), generation };
+    case 'survive_ticks': return { type, description: desc.survive_ticks(Math.round(800 * scale)), progress: 0, target: Math.round(800 * scale), generation };
+    case 'defeat_adventurers': return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
+    case 'enclose_fort': return { type, description: desc.enclose_fort(), progress: 0, target: 1, generation };
   }
 }
 
@@ -142,8 +142,8 @@ for (let y = 0; y < GRID_SIZE; y++) {
 console.log(`   Harvestable: ${forageableNearSpawn} tiles within 30 of spawn`);
 console.log(`   Total: ${totalForageable} ${[...FORAGEABLE_TILES].join('/')} tiles across ${GRID_SIZE}x${GRID_SIZE} map`);
 
-let goblins:       Goblin[]       = spawnGoblins(grid, spawnZone);
-let adventurers:   Adventurer[]   = spawnInitialAdventurers(grid, 3);
+const goblins: Goblin[] = spawnGoblins(grid, spawnZone);
+let adventurers: Adventurer[] = spawnInitialAdventurers(grid, 3);
 resetAdventurers();
 
 const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
@@ -152,26 +152,26 @@ const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
 // Auto-place 3 rooms with pre-set specializations for headless sim
 const rooms: Room[] = [
   { id: 'room-food', type: 'storage', x: depotX - 2, y: depotY - 2, w: 5, h: 5, specialization: 'food' },
-  { id: 'room-ore',  type: 'storage', x: depotX + 6, y: depotY - 2, w: 5, h: 5, specialization: 'ore' },
+  { id: 'room-ore', type: 'storage', x: depotX + 6, y: depotY - 2, w: 5, h: 5, specialization: 'ore' },
   { id: 'room-wood', type: 'storage', x: depotX - 10, y: depotY - 2, w: 5, h: 5, specialization: 'wood' },
 ];
 
-let foodStockpiles: FoodStockpile[] = [{ x: depotX,     y: depotY, food: 0,   maxFood: 200 }];
-let oreStockpiles:  OreStockpile[]  = [{ x: depotX + 8, y: depotY, ore:  150, maxOre:  200 }];
-let woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0,   maxWood: 200 }];
+const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, maxFood: 200 }];
+const oreStockpiles: OreStockpile[] = [{ x: depotX + 8, y: depotY, ore: 150, maxOre: 200 }];
+const woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0, maxWood: 200 }];
 
 for (const g of goblins) g.homeTile = { x: depotX, y: depotY };
 
-let colonyGoal         = makeGoal('stockpile_food', 0);
-let goalStartTick      = 0;
-let adventurerKills    = 0;
+let colonyGoal = makeGoal('stockpile_food', 0);
+let goalStartTick = 0;
+let adventurerKills = 0;
 const pendingSuccessions: { deadGoblinId: string; spawnAtTick: number }[] = [];
-const combatHits       = new Map<string, number>();
+const combatHits = new Map<string, number>();
 
-const weather     = createWeather(0);
+const weather = createWeather(0);
 const warmthField = createWarmthField();
 const dangerField = createDangerField();
-const dangerPrev  = createDangerField();
+const dangerPrev = createDangerField();
 
 setNextEventTick(300 + Math.floor(Math.random() * 300));
 
@@ -229,7 +229,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
   const fireResult = tickFire(grid, tick, goblins, weather.type, (msg, level) => {
     if (level === 'warn' || level === 'error') fireLog.push({ tick, message: msg });
   });
-  fireTilesTotal     += fireResult.burnouts;
+  fireTilesTotal += fireResult.burnouts;
   fireTilesRainedOut += fireResult.extinguished;
 
   // Track peak fire tile count
@@ -254,8 +254,8 @@ for (let tick = 1; tick <= TICKS; tick++) {
         g.health = Math.max(0, g.health - damage);
         g.morale = Math.max(0, g.morale - 5);
         if (g.health <= 0) {
-          g.alive        = false;
-          g.task         = 'dead';
+          g.alive = false;
+          g.task = 'dead';
           g.causeOfDeath = 'killed by adventurers';
           deathLog.push({ tick, name: g.name, cause: g.causeOfDeath });
           pendingSuccessions.push({ deadGoblinId: g.id, spawnAtTick: tick + SUCCESSION_DELAY });
@@ -315,8 +315,8 @@ for (let tick = 1; tick <= TICKS; tick++) {
   // Goal progress
   const alive = goblins.filter(g => g.alive);
   switch (colonyGoal.type) {
-    case 'stockpile_food':     colonyGoal.progress = foodStockpiles.reduce((s, d) => s + d.food, 0); break;
-    case 'survive_ticks':      colonyGoal.progress = tick - goalStartTick; break;
+    case 'stockpile_food': colonyGoal.progress = foodStockpiles.reduce((s, d) => s + d.food, 0); break;
+    case 'survive_ticks': colonyGoal.progress = tick - goalStartTick; break;
     case 'defeat_adventurers': colonyGoal.progress = adventurerKills; break;
     case 'enclose_fort': {
       const rem = roomWallSlots(rooms, grid, goblins, '', adventurers);
@@ -339,14 +339,14 @@ for (let tick = 1; tick <= TICKS; tick++) {
     const aliveNow = goblins.filter(g => g.alive);
     snapshots.push({
       tick,
-      alive:      aliveNow.length,
-      totalFood:  foodStockpiles.reduce((s, d) => s + d.food, 0),
-      totalOre:   oreStockpiles.reduce((s, d) => s + d.ore, 0),
-      totalWood:  woodStockpiles.reduce((s, d) => s + d.wood, 0),
-      avgHunger:  aliveNow.length ? aliveNow.reduce((s, g) => s + g.hunger, 0) / aliveNow.length : 0,
-      avgMorale:  aliveNow.length ? aliveNow.reduce((s, g) => s + g.morale, 0) / aliveNow.length : 0,
+      alive: aliveNow.length,
+      totalFood: foodStockpiles.reduce((s, d) => s + d.food, 0),
+      totalOre: oreStockpiles.reduce((s, d) => s + d.ore, 0),
+      totalWood: woodStockpiles.reduce((s, d) => s + d.wood, 0),
+      avgHunger: aliveNow.length ? aliveNow.reduce((s, g) => s + g.hunger, 0) / aliveNow.length : 0,
+      avgMorale: aliveNow.length ? aliveNow.reduce((s, g) => s + g.morale, 0) / aliveNow.length : 0,
       avgFatigue: aliveNow.length ? aliveNow.reduce((s, g) => s + g.fatigue, 0) / aliveNow.length : 0,
-      raiders:    adventurers.length,
+      raiders: adventurers.length,
     });
   }
 }
@@ -356,7 +356,7 @@ const elapsed = Date.now() - t0;
 // ── Report ────────────────────────────────────────────────────────────────────
 
 const alive = goblins.filter(g => g.alive);
-const last  = snapshots[snapshots.length - 1];
+const last = snapshots[snapshots.length - 1];
 
 console.log(`\n${'─'.repeat(56)}`);
 console.log(` RESULTS  (${TICKS} ticks in ${elapsed}ms — ${(TICKS / (elapsed / 1000)).toFixed(0)} ticks/sec)`);
@@ -399,8 +399,8 @@ console.log(`\n Action frequencies (top 15):`);
 const sorted = Object.entries(actionCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
 const maxCount = sorted[0]?.[1] ?? 1;
 for (const [action, count] of sorted) {
-  const bar  = '█'.repeat(Math.round((count / maxCount) * 20));
-  const pct  = ((count / Object.values(actionCounts).reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+  const bar = '█'.repeat(Math.round((count / maxCount) * 20));
+  const pct = ((count / Object.values(actionCounts).reduce((a, b) => a + b, 0)) * 100).toFixed(1);
   console.log(`   ${action.padEnd(24)} ${bar.padEnd(20)} ${pct}%`);
 }
 

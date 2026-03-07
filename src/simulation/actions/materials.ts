@@ -45,23 +45,28 @@ export const mine: Action = {
     }
 
     if (oreTarget) {
-      if (goblin.x !== oreTarget.x || goblin.y !== oreTarget.y) {
-        moveTo(goblin, oreTarget, grid);
-      }
-      const here = grid[goblin.y][goblin.x];
-      if (here.materialValue >= 1) {
-        const hadMat = here.materialValue;
-        const baseOre = 2 + skillOreBonus(goblin);
-        const oreYield = Math.max(1, Math.round(baseOre * woundYieldMultiplier(goblin)));
-        const mined = Math.min(hadMat, oreYield);
-        here.materialValue = Math.max(0, hadMat - mined);
-        if (here.materialValue === 0) { here.type = TileType.Stone; here.maxMaterial = 0; }
-        goblin.inventory.ore += Math.min(mined, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
-        addWorkFatigue(goblin);
-        // Miner XP — grant on successful ore extraction
-        grantXp(goblin, currentTick, onLog);
-        goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
+      if (goblin.x === oreTarget.x && goblin.y === oreTarget.y) {
+        const here = grid[goblin.y][goblin.x];
+        if (here.type === TileType.Ore && here.materialValue >= 1) {
+          const hadMat = here.materialValue;
+          const baseOre = 2 + skillOreBonus(goblin);
+          const oreYield = Math.max(1, Math.round(baseOre * woundYieldMultiplier(goblin)));
+          const mined = Math.min(hadMat, oreYield);
+          here.materialValue = Math.max(0, hadMat - mined);
+          if (here.materialValue === 0) {
+            here.type = TileType.Stone;
+            here.maxMaterial = 0;
+          }
+          goblin.inventory.ore += Math.min(mined, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
+          addWorkFatigue(goblin);
+          grantXp(goblin, currentTick, onLog);
+          goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
+        } else {
+          // Edge case: target changed type underfoot (e.g. became stone)
+          goblin.task = 'mining… looking for vein';
+        }
       } else {
+        moveTo(goblin, oreTarget, grid);
         goblin.task = `mining → (${oreTarget.x},${oreTarget.y})`;
       }
       return;
@@ -71,15 +76,20 @@ export const mine: Action = {
     if (goblin.knownOreSites.length > 0) {
       const best = goblin.knownOreSites.reduce((a, b) => b.value > a.value ? b : a);
       if (goblin.x === best.x && goblin.y === best.y) {
+        // We reached the remembered site but it's not visible in oreTarget?
+        // This implies it's no longer Ore or has 0 material. Clear it.
         const tileHere = grid[goblin.y][goblin.x];
-        if (tileHere.materialValue < 1 || tileHere.type === TileType.Forest) {
+        if (tileHere.type !== TileType.Ore || tileHere.materialValue < 1) {
           goblin.knownOreSites = goblin.knownOreSites.filter(s => !(s.x === best.x && s.y === best.y));
+          goblin.task = 'searching for ore…';
         } else {
+          // Still good, update visibility record and stay here
           recordSite(goblin.knownOreSites, best.x, best.y, tileHere.materialValue, currentTick);
+          goblin.task = 'preparing to mine…';
         }
       } else {
         moveTo(goblin, best, grid);
-        goblin.task = '→ remembered ore vein';
+        goblin.task = `→ remembered ore (${best.x},${best.y})`;
       }
     }
   },
@@ -120,26 +130,29 @@ export const chop: Action = {
     }
 
     if (woodTarget) {
-      if (goblin.x !== woodTarget.x || goblin.y !== woodTarget.y) {
-        moveTo(goblin, woodTarget, grid);
-      }
-      const here = grid[goblin.y][goblin.x];
-      if (here.type === TileType.Forest && here.materialValue >= 1) {
-        const hadWood = here.materialValue;
-        const roleChopBonus = goblin.role === 'lumberjack' ? 15 : 0;
-        const baseChop = 5 + roleChopBonus + traitMod(goblin, 'chopPower', 0) + skillYieldBonus(goblin);
-        const chopYield = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
-        const chopped = Math.min(hadWood, chopYield);
-        here.materialValue = Math.max(0, hadWood - chopped);
-        // Depleted forest reverts to a tree stump
-        if (here.materialValue === 0) { here.type = TileType.TreeStump; here.maxMaterial = 0; }
-        goblin.inventory.wood += Math.min(chopped, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
-        addWorkFatigue(goblin);
-        // Lumberjack XP — grant on successful wood chop
-        grantXp(goblin, currentTick, onLog);
-        goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
+      if (goblin.x === woodTarget.x && goblin.y === woodTarget.y) {
+        const here = grid[goblin.y][goblin.x];
+        if (here.type === TileType.Forest && here.materialValue >= 1) {
+          const hadWood = here.materialValue;
+          const roleChopBonus = goblin.role === 'lumberjack' ? 15 : 0;
+          const baseChop = 5 + roleChopBonus + traitMod(goblin, 'chopPower', 0) + skillYieldBonus(goblin);
+          const chopYield = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
+          const chopped = Math.min(hadWood, chopYield);
+          here.materialValue = Math.max(0, hadWood - chopped);
+          if (here.materialValue === 0) {
+            here.type = TileType.TreeStump;
+            here.maxMaterial = 0;
+          }
+          goblin.inventory.wood += Math.min(chopped, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
+          addWorkFatigue(goblin);
+          grantXp(goblin, currentTick, onLog);
+          goblin.task = `logging (wood: ${here.materialValue.toFixed(0)})`;
+        } else {
+          goblin.task = 'logging… looking for tree';
+        }
       } else {
-        goblin.task = `→ forest (${woodTarget.x},${woodTarget.y})`;
+        moveTo(goblin, woodTarget, grid);
+        goblin.task = `logging → (${woodTarget.x},${woodTarget.y})`;
       }
       return;
     }
@@ -151,12 +164,14 @@ export const chop: Action = {
         const tileHere = grid[goblin.y][goblin.x];
         if (tileHere.type !== TileType.Forest || tileHere.materialValue < 1) {
           goblin.knownWoodSites = goblin.knownWoodSites.filter(s => !(s.x === best.x && s.y === best.y));
+          goblin.task = 'searching for forest…';
         } else {
           recordSite(goblin.knownWoodSites, best.x, best.y, tileHere.materialValue, currentTick);
+          goblin.task = 'preparing to log…';
         }
       } else {
         moveTo(goblin, best, grid);
-        goblin.task = '→ remembered forest';
+        goblin.task = `→ remembered forest (${best.x},${best.y})`;
       }
     }
   },
