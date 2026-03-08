@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import type { GameState, ColonyGoal, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
+import type { GameState, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
   goalPanel: {
@@ -49,11 +49,30 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     transition: 'width 0.15s ease',
   },
+  chunkBar: {
+    display: 'flex',
+    gap: 2,
+    flex: 1,
+  },
+  chunk: {
+    flex: 1,
+    height: 7,
+    borderRadius: 3,
+    background: '#333',
+    overflow: 'hidden',
+  },
+  chunkFilled: {
+    height: '100%',
+    width: '100%',
+    borderRadius: 3,
+    transition: 'background 0.15s ease',
+  },
 };
 
 export function ColonyGoalPanel() {
   const [goal, setGoal] = useState<ColonyGoal | null>(null);
   const [foodStockpiles, setFoodStockpiles] = useState<FoodStockpile[]>([]);
+  const [mealStockpiles, setMealStockpiles] = useState<MealStockpile[]>([]);
   const [oreStockpiles, setOreStockpiles] = useState<OreStockpile[]>([]);
   const [woodStockpiles, setWoodStockpiles] = useState<WoodStockpile[]>([]);
 
@@ -61,6 +80,7 @@ export function ColonyGoalPanel() {
     const onState = (s: GameState) => {
       if (s.colonyGoal) setGoal({ ...s.colonyGoal });
       if (s.foodStockpiles) setFoodStockpiles(s.foodStockpiles.map(d => ({ ...d })));
+      if (s.mealStockpiles) setMealStockpiles(s.mealStockpiles.map(d => ({ ...d })));
       if (s.oreStockpiles) setOreStockpiles(s.oreStockpiles.map(sp => ({ ...sp })));
       if (s.woodStockpiles) setWoodStockpiles(s.woodStockpiles.map(sp => ({ ...sp })));
     };
@@ -70,6 +90,7 @@ export function ColonyGoalPanel() {
 
   if (!goal) return null;
 
+  const isBuildRooms = goal.type === 'build_rooms';
   const pct = Math.min(1, goal.progress / goal.target);
   const totalFood = foodStockpiles.reduce((s, d) => s + d.food, 0);
   const maxFood = foodStockpiles.reduce((s, d) => s + d.maxFood, 0);
@@ -77,27 +98,48 @@ export function ColonyGoalPanel() {
   const maxOre = oreStockpiles.reduce((s, sp) => s + sp.maxOre, 0);
   const totalWood = woodStockpiles.reduce((s, sp) => s + sp.wood, 0);
   const maxWood = woodStockpiles.reduce((s, sp) => s + sp.maxWood, 0);
+  const totalMeals = mealStockpiles.reduce((s, sp) => s + sp.meals, 0);
+  const maxMeals = mealStockpiles.reduce((s, sp) => s + sp.maxMeals, 0);
   const foodStockpilePct = maxFood > 0 ? Math.min(1, totalFood / maxFood) : 0;
   const oreStockpilePct = maxOre > 0 ? Math.min(1, totalOre / maxOre) : 0;
   const woodStockpilePct = maxWood > 0 ? Math.min(1, totalWood / maxWood) : 0;
+  const mealStockpilePct = maxMeals > 0 ? Math.min(1, totalMeals / maxMeals) : 0;
   const foodLabel = foodStockpiles.length > 1 ? `×${foodStockpiles.length}` : '';
   const oreLabel = oreStockpiles.length > 1 ? `×${oreStockpiles.length}` : '';
   const woodLabel = woodStockpiles.length > 1 ? `×${woodStockpiles.length}` : '';
+  const mealLabel = mealStockpiles.length > 1 ? `×${mealStockpiles.length}` : '';
 
   return (
     <div style={styles.goalPanel}>
       <div style={styles.goalTitle}>COLONY GOAL · gen {goal.generation + 1}</div>
       <div style={styles.goalDesc}>{goal.description}</div>
-      <div style={styles.barTrack}>
-        <div style={{
-          ...styles.barFill,
-          width: `${pct * 100}%`,
-          background: pct >= 1 ? '#56d973' : '#f0c040',
-        }} />
-      </div>
+      {isBuildRooms ? (
+        <div style={{ ...styles.goalDepot, marginTop: 4 }}>
+          <div style={styles.chunkBar}>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} style={styles.chunk}>
+                <div style={{
+                  ...styles.chunkFilled,
+                  background: goal.progress > i ? (pct >= 1 ? '#56d973' : '#f0c040') : undefined,
+                }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={styles.barTrack}>
+          <div style={{
+            ...styles.barFill,
+            width: `${pct * 100}%`,
+            background: pct >= 1 ? '#56d973' : '#f0c040',
+          }} />
+        </div>
+      )}
       <div style={styles.goalProgress}>
-        {goal.progress.toFixed(0)} / {goal.target}
-        {pct >= 1 && <span style={{ color: '#56d973', marginLeft: 6 }}>✓ COMPLETE</span>}
+        {isBuildRooms
+          ? `${goal.progress.toFixed(0)}/4 Rooms Built${pct >= 1 ? ' · ✓ COMPLETE' : ''}`
+          : <>{goal.progress.toFixed(0)} / {goal.target}{pct >= 1 && <span style={{ color: '#56d973', marginLeft: 6 }}>✓ COMPLETE</span>}</>
+        }
       </div>
       {/* Food stockpile row */}
       <div style={styles.goalDepot}>
@@ -107,6 +149,16 @@ export function ColonyGoalPanel() {
         </div>
         <span style={{ color: '#f0c040' }}>{totalFood.toFixed(0)}/{maxFood}{foodLabel}</span>
       </div>
+      {/* Meal stockpile row */}
+      {mealStockpiles.length > 0 && (
+        <div style={styles.goalDepot}>
+          <span style={{ color: '#ffbb88' }}>🍽</span>
+          <div style={{ ...styles.barTrack, flex: 1, margin: '0 4px' }}>
+            <div style={{ ...styles.barFill, width: `${mealStockpilePct * 100}%`, background: '#ffbb88' }} />
+          </div>
+          <span style={{ color: '#ffbb88' }}>{totalMeals.toFixed(0)}/{maxMeals}{mealLabel}</span>
+        </div>
+      )}
       {/* Ore stockpile row */}
       <div style={styles.goalDepot}>
         <span style={{ color: '#ff8800' }}>⛏</span>

@@ -80,7 +80,7 @@ export function initializeWorld(scene: WorldScene) {
     scene.adventurerKillCount = 0;
     scene.mealsCooked = 0;
     scene.goalStartTick = 0;
-    scene.colonyGoal = WorldGoals.makeGoal('cook_meals', 0);
+    scene.colonyGoal = WorldGoals.makeGoal('build_rooms', 0);
     scene.weather = createWeather(0);
     for (const d of scene.goblins) {
       d.homeTile = { x: depotX, y: depotY };

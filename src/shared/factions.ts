@@ -53,6 +53,7 @@ export interface FactionConfig {
 
   // ── Colony goal descriptions ────────────────────────────────────────────────
   goalDescriptions: {
+    build_rooms: () => string;
     cook_meals: (t: number) => string;
     survive_ticks: (t: number) => string;
     defeat_adventurers: (t: number) => string;
@@ -133,6 +134,7 @@ export const GOBLIN_FACTION: FactionConfig = {
   enemyNounPlural: 'adventurers',
 
   goalDescriptions: {
+    build_rooms: () => "Build 3 storage rooms and a kitchen",
     cook_meals: (t: number) => `Cook ${t} meals`,
     survive_ticks: (t: number) => `Don't all die for ${t} ticks`,
     defeat_adventurers: (t: number) => `Clobber ${t} adventurers`,

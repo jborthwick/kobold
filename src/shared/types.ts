@@ -146,7 +146,7 @@ export interface LogEntry {
 export type OverlayMode = 'off' | 'food' | 'material' | 'wood' | 'warmth' | 'danger' | 'traffic';
 
 // Colony-wide shared goal — all goblins contribute; cycles on completion
-export type ColonyGoalType = 'cook_meals' | 'survive_ticks' | 'defeat_adventurers';
+export type ColonyGoalType = 'build_rooms' | 'cook_meals' | 'survive_ticks' | 'defeat_adventurers';
 
 export interface ColonyGoal {
   type: ColonyGoalType;

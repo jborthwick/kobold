@@ -91,6 +91,9 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
         {goblin.inventory.wood > 0 && (
           <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.wood.toFixed(1)}</span>
         )}
+        {goblin.inventory.meals > 0 && (
+          <span style={{ color: '#ffbb88' }}>🍽 {goblin.inventory.meals.toFixed(0)}</span>
+        )}
         {goblin.adventurerKills > 0 && (
           <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
         )}

@@ -8,6 +8,8 @@ export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGo
     const scale = 1 + generation * 0.6;
     const desc = getActiveFaction().goalDescriptions;
     switch (type) {
+        case 'build_rooms':
+            return { type, description: desc.build_rooms(), progress: 0, target: 4, generation };
         case 'cook_meals':
             return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
         case 'survive_ticks':
@@ -15,12 +17,18 @@ export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGo
         case 'defeat_adventurers':
             return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
     }
-    return { type: 'cook_meals', description: '', progress: 0, target: 20, generation };
+    return { type: 'build_rooms', description: desc.build_rooms(), progress: 0, target: 4, generation };
 }
 
 export function updateGoalProgress(scene: WorldScene) {
     const alive = scene.goblins.filter(d => d.alive);
     switch (scene.colonyGoal.type) {
+        case 'build_rooms': {
+            const storageCount = scene.rooms.filter(r => r.type === 'storage').length;
+            const kitchenCount = scene.rooms.filter(r => r.type === 'kitchen').length;
+            scene.colonyGoal.progress = Math.min(3, storageCount) + (kitchenCount >= 1 ? 1 : 0);
+            break;
+        }
         case 'cook_meals':
             scene.colonyGoal.progress = scene.mealsCooked;
             break;
@@ -50,7 +58,7 @@ export function completeGoal(scene: WorldScene, alive: Goblin[]) {
         message: `✓ Goal complete: ${scene.colonyGoal.description}! Morale boost for all!`,
         level: 'info',
     });
-    const GOAL_TYPES: ColonyGoal['type'][] = ['cook_meals', 'survive_ticks', 'defeat_adventurers'];
+    const GOAL_TYPES: ColonyGoal['type'][] = ['build_rooms', 'cook_meals', 'survive_ticks', 'defeat_adventurers'];
     const curr = GOAL_TYPES.indexOf(scene.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
 
