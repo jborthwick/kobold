@@ -159,7 +159,7 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xffbbdd,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, h) => ({
+        spawn: (w, _h) => ({
             x: Math.random() * w,
             y: -10,
             speed: randRange(15, 30),
@@ -200,7 +200,7 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xdd8822,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, h) => ({
+        spawn: (w, _h) => ({
             x: Math.random() * w,
             y: -10,
             speed: randRange(30, 60),
@@ -220,7 +220,7 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xffffff,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, h) => ({
+        spawn: (w, _h) => ({
             x: Math.random() * w,
             y: -10,
             speed: randRange(10, 25),
