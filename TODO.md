@@ -1,11 +1,9 @@
 ## Features
-[ ] Add more room types
-[ ] Add regrowth after fires
-[ ] Allow stumps to be harvest for wood
-[ ]  
+[ ] Remove LLM from driving goblin behavior
+- Refactor how LLMs are used in Kobold. Isolate LLM usage to chapter generation. It's the storyteller, capturing the chaotic craziness with a flare.
 
 
 ## Bugs:
-[ ] Loop: goblin is stuck in a food storage room (with two stockpiles) oscillating between two tiles and states forever, "remembering forest" and "logging".
+
 
 

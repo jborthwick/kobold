@@ -11,6 +11,7 @@ import { tickBurningGoblins, tickFire } from '../../simulation/fire';
 import { tickPooling } from '../../simulation/pooling';
 import { tickLightning } from '../../simulation/lightning';
 import { maybeSpawnRaid, tickAdventurers } from '../../simulation/adventurers';
+import { addMemory } from '../../simulation/mood';
 import { rollWound, woundLabel } from '../../simulation/wounds';
 import { tickWorldEvents, tickMushroomSprout } from '../../simulation/events';
 import { expandStockpilesInRooms } from '../../simulation/rooms';
@@ -143,7 +144,7 @@ export function gameTick(scene: WorldScene) {
             const d = scene.goblins.find(dw => dw.id === goblinId);
             if (d && d.alive) {
                 d.health = Math.max(0, d.health - damage);
-                d.morale = Math.max(0, d.morale - 5);
+                addMemory(d, 'attacked_by_enemy', scene.tick);
                 const enemyNoun = getActiveFaction().enemyNounPlural;
                 if (d.health <= 0) {
                     d.alive = false;
@@ -158,8 +159,17 @@ export function gameTick(scene: WorldScene) {
                     });
                 } else {
                     const enemySing = enemyNoun.replace(/s$/, '');
-                    // Survived — batch hits to reduce log noise (log every 3rd hit)
-                    d.memory.push({ tick: scene.tick, crisis: 'combat', action: `hit by ${enemySing}, ${d.health.toFixed(0)} hp remaining` });
+                    // Survived — stack HISTORY memories
+                    const lastMem = d.memory[d.memory.length - 1];
+                    if (lastMem && lastMem.crisis === 'combat' && lastMem.action.startsWith(`hit by ${enemySing}`)) {
+                        lastMem.tick = scene.tick;
+                        const match = lastMem.action.match(/x(\d+)/);
+                        const count = match ? parseInt(match[1], 10) + 1 : 2;
+                        lastMem.action = `hit by ${enemySing} x${count}`;
+                    } else {
+                        d.memory.push({ tick: scene.tick, crisis: 'combat', action: `hit by ${enemySing}` });
+                    }
+                    
                     const hits = (scene.combatHits.get(d.id) ?? 0) + 1;
                     scene.combatHits.set(d.id, hits);
                     if (hits % 3 === 1) {  // log 1st hit, then every 3rd

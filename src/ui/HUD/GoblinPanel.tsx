@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
 import { getTraitDisplay, getRoleDisplay } from '../../simulation/agents';
+import { THOUGHT_DEFS, MEMORY_DEFS } from '../../simulation/mood';
 import type { GameState, Goblin, GoblinRole, GoblinTrait } from '../../shared/types';
 
 function topRelation(
@@ -107,6 +108,27 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
         <div style={styles.relSection}>
           {ally  && <div style={styles.relAlly}>♥ {ally.name} ({ally.score})</div>}
           {rival && <div style={styles.relRival}>⚔ {rival.name} ({100 - rival.score})</div>}
+        </div>
+      )}
+      {(goblin.thoughts?.length > 0 || goblin.memories?.length > 0) && (
+        <div style={styles.memorySection}>
+          <div style={styles.memoryHeader}>MOOD FACTORS</div>
+          {[...(goblin.thoughts || []), ...(goblin.memories || [])].map((item, i) => {
+            const isMemory = 'stage' in item;
+            const def = isMemory ? MEMORY_DEFS[item.defId] : THOUGHT_DEFS[item.defId];
+            if (!def) return null;
+            const label = typeof def.label === 'function' && isMemory
+               ? def.label(item.stage) : (typeof def.label === 'string' ? def.label : '');
+            const delta = isMemory ? (def as any).deltas[item.stage] ?? 0 : (def as any).delta;
+            return (
+              <div key={i} style={styles.memoryEntry}>
+                <span style={{ color: delta >= 0 ? '#56d973' : '#e74c3c' }}>
+                  [{delta > 0 ? '+' : ''}{delta}]
+                </span>{' '}
+                {label}
+              </div>
+            );
+          })}
         </div>
       )}
       {goblin.memory.length > 0 && (

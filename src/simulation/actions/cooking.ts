@@ -3,6 +3,7 @@ import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
+import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 
 const MEALS_PER_BATCH = 5;
@@ -143,6 +144,7 @@ export const cook: Action = {
             const mealPile = getOrCreateMealStockpile(ctx);
             if (mealPile) {
                 mealPile.meals = Math.min(mealPile.maxMeals, mealPile.meals + MEALS_PER_BATCH);
+                addThought(goblin, 'crafted_meal', ctx.currentTick);
                 onLog?.(`🍲 ${goblin.name} cooked ${MEALS_PER_BATCH} meals!`, 'info');
             }
             goblin.cookingProgress = undefined;

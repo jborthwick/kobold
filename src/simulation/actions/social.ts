@@ -4,6 +4,7 @@ import { isWalkable } from '../world';
 import { sigmoid, ramp, inverseSigmoid } from '../utilityAI';
 import { traitMod } from '../agents';
 import { moveTo, shouldLog, traitText, totalLoad } from './helpers';
+import { addMemory } from '../mood';
 import type { Action } from './types';
 
 // --- share: gift food to a hungry neighbor ---
@@ -89,7 +90,7 @@ export const socialize: Action = {
     const momentum = (goblin.task.includes('socializing')) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
-  execute: ({ goblin, goblins, grid }) => {
+  execute: ({ goblin, goblins, grid, currentTick }) => {
     if (!goblins) { goblin.task = 'lonely'; return; }
     const FRIEND_REL = 40;
     const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
@@ -113,6 +114,9 @@ export const socialize: Action = {
     const closeDist = Math.abs(bestFriend.x - goblin.x) + Math.abs(bestFriend.y - goblin.y);
     if (closeDist <= FRIEND_RADIUS) {
       goblin.social = Math.max(0, goblin.social - 1.2);
+      if (shouldLog(goblin, 'chat', currentTick, 200)) {
+        addMemory(goblin, 'chatted_with_ally', currentTick);
+      }
     } else {
       goblin.social = Math.max(0, goblin.social - 0.4); // moving toward friend, partial credit
     }

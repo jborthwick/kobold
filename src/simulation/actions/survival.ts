@@ -3,6 +3,7 @@ import { getWarmth } from '../diffusion';
 import { traitMod, FORAGEABLE_TILES } from '../agents';
 import { accelerateHealing } from '../wounds';
 import { moveTo, shouldLog, traitText } from './helpers';
+import { addThought } from '../mood';
 import type { Action } from './types';
 
 // --- commandMove: player override (always wins) ---
@@ -51,13 +52,14 @@ export const eat: Action = {
       // Eat a meal
       goblin.inventory.meals -= 1;
       goblin.hunger = Math.max(0, goblin.hunger - 50);
-      goblin.morale = Math.min(100, goblin.morale + 10);
+      addThought(goblin, 'ate_tasty_meal', currentTick);
       goblin.task = 'eating a meal';
     } else if (goblin.inventory.food > 0) {
       // Eat from inventory (normal path)
       const bite = Math.min(goblin.inventory.food, 3);
       goblin.inventory.food -= bite;
       goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
+      addThought(goblin, 'ate_raw_food', currentTick);
       goblin.task = 'eating';
     } else {
       // Graze directly from the tile underfoot
@@ -66,6 +68,7 @@ export const eat: Action = {
       const bite = Math.min(tile.foodValue, 2);
       tile.foodValue -= bite;
       goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
+      addThought(goblin, 'ate_raw_food', currentTick);
       goblin.task = 'grazing';
     }
 
@@ -87,24 +90,25 @@ export const rest: Action = {
     const momentum = (goblin.task.includes('resting') && goblin.fatigue > 30) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
-  execute: ({ goblin, warmthField }) => {
+  execute: ({ goblin, warmthField, currentTick }) => {
     const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;
     if (warmth >= 40) {
       // Sheltered by hearth — best recovery
       goblin.fatigue = Math.max(0, goblin.fatigue - 2.5);
       accelerateHealing(goblin, 3);
-      goblin.morale = Math.min(100, goblin.morale + 0.3);
+      addThought(goblin, 'rested_by_hearth', currentTick);
       goblin.task = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
     } else if (warmth >= 20) {
       // Mild warmth — small bonus
       goblin.fatigue = Math.max(0, goblin.fatigue - 2.0);
       accelerateHealing(goblin, 2);
-      goblin.morale = Math.min(100, goblin.morale + 0.1);
+      addThought(goblin, 'rested_near_warmth', currentTick);
       goblin.task = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
     } else {
       // Exposed — baseline
       goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
       accelerateHealing(goblin, 2);
+      addThought(goblin, 'slept_on_ground', currentTick);
       goblin.task = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
     }
   },

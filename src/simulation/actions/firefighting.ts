@@ -15,13 +15,13 @@ import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid } from '../utilityAI';
 import { effectiveVision } from '../wounds';
 import { moveTo, shouldLog, addWorkFatigue } from './helpers';
+import { addThought } from '../mood';
 import type { Action } from './types';
 
 const FIRE_SCAN_RADIUS = 18;   // tiles — how far to look for fire
 const WATER_SCAN_RADIUS = 24;   // tiles — how far to look for water (lakes can be far)
 const DOUSE_CHANCE = 0.80; // probability of extinguishing the fire tile
 const SINGE_CHANCE = 0.20; // probability of taking a light wound while dousing
-const SINGE_MOR_LOSS = 5;    // morale loss on singe
 
 /** Find the nearest Fire tile within radius. Returns null if none. */
 function nearestFire(
@@ -138,6 +138,7 @@ export const fightFire: Action = {
             growbackRate: 0,
             trafficScore: t.trafficScore,
           };
+          addThought(goblin, 'doused_fire', currentTick);
           goblin.task = '🚿 doused the fire!';
           if (shouldLog(goblin, 'dousedFire', currentTick, 30)) {
             onLog?.(`🚿 ${goblin.name} doused a fire tile!`, 'info');
@@ -150,7 +151,7 @@ export const fightFire: Action = {
         if (Math.random() < SINGE_CHANCE && !goblin.onFire) {
           goblin.onFire = true;
           goblin.onFireTick = currentTick;
-          goblin.morale = Math.max(0, goblin.morale - SINGE_MOR_LOSS);
+          addThought(goblin, 'singed_by_fire', currentTick);
           onLog?.(`🔥 ${goblin.name} caught fire while fighting the flames!`, 'warn');
         }
 

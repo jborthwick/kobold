@@ -48,6 +48,8 @@ export function loadGame(): SaveData | null {
     for (const d of data.goblins) {
       if (d.skillXp === undefined) d.skillXp = 0;
       if (d.skillLevel === undefined) d.skillLevel = 0;
+      if (d.thoughts === undefined) d.thoughts = [];
+      if (d.memories === undefined) d.memories = [];
       if (d.knownHearthSites === undefined) d.knownHearthSites = [];
       if (d.carryingWater === undefined) d.carryingWater = false;
       if (d.onFire === undefined) d.onFire = false;

@@ -15,6 +15,7 @@ import type { CrisisSituation, LLMDecision } from './types';
 import { bus } from '../shared/events';
 import { getActiveFaction } from '../shared/factions';
 import { traitMod, ROLE_COMBAT_APT } from '../simulation/agents';
+import { THOUGHT_DEFS, MEMORY_DEFS } from '../simulation/mood';
 
 // ── LLM provider abstraction ─────────────────────────────────────────────────
 
@@ -239,6 +240,21 @@ function buildPrompt(goblin: Goblin, situation: CrisisSituation, goblins: Goblin
     .forEach(d => relParts.push(`Rival: ${d.name} (tension ${(100 - (goblin.relations[d.id] ?? 50)).toFixed(0)}/100)`));
   const relBlock = relParts.length > 0 ? `\nRelationships: ${relParts.join('. ')}` : '';
 
+  const moodParts: string[] = [];
+  for (const t of goblin.thoughts) {
+    const def = THOUGHT_DEFS[t.defId];
+    if (def) moodParts.push(`${def.label} (${def.delta > 0 ? '+' : ''}${def.delta})`);
+  }
+  for (const m of goblin.memories) {
+    const def = MEMORY_DEFS[m.defId];
+    if (def) {
+      const label = typeof def.label === 'function' ? def.label(m.stage) : def.label;
+      const d = def.deltas[m.stage] ?? 0;
+      moodParts.push(`${label} (${d > 0 ? '+' : ''}${d})`);
+    }
+  }
+  const moodBlock = moodParts.length > 0 ? `\nActive Mood Factors: ${moodParts.join(', ')}` : '';
+
   const goalLine = colonyGoal
     ? `\nColony goal: ${colonyGoal.description} (${colonyGoal.progress.toFixed(0)}/${colonyGoal.target})`
     : '';
@@ -266,7 +282,7 @@ Status — Health: ${goblin.health}/${goblin.maxHealth}, Hunger: ${goblin.hunger
 Food carried: ${goblin.inventory.food.toFixed(0)} food, ${goblin.inventory.meals.toFixed(0)} meals. Current task: ${goblin.task}. ${homeStr}${skillLine}${woundLine}
 
 CRISIS: ${situation.description}
-Colony context: ${situation.colonyContext}${goalLine}${relBlock}${memBlock}
+Colony context: ${situation.colonyContext}${goalLine}${relBlock}${moodBlock}${memBlock}
 
 Respond ONLY as valid JSON (no markdown, no extra text):
 {

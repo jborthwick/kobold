@@ -8,6 +8,7 @@ import {
 import { grantXp, skillOreBonus, skillYieldBonus } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, addWorkFatigue, totalLoad, nearestOreStockpile, nearestWoodStockpile } from './helpers';
+import { addThought } from '../mood';
 import type { Action } from './types';
 
 // --- mine: miners target ore tiles ---
@@ -62,6 +63,7 @@ export const mine: Action = {
           goblin.inventory.ore += Math.min(mined, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
           addWorkFatigue(goblin);
           grantXp(goblin, currentTick, onLog);
+          addThought(goblin, 'mined_ore', currentTick);
           goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
         } else {
           // Edge case: target changed type underfoot (e.g. became stone)

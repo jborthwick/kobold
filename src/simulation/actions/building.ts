@@ -4,6 +4,7 @@ import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
 import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile } from './helpers';
+import { addThought } from '../mood';
 import type { Action } from './types';
 
 // --- buildWall: any goblin can build walls around rooms ---
@@ -27,7 +28,7 @@ export const buildWall: Action = {
     const momentum = (goblin.task.includes('wall')) ? 0.15 : 0;
     return Math.min(1.0, base + momentum);
   },
-  execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers }) => {
+  execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return;
 
     // Prefer stockpile ore, fall back to inventory
@@ -58,6 +59,7 @@ export const buildWall: Action = {
           goblin.inventory.ore -= 3;
         }
         addWorkFatigue(goblin);
+        addThought(goblin, 'built_wall', currentTick);
         goblin.task = 'built room wall!';
       } else {
         goblin.x = next.x; goblin.y = next.y;

@@ -59,6 +59,17 @@ export interface ResourceSite {
   tick: number;  // currentTick when last seen/updated
 }
 
+export interface ActiveThought {
+  defId: string;
+  expiryTick: number;
+}
+
+export interface ActiveMemory {
+  defId: string;
+  stage: number;
+  lastRefreshTick: number;
+}
+
 // PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
 export interface MemoryEntry {
   tick: number;
@@ -98,6 +109,8 @@ export interface Goblin {
   llmIntent: LLMIntent | null; // active override intent (expires at llmIntentExpiry)
   llmIntentExpiry: number;           // tick after which intent is discarded
   memory: MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
+  thoughts: ActiveThought[]; // rimworld-style timed buffs
+  memories: ActiveMemory[];  // rimworld-style staged accumulation
   wanderTarget: { x: number; y: number } | null;  // persistent explore waypoint
   wanderExpiry: number;           // tick at which to repick a new wander waypoint
   knownFoodSites: ResourceSite[];   // remembered food patches (cap: 5)

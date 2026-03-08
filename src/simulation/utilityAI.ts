@@ -22,6 +22,7 @@ import { traitMod, pathNextStep } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
 import { tickWoundHealing } from './wounds';
+import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 
 // ── Response curves ────────────────────────────────────────────────────────────
 //
@@ -91,22 +92,61 @@ function updateNeeds(
     const coldPenalty = inverseSigmoid(warmth, 30, 0.12);
     if (coldPenalty > 0.05) {
       goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
-      goblin.morale = Math.max(0, goblin.morale - 0.25 * coldPenalty);
       goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
       if (shouldLog(goblin, 'freezing', currentTick, 150)) {
+        addMemory(goblin, 'freezing', currentTick);
         onLog?.('🥶 freezing in the open', 'warn');
       }
     }
   }
 
   // ── Morale ───────────────────────────────────────────────────────────────────
-  // Morale decays when hungry (above 60), recovers when well-fed (below 30).
-  // These two terms run every tick and partially cancel — at hunger=45 neither fires strongly.
-  goblin.morale = Math.max(0, Math.min(100,
-    goblin.morale
-    - sigmoid(goblin.hunger, 60) * 0.5       // hunger above 60 → morale falls
-    + inverseSigmoid(goblin.hunger, 30) * 0.25, // hunger below 30 → morale recovers
-  ));
+  // Clean up expired thoughts
+  goblin.thoughts = goblin.thoughts.filter(t => t.expiryTick > currentTick);
+
+  // Clean up expired or drop-staged memories
+  for (let i = goblin.memories.length - 1; i >= 0; i--) {
+    const mem = goblin.memories[i];
+    const def = MEMORY_DEFS[mem.defId];
+    if (def && currentTick - mem.lastRefreshTick > def.decayDuration) {
+      if (mem.stage > 0) {
+        mem.stage--;
+        mem.lastRefreshTick = currentTick;
+      } else {
+        goblin.memories.splice(i, 1);
+      }
+    }
+  }
+
+  // Calculate target morale
+  let targetMorale = 50;
+
+  for (const t of goblin.thoughts) {
+    targetMorale += THOUGHT_DEFS[t.defId]?.delta ?? 0;
+  }
+  for (const m of goblin.memories) {
+    const def = MEMORY_DEFS[m.defId];
+    if (def) targetMorale += (def.deltas[m.stage] ?? 0);
+  }
+
+  // Continuous Situational modifiers
+  if (goblin.hunger > 60) targetMorale -= Math.round(15 * sigmoid(goblin.hunger, 70));
+  if (goblin.hunger < 30) targetMorale += Math.round(10 * inverseSigmoid(goblin.hunger, 20));
+  if (goblin.social > 60) targetMorale -= Math.round(15 * sigmoid(goblin.social, 75));
+  if (goblin.fatigue > 80) targetMorale -= Math.round(15 * sigmoid(goblin.fatigue, 90));
+  if (goblin.onFire) targetMorale -= 40;
+  
+  if (weatherType === 'cold' && warmthField) {
+    const warmth = getWarmth(warmthField, goblin.x, goblin.y);
+    if (warmth < 30) targetMorale -= Math.round(20 * inverseSigmoid(warmth, 15));
+  }
+
+  targetMorale = Math.max(0, Math.min(100, targetMorale));
+
+  // Lerp towards target: gap closes at 0.5% per tick
+  const gap = targetMorale - goblin.morale;
+  goblin.morale += gap * 0.005;
+
   // Stress loop: low morale → burns calories faster → harder to stay fed → morale falls further.
   // stressMod is near 0 above morale=50, rises sharply below 35.
   const stressMod = inverseSigmoid(goblin.morale, 35) * 0.4;
@@ -132,9 +172,9 @@ function updateNeeds(
   if (woundDrain > 0) {
     goblin.fatigue = Math.min(100, goblin.fatigue + woundDrain);
   }
-  // Exhaustion above 80 also drains morale — two bad things reinforce each other.
-  goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.fatigue, 80) * 0.25);
+  // Exhaustion drains morale via targetMorale continuous modifier
   if (goblin.fatigue > 80 && shouldLog(goblin, 'exhausted', currentTick, 150)) {
+    addMemory(goblin, 'exhausted_work', currentTick);
     onLog?.('😩 exhausted', 'warn');
   }
 
@@ -165,10 +205,10 @@ function updateNeeds(
       goblin.social = Math.min(100, goblin.social + Math.min(0.5, isolationTicks / 400));
     }
   }
-  // High loneliness drains morale — this is what makes the socialize action score highly
+  // High loneliness drains morale via targetMorale continuous modifier
   if (goblin.social > 40) {
-    goblin.morale = Math.max(0, goblin.morale - sigmoid(goblin.social, 60) * 0.2);
     if (goblin.social > 60 && shouldLog(goblin, 'lonely', currentTick, 200)) {
+      addMemory(goblin, 'socially_isolated', currentTick);
       onLog?.('😔 feeling lonely', 'warn');
     }
   }
@@ -253,9 +293,10 @@ export function tickAgentUtility(
   if (goblin.inventory.food === 0 && goblin.inventory.meals === 0 && goblin.hunger >= 90) {
     const starveDmg = sigmoid(goblin.hunger, 95, 0.2) * 0.003 * goblin.maxHealth;
     goblin.health -= starveDmg;
-    goblin.morale = Math.max(0, goblin.morale - starveDmg);
+    // targetMorale modifier takes care of morale penalty for starvation directly
     goblin.task = 'starving!';
     if (shouldLog(goblin, 'starving', currentTick, 150)) {
+      addMemory(goblin, 'starving', currentTick);
       onLog?.(`is starving! (health ${goblin.health.toFixed(0)})`, 'warn');
     }
     if (goblin.health <= 0) {
