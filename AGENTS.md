@@ -123,7 +123,8 @@ Actions defined in `actions/`; see files for scoring formulas.
 
 ## Game systems (see source files for exact values)
 
-- **Crisis detection** (`crisis.ts`): 5 crisis types trigger LLM calls. Morale decays when hungry, recovers when fed.
+- **Crisis detection** (`crisis.ts`): 5 crisis types trigger LLM calls.
+- **Mood system** (`mood.ts`, `utilityAI.ts`): RimWorld-style temporary Thoughts and staged, decaying Memories form a `targetMorale` that `goblin.morale` smoothly lerps toward.
 - **Traits** (`agents.ts` `TRAIT_MODS`): 8 traits shift sigmoid midpoints via `traitMod()`. See table in source.
 - **Weather** (`weather.ts`): clear/rain/drought/cold/storm modify growback + metabolism. Seasons cycle every 600 ticks. Storm = heavy rain + lightning strikes.
 - **Skills** (`skills.ts`): one skill per role, level = `floor(sqrt(xp/10))`. XP on primary action, +0.3 yield or +3 dmg per level.
@@ -202,6 +203,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 26: Player-placed storage rooms — build mode UI, room placement, goblin-chosen specialization, room-aware walls.
 27: Persistent tiled glow; terrain layering (floor/object) for depth occlusion; AI momentum fixes for 2-tile loops.
 28: Kitchen rooms with cooking system and separate meal stockpiles; dwarf faction removal; visual seasons.
+29: RimWorld-style mood system: temporary Thoughts and accumulating, decaying Memories driving a lerped target morale.
 
 ---
 
