@@ -1,4 +1,4 @@
-import type { Goblin, Tile, LLMIntent, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
+import type { Goblin, Tile, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -22,7 +22,6 @@ export interface ActionContext {
 
 export interface Action {
   name:         string;
-  intentMatch?: LLMIntent;  // which LLM intent boosts this action
   eligible:     (ctx: ActionContext) => boolean;
   score:        (ctx: ActionContext) => number;
   execute:      (ctx: ActionContext) => void;

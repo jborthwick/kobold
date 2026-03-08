@@ -3,15 +3,13 @@
  *
  * Every tick each eligible action scores 0–1. The highest-scoring action wins.
  * Traits shift sigmoid midpoints (not thresholds), creating organic personality-driven
- * divergence. LLM intents add +0.5 to matching action scores (capped at 1.0) instead
- * of hard-overriding the BT.
+ * divergence.
  *
  * Flow:
  *   1. updateNeeds()           — hunger, morale, fatigue, social
  *   2. starvation damage       — unconditional, not an action
- *   3. expire stale LLM intent
- *   4. score all eligible actions (+ LLM boost)
- *   5. execute highest-scoring action
+ *   3. score all eligible actions
+ *   4. execute highest-scoring action
  */
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
@@ -337,13 +335,6 @@ export function tickAgentUtility(
     return;
   }
 
-  // ── Step 3: Expire stale LLM intent ──────────────────────────────────────────
-  // LLM decisions write goblin.llmIntent (e.g. "forage") and a tick expiry.
-  // If the intent is past its expiry it's cleared here so it stops boosting scores.
-  if (goblin.llmIntent && currentTick > goblin.llmIntentExpiry) {
-    goblin.llmIntent = null;
-  }
-
   // ── Step 4: Build action context ─────────────────────────────────────────────
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
@@ -357,10 +348,6 @@ export function tickAgentUtility(
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
-  //
-  // We loop ALL_ACTIONS once, skipping ineligible ones, and track the top two scores.
-  // LLM intents nudge the matching action by +0.5 (capped at 1.0) — they tip the balance
-  // without overriding a genuinely urgent competing need.
   let bestAction: Action | null = null;
   let bestScore = -1;
   let secondName = '';
@@ -368,11 +355,7 @@ export function tickAgentUtility(
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
-    let score = action.score(ctx);
-    // LLM intent boost: the LLM said "do X" — give X a meaningful nudge but don't hard-override
-    if (goblin.llmIntent && action.intentMatch === goblin.llmIntent) {
-      score = Math.min(1.0, score + 0.5);
-    }
+    const score = action.score(ctx);
     if (score > bestScore) {
       secondScore = bestScore;
       secondName = bestAction?.name ?? '';

@@ -4,7 +4,7 @@ import { generateWorld } from '../../simulation/world';
 import { spawnGoblins } from '../../simulation/agents';
 import { resetAdventurers, spawnInitialAdventurers } from '../../simulation/adventurers';
 import { createWeather } from '../../simulation/weather';
-import { llmSystem } from '../../ai/crisis';
+import { setStorytellerEnabled, setStorytellerProvider } from '../../ai/storyteller';
 import { loadGame } from '../../shared/save';
 import { bus } from '../../shared/events';
 import { setNextEventTick } from '../../simulation/events';
@@ -42,6 +42,7 @@ export function initializeWorld(scene: WorldScene) {
     scene.oreStockpiles = save.oreStockpiles;
     scene.woodStockpiles = save.woodStockpiles ?? [];
     scene.adventurerKillCount = save.adventurerKillCount;
+    scene.mealsCooked = save.mealsCooked ?? 0;
     scene.pendingSuccessions = save.pendingSuccessions;
     scene.commandTile = save.commandTile;
     scene.speedMultiplier = save.speed;
@@ -77,8 +78,9 @@ export function initializeWorld(scene: WorldScene) {
     scene.woodStockpiles = [];
     scene.rooms = [];
     scene.adventurerKillCount = 0;
+    scene.mealsCooked = 0;
     scene.goalStartTick = 0;
-    scene.colonyGoal = WorldGoals.makeGoal('stockpile_food', 0);
+    scene.colonyGoal = WorldGoals.makeGoal('cook_meals', 0);
     scene.weather = createWeather(0);
     for (const d of scene.goblins) {
       d.homeTile = { x: depotX, y: depotY };
@@ -142,8 +144,8 @@ export function initializeWorld(scene: WorldScene) {
     // 'newColony' is handled by App.tsx; WorldScene has nothing to do
   };
   const settingsHandler = (s: { llmEnabled?: boolean; llmProvider?: 'anthropic' | 'groq' }) => {
-    if (s.llmEnabled !== undefined) llmSystem.enabled = s.llmEnabled;
-    if (s.llmProvider) llmSystem.provider = s.llmProvider;
+    if (s.llmEnabled !== undefined) setStorytellerEnabled(s.llmEnabled);
+    if (s.llmProvider) setStorytellerProvider(s.llmProvider);
   };
   const logCaptureHandler = (entry: LogEntry) => {
     scene.logHistory.push(entry);
@@ -174,6 +176,7 @@ export function initializeWorld(scene: WorldScene) {
   bus.on('overlayChange', overlayHandler);
   bus.on('cycleSelected', cycleHandler);
   bus.on('buildMode', buildModeHandler);
+  bus.on('mealsCooked', (n: number) => { scene.mealsCooked += n; });
 
   // Remove bus listeners when this scene is destroyed (new-colony flow)
   scene.events.once('destroy', () => {
@@ -183,6 +186,7 @@ export function initializeWorld(scene: WorldScene) {
     bus.off('overlayChange', overlayHandler);
     bus.off('cycleSelected', cycleHandler);
     bus.off('buildMode', buildModeHandler);
+    bus.off('mealsCooked', () => {});
   });
 
   setupCamera(scene);

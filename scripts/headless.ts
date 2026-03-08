@@ -26,7 +26,7 @@ import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/si
 import { rollWound } from '../src/simulation/wounds';
 import { getActiveFaction } from '../src/shared/factions';
 import { GRID_SIZE } from '../src/shared/constants';
-import type { Goblin, Tile, FoodStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
+import type { Goblin, Tile, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
 import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
@@ -105,17 +105,17 @@ function findNextStockpileSlot(
 // ── Goal helpers (replicated from WorldScene) ─────────────────────────────────
 
 type GoalType = ColonyGoal['type'];
-const GOAL_CYCLE: GoalType[] = ['stockpile_food', 'survive_ticks', 'defeat_adventurers', 'enclose_fort'];
+const GOAL_CYCLE: GoalType[] = ['cook_meals', 'survive_ticks', 'defeat_adventurers'];
 
 function makeGoal(type: GoalType, generation: number): ColonyGoal {
   const scale = 1 + generation * 0.6;
   const desc = getActiveFaction().goalDescriptions;
   switch (type) {
-    case 'stockpile_food': return { type, description: desc.stockpile_food(Math.round(80 * scale)), progress: 0, target: Math.round(80 * scale), generation };
-    case 'survive_ticks': return { type, description: desc.survive_ticks(Math.round(800 * scale)), progress: 0, target: Math.round(800 * scale), generation };
+    case 'cook_meals': return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
+    case 'survive_ticks': return { type, description: desc.survive_ticks(Math.round(400 * scale)), progress: 0, target: Math.round(400 * scale), generation };
     case 'defeat_adventurers': return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
-    case 'enclose_fort': return { type, description: desc.enclose_fort(), progress: 0, target: 1, generation };
   }
+  return { type: 'cook_meals' as const, description: '', progress: 0, target: 20, generation };
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -160,13 +160,14 @@ const rooms: Room[] = [
 // Give them a hearth right in the middle of the kitchen!
 grid[depotY + 8][depotX + 8].type = TileType.Hearth;
 
-const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, meals: 0, maxFood: 200 }];
+const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, maxFood: 200 }];
+const mealStockpiles: MealStockpile[] = [{ x: depotX, y: depotY + 8, meals: 0, maxMeals: 100 }];
 const oreStockpiles: OreStockpile[] = [{ x: depotX + 8, y: depotY, ore: 150, maxOre: 200 }];
 const woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0, maxWood: 200 }];
 
 for (const g of goblins) g.homeTile = { x: depotX, y: depotY };
 
-let colonyGoal = makeGoal('stockpile_food', 0);
+let colonyGoal = makeGoal('cook_meals', 0);
 let goalStartTick = 0;
 let adventurerKills = 0;
 const pendingSuccessions: { deadGoblinId: string; spawnAtTick: number }[] = [];
@@ -212,7 +213,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
         }
       },
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
-      metabolismModifier(weather), warmthField, dangerField, weather.type, rooms,
+      metabolismModifier(weather), warmthField, dangerField, weather.type, rooms, mealStockpiles,
     );
     if (g.alive) recordAction(g.task);
     if (wasAlive && !g.alive) {
@@ -292,7 +293,6 @@ for (let tick = 1; tick <= TICKS; tick++) {
     const home = foodStockpiles[0] ?? { x: depotX, y: depotY };
     successor.homeTile = { x: home.x, y: home.y };
     goblins.push(successor);
-    successor.llmReasoning = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
     successor.memory.push({ tick, crisis: 'arrival', action: `arrived to replace ${dead.name}` });
   }
 
@@ -301,7 +301,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
   if (lastFood.food >= lastFood.maxFood) {
     const all = [...foodStockpiles, ...oreStockpiles, ...woodStockpiles];
     const pos = findNextStockpileSlot(foodStockpiles, all, grid, oreStockpiles);
-    if (pos) foodStockpiles.push({ ...pos, food: 0, meals: 0, maxFood: 200 });
+    if (pos) foodStockpiles.push({ ...pos, food: 0, maxFood: 200 });
   }
   const lastOre = oreStockpiles[oreStockpiles.length - 1];
   if (lastOre.ore >= lastOre.maxOre) {
@@ -319,14 +319,9 @@ for (let tick = 1; tick <= TICKS; tick++) {
   // Goal progress
   const alive = goblins.filter(g => g.alive);
   switch (colonyGoal.type) {
-    case 'stockpile_food': colonyGoal.progress = foodStockpiles.reduce((s, d) => s + d.food, 0); break;
+    case 'cook_meals': colonyGoal.progress = mealStockpiles.reduce((s, d) => s + d.meals, 0); break;
     case 'survive_ticks': colonyGoal.progress = tick - goalStartTick; break;
     case 'defeat_adventurers': colonyGoal.progress = adventurerKills; break;
-    case 'enclose_fort': {
-      const rem = roomWallSlots(rooms, grid, goblins, '', adventurers);
-      colonyGoal.progress = (rooms.length > 0 && rem.length === 0) ? 1 : 0;
-      break;
-    }
   }
   if (colonyGoal.progress >= colonyGoal.target) {
     for (const g of alive) g.morale = Math.min(100, g.morale + 15);

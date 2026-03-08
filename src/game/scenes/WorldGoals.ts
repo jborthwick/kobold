@@ -1,7 +1,6 @@
 import { bus } from '../../shared/events';
 import { getActiveFaction } from '../../shared/factions';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
-import { roomWallSlots } from '../../simulation/agents';
 import type { ColonyGoal, Chapter, Goblin } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
 
@@ -9,22 +8,21 @@ export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGo
     const scale = 1 + generation * 0.6;
     const desc = getActiveFaction().goalDescriptions;
     switch (type) {
-        case 'stockpile_food':
-            return { type, description: desc.stockpile_food(Math.round(80 * scale)), progress: 0, target: Math.round(80 * scale), generation };
+        case 'cook_meals':
+            return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
         case 'survive_ticks':
-            return { type, description: desc.survive_ticks(Math.round(800 * scale)), progress: 0, target: Math.round(800 * scale), generation };
+            return { type, description: desc.survive_ticks(Math.round(400 * scale)), progress: 0, target: Math.round(400 * scale), generation };
         case 'defeat_adventurers':
             return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
-        case 'enclose_fort':
-            return { type, description: desc.enclose_fort(), progress: 0, target: 1, generation };
     }
+    return { type: 'cook_meals', description: '', progress: 0, target: 20, generation };
 }
 
 export function updateGoalProgress(scene: WorldScene) {
     const alive = scene.goblins.filter(d => d.alive);
     switch (scene.colonyGoal.type) {
-        case 'stockpile_food':
-            scene.colonyGoal.progress = scene.foodStockpiles.reduce((sum, d) => sum + d.food, 0);
+        case 'cook_meals':
+            scene.colonyGoal.progress = scene.mealsCooked;
             break;
         case 'survive_ticks':
             scene.colonyGoal.progress = scene.tick - scene.goalStartTick;
@@ -32,11 +30,6 @@ export function updateGoalProgress(scene: WorldScene) {
         case 'defeat_adventurers':
             scene.colonyGoal.progress = scene.adventurerKillCount;
             break;
-        case 'enclose_fort': {
-            const remaining = roomWallSlots(scene.rooms, scene.grid, scene.goblins, '', scene.adventurers);
-            scene.colonyGoal.progress = (scene.rooms.length > 0 && remaining.length === 0) ? 1 : 0;
-            break;
-        }
     }
     if (scene.colonyGoal.progress >= scene.colonyGoal.target) {
         completeGoal(scene, alive);
@@ -57,7 +50,7 @@ export function completeGoal(scene: WorldScene, alive: Goblin[]) {
         message: `✓ Goal complete: ${scene.colonyGoal.description}! Morale boost for all!`,
         level: 'info',
     });
-    const GOAL_TYPES: ColonyGoal['type'][] = ['stockpile_food', 'survive_ticks', 'defeat_adventurers', 'enclose_fort'];
+    const GOAL_TYPES: ColonyGoal['type'][] = ['cook_meals', 'survive_ticks', 'defeat_adventurers'];
     const curr = GOAL_TYPES.indexOf(scene.colonyGoal.type);
     const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
 

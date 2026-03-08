@@ -45,9 +45,6 @@ export interface Adventurer {
   staggeredUntil?: number;         // tick until which the adventurer cannot move (post-hit stagger)
 }
 
-// PIANO step 5 — structured intent the LLM can set to override the BT
-export type LLMIntent = 'eat' | 'forage' | 'rest' | 'avoid' | 'socialize' | 'none';
-
 // Permanent personality trait assigned at spawn
 export type GoblinTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
 
@@ -105,9 +102,6 @@ export interface Goblin {
   alive: boolean;
   task: string;
   commandTarget: { x: number; y: number } | null;  // player-issued move order
-  llmReasoning: string | null;    // last LLM decision shown in GoblinPanel
-  llmIntent: LLMIntent | null; // active override intent (expires at llmIntentExpiry)
-  llmIntentExpiry: number;           // tick after which intent is discarded
   memory: MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
   thoughts: ActiveThought[]; // rimworld-style timed buffs
   memories: ActiveMemory[];  // rimworld-style staged accumulation
@@ -152,7 +146,7 @@ export interface LogEntry {
 export type OverlayMode = 'off' | 'food' | 'material' | 'wood' | 'warmth' | 'danger' | 'traffic';
 
 // Colony-wide shared goal — all goblins contribute; cycles on completion
-export type ColonyGoalType = 'stockpile_food' | 'survive_ticks' | 'defeat_adventurers' | 'enclose_fort';
+export type ColonyGoalType = 'cook_meals' | 'survive_ticks' | 'defeat_adventurers';
 
 export interface ColonyGoal {
   type: ColonyGoalType;

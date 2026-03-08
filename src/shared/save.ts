@@ -31,6 +31,8 @@ export interface SaveData {
   rooms?: Room[];
   /** Meal stockpiles inside kitchens — optional for backward compat. */
   mealStockpiles?: MealStockpile[];
+  /** Cumulative meals cooked this colony — optional for backward compat. */
+  mealsCooked?: number;
 }
 
 const KEY = 'kobold_save_v2';
@@ -68,6 +70,7 @@ export function loadGame(): SaveData | null {
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];
+    data.mealsCooked ??= 0;
     // Migrate: remove legacy meals field from food stockpiles
     for (const sp of data.foodStockpiles) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

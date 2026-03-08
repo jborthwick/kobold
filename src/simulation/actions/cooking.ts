@@ -5,6 +5,7 @@ import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
+import { bus } from '../../shared/events';
 
 const MEALS_PER_BATCH = 5;
 const FOOD_COST = 5;
@@ -143,9 +144,11 @@ export const cook: Action = {
         if (goblin.cookingProgress >= COOKING_TICKS_REQUIRED) {
             const mealPile = getOrCreateMealStockpile(ctx);
             if (mealPile) {
-                mealPile.meals = Math.min(mealPile.maxMeals, mealPile.meals + MEALS_PER_BATCH);
+                const actualMeals = Math.min(mealPile.maxMeals - mealPile.meals, MEALS_PER_BATCH);
+                mealPile.meals += actualMeals;
+                bus.emit('mealsCooked', actualMeals);
                 addThought(goblin, 'crafted_meal', ctx.currentTick);
-                onLog?.(`🍲 ${goblin.name} cooked ${MEALS_PER_BATCH} meals!`, 'info');
+                onLog?.(`🍲 ${goblin.name} cooked ${actualMeals} meals!`, 'info');
             }
             goblin.cookingProgress = undefined;
             addWorkFatigue(goblin);
