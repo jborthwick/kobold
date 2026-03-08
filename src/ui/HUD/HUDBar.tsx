@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import type { LLMProvider } from '../../ai/crisis';
 import { getActiveFaction } from '../../shared/factions';
+
+type LLMProvider = 'anthropic' | 'groq';
 import type { GameState, OverlayMode, WeatherType, Season, RoomType } from '../../shared/types';
 import type { LayoutMode } from '../../shared/useViewport';
 import { BuildMenu } from './BuildMenu';

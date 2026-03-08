@@ -53,10 +53,9 @@ export interface FactionConfig {
 
   // ── Colony goal descriptions ────────────────────────────────────────────────
   goalDescriptions: {
-    stockpile_food: (target: number) => string;
-    survive_ticks: (target: number) => string;
-    defeat_adventurers: (target: number) => string;
-    enclose_fort: () => string;
+    cook_meals: (t: number) => string;
+    survive_ticks: (t: number) => string;
+    defeat_adventurers: (t: number) => string;
   };
 }
 
@@ -134,10 +133,9 @@ export const GOBLIN_FACTION: FactionConfig = {
   enemyNounPlural: 'adventurers',
 
   goalDescriptions: {
-    stockpile_food: (t) => `Hoard ${t} food (without eating it all)`,
-    survive_ticks: (t) => `Don't all die for ${t} ticks`,
-    defeat_adventurers: (t) => `Clobber ${t} adventurers`,
-    enclose_fort: () => 'Build walls (that hopefully stay up)',
+    cook_meals: (t: number) => `Cook ${t} meals`,
+    survive_ticks: (t: number) => `Don't all die for ${t} ticks`,
+    defeat_adventurers: (t: number) => `Clobber ${t} adventurers`,
   },
 };
 

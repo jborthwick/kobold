@@ -19,6 +19,7 @@ export function buildSaveData(scene: WorldScene): SaveData {
         oreStockpiles: scene.oreStockpiles.map(s => ({ ...s })),
         woodStockpiles: scene.woodStockpiles.map(s => ({ ...s })),
         adventurerKillCount: scene.adventurerKillCount,
+        mealsCooked: scene.mealsCooked,
         spawnZone: { ...scene.spawnZone },
         pendingSuccessions: scene.pendingSuccessions.map(s => ({ ...s })),
         commandTile: scene.commandTile ? { ...scene.commandTile } : null,

@@ -14,7 +14,6 @@ import type { Action } from './types';
 // --- forage: scan for food, pathfind, harvest ---
 export const forage: Action = {
   name: 'forage',
-  intentMatch: 'forage',
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
@@ -43,7 +42,7 @@ export const forage: Action = {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
-    const radius = (goblin.llmIntent === 'forage' || goblin.hunger > 20)
+    const radius = goblin.hunger > 20
       ? maxSearch
       : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const foodTarget = bestFoodTile(goblin, grid, radius);

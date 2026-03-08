@@ -32,7 +32,6 @@ export const commandMove: Action = {
 // --- eat: consume food from inventory, or graze from tile underfoot ---
 export const eat: Action = {
   name: 'eat',
-  intentMatch: 'eat',
   eligible: ({ goblin, grid }) => {
     if (goblin.inventory.food > 0 || goblin.inventory.meals > 0) return true;
     // Graze: standing on a forageable tile with food
@@ -81,7 +80,6 @@ export const eat: Action = {
 // --- rest: stay still, recover fatigue; warmth tiers bonus ---
 export const rest: Action = {
   name: 'rest',
-  intentMatch: 'rest',
   eligible: ({ goblin }) => goblin.hunger < 95,
   score: ({ goblin }) => {
     // Lower midpoint (50 instead of 60) makes resting more attractive earlier

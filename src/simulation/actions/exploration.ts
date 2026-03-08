@@ -87,7 +87,6 @@ const SEEK_WARMTH_SCORE_COLD          = 0.28;
 const SEEK_WARMTH_SCORE_DEFAULT       = 0.08;
 export const seekWarmth: Action = {
   name: 'seekWarmth',
-  intentMatch: 'rest',
   eligible: ({ goblin, warmthField, grid, currentTick }) => {
     if (!warmthField) return false;
     // Use smoothed goblin.warmth to avoid single-step threshold crossings.

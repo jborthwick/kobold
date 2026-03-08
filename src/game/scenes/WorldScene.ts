@@ -71,6 +71,7 @@ export class WorldScene extends Phaser.Scene {
   public colonyGoal!: ColonyGoal;
   public goalStartTick = 0;
   public adventurerKillCount = 0;
+  public mealsCooked = 0;
   public foodStockpiles: FoodStockpile[] = [];
   public mealStockpiles: MealStockpile[] = [];
   public oreStockpiles: OreStockpile[] = [];

@@ -1,7 +1,7 @@
 import { GRID_SIZE } from '../../shared/constants';
 import { bus } from '../../shared/events';
 import { getActiveFaction } from '../../shared/factions';
-import { llmSystem, callSuccessionLLM } from '../../ai/crisis';
+
 import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
 import { findHearths, computeWarmth, computeDanger, updateTraffic } from '../../simulation/diffusion';
 import { tickAgentUtility } from '../../simulation/utilityAI';
@@ -52,18 +52,6 @@ export function gameTick(scene: WorldScene) {
         }
     }
 
-    // PIANO step 6 — check pending outcome verifications, log surprises
-    const surprises = llmSystem.checkVerifications(scene.goblins, scene.tick);
-    for (const msg of surprises) {
-        bus.emit('logEntry', {
-            tick: scene.tick,
-            goblinId: 'system',
-            goblinName: 'VERIFY',
-            message: msg,
-            level: 'warn',
-        });
-    }
-
     const aliveBeforeTick = new Set(scene.goblins.filter(g => g.alive).map(g => g.id));
 
     for (const d of scene.goblins) {
@@ -82,32 +70,6 @@ export function gameTick(scene: WorldScene) {
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
             metabolismModifier(scene.weather), scene.warmthField, scene.dangerField,
             scene.weather.type, scene.rooms, scene.mealStockpiles
-        );
-
-        // Fire async LLM crisis check — never blocks the game loop
-        llmSystem.requestDecision(d, scene.goblins, scene.grid, scene.tick, scene.adventurers,
-            (goblin, decision, situation) => {
-                goblin.llmReasoning = decision.reasoning;
-                goblin.task = decision.action;  // show LLM action string as task label
-
-                // Store structured intent with expiry (~7.5 s at 7 ticks/s)
-                if (decision.intent && decision.intent !== 'none') {
-                    goblin.llmIntent = decision.intent;
-                    goblin.llmIntentExpiry = scene.tick + 50;
-                }
-
-                // Push to rolling memory (uncapped; last 5 entries used in LLM prompts)
-                goblin.memory.push({ tick: scene.tick, crisis: situation.type, action: decision.action, reasoning: decision.reasoning });
-
-                bus.emit('logEntry', {
-                    tick: scene.tick,
-                    goblinId: goblin.id,
-                    goblinName: goblin.name,
-                    message: `[${situation.type}] ${decision.intent ?? 'none'} — "${decision.reasoning}"`,
-                    level: 'warn',
-                });
-            },
-            scene.colonyGoal,
         );
     }
 
@@ -292,18 +254,8 @@ export function gameTick(scene: WorldScene) {
             level: 'info',
         });
 
-        // LLM arrival thought — detached, never blocks the game loop
-        if (llmSystem.enabled) {
-            callSuccessionLLM(dead, successor).then(text => {
-                const thought = text ?? `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
-                successor.llmReasoning = thought;
-                successor.memory.push({ tick: scene.tick, crisis: 'arrival', action: `arrived to replace ${dead.name}`, reasoning: thought });
-            });
-        } else {
-            const thought = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
-            successor.llmReasoning = thought;
-            successor.memory.push({ tick: scene.tick, crisis: 'arrival', action: `arrived to replace ${dead.name}`, reasoning: thought });
-        }
+        const thought = `I heard what happened to ${dead.name}. I will not make the same mistakes.`;
+        successor.memory.push({ tick: scene.tick, crisis: 'arrival', action: `arrived to replace ${dead.name}`, reasoning: thought });
     }
 
     // ── Sync stockpile graphics (actions may have added new stockpiles) ─────

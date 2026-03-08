@@ -1,73 +1,93 @@
 /**
  * Storyteller AI — narrator that writes chapter summaries on goal completion.
  *
- * Fires once per colony goal cycle. Uses the same LLM provider/rate-limit
- * infrastructure as crisis.ts. Falls back to deterministic text if LLM is
- * disabled, rate-limited, or fails.
+ * Fires once per colony goal cycle. Falls back to deterministic text if LLM is
+ * disabled or fails.
  */
 
 import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
-import { llmSystem, PROVIDERS } from './crisis';
 import { getActiveFaction } from '../shared/factions';
+
+// ── LLM Config ────────────────────────────────────────────────────────────────
+
+let enabled = false;
+let provider: 'anthropic' | 'groq' = 'anthropic';
+let sessionInputTokens = 0;
+let sessionOutputTokens = 0;
+let sessionCallCount = 0;
+let lastCallTick = 0;
+const COOLDOWN_TICKS = 300;
+
+const PROVIDERS = {
+  anthropic: {
+    url: '/api/llm-proxy',
+    model: 'claude-haiku-4-5',
+    extractText: (data: { content?: Array<{ text?: string }> }) => data.content?.[0]?.text,
+    extractUsage: (data: { usage?: { input_tokens?: number; output_tokens?: number } }) => ({
+      input: data.usage?.input_tokens ?? 0,
+      output: data.usage?.output_tokens ?? 0,
+    }),
+  },
+  groq: {
+    url: '/api/groq-proxy',
+    model: 'llama-3.3-70b-versatile',
+    extractText: (data: { choices?: Array<{ message?: { content?: string } }> }) => 
+      data.choices?.[0]?.message?.content,
+    extractUsage: (data: { usage?: { prompt_tokens?: number; completion_tokens?: number } }) => ({
+      input: data.usage?.prompt_tokens ?? 0,
+      output: data.usage?.completion_tokens ?? 0,
+    }),
+  },
+};
+
+export function setStorytellerEnabled(val: boolean) { enabled = val; }
+export function setStorytellerProvider(p: 'anthropic' | 'groq') { provider = p; }
+export function getStorytellerEnabled() { return enabled; }
 
 // ── Event filtering ──────────────────────────────────────────────────────────
 
-/** Significant goblinName/level patterns worth including in a chapter prompt. */
 const SIG_NAMES = new Set(['WEATHER', 'world', 'COLONY', 'RAID']);
 
-/**
- * Filter log history to the ~15 most narratively important entries since the
- * last chapter tick. Returns condensed strings for the LLM prompt.
- */
 export function filterSignificantEvents(
   logHistory: LogEntry[],
   lastChapterTick: number,
 ): string[] {
   const recent = logHistory.filter(e => e.tick > lastChapterTick);
   const significant: LogEntry[] = [];
-  let llmDecisionCount = 0;
+  let warnCount = 0;
 
   for (const e of recent) {
-    // Deaths, raids, combat (error-level entries)
     if (e.level === 'error') { significant.push(e); continue; }
-    // Weather shifts, world events, colony milestones
     if (SIG_NAMES.has(e.goblinName)) { significant.push(e); continue; }
-    // Adventurer kills (killVerb varies by faction)
     if (e.message.includes(getActiveFaction().killVerb)) { significant.push(e); continue; }
-    // LLM crisis decisions (cap at 3 to avoid prompt bloat)
-    if (e.level === 'warn' && e.goblinId !== 'verify' && llmDecisionCount < 3) {
+    if (e.level === 'warn' && e.goblinId !== 'verify' && warnCount < 3) {
       significant.push(e);
-      llmDecisionCount++;
+      warnCount++;
     }
   }
 
-  // Cap at 15 entries, prioritizing earliest (chronological narrative flow)
-  return significant.slice(0, 15).map(
-    e => `[tick ${e.tick}] ${e.goblinName}: ${e.message}`,
-  );
+  return significant.slice(0, 15).map(e => `[tick ${e.tick}] ${e.goblinName}: ${e.message}`);
 }
 
 // ── Storyteller LLM call ─────────────────────────────────────────────────────
 
-/**
- * Generate a chapter summary via LLM. Fire-and-forget — never blocks the
- * game loop. Returns narrator prose (2-4 sentences) or null on failure.
- */
 export async function callStorytellerLLM(
   completedGoal: ColonyGoal,
   goblins: Goblin[],
   adventurers: Adventurer[],
   significantEvents: string[],
+  currentTick?: number,
 ): Promise<string | null> {
-  if (!llmSystem.enabled) return null;
-  if (!llmSystem.canCallNowPublic()) return null;
+  if (!enabled) return null;
+  
+  // Cooldown check if tick provided
+  if (currentTick !== undefined && currentTick - lastCallTick < COOLDOWN_TICKS) return null;
 
-  const cfg = PROVIDERS[llmSystem.provider];
+  const cfg = PROVIDERS[provider];
   const alive = goblins.filter(d => d.alive);
   const dead = goblins.filter(d => !d.alive);
 
-  // Tension (same formula as events.ts colonyTension — not exported)
   const avgHunger = alive.length > 0
     ? alive.reduce((s, d) => s + d.hunger, 0) / alive.length : 100;
   const avgMorale = alive.length > 0
@@ -96,14 +116,14 @@ export async function callStorytellerLLM(
     `Write in past tense, third person. Be specific — name ${faction.unitNounPlural}, reference actual events. No dialogue.`;
 
   try {
-    llmSystem.recordCallPublic();
+    lastCallTick = currentTick ?? lastCallTick;
     const res = await fetch(cfg.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(8_000), // slightly longer than crisis calls
+      signal: AbortSignal.timeout(8_000),
       body: JSON.stringify({
         model: cfg.model,
-        max_tokens: 200,
+        max_tokens: 256,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -111,22 +131,21 @@ export async function callStorytellerLLM(
     if (!res.ok) return null;
 
     const data = await res.json();
-    const usage = cfg.extractUsage(data);
-    llmSystem.sessionInputTokens += usage.input;
-    llmSystem.sessionOutputTokens += usage.output;
-    llmSystem.sessionCallCount++;
+    const usage = cfg.extractUsage(data as Parameters<typeof cfg.extractUsage>[0]);
+    sessionInputTokens += usage.input;
+    sessionOutputTokens += usage.output;
+    sessionCallCount++;
     bus.emit('tokenUsage', {
-      inputTotal: llmSystem.sessionInputTokens,
-      outputTotal: llmSystem.sessionOutputTokens,
-      callCount: llmSystem.sessionCallCount,
+      inputTotal: sessionInputTokens,
+      outputTotal: sessionOutputTokens,
+      callCount: sessionCallCount,
       lastInput: usage.input,
       lastOutput: usage.output,
     });
 
-    const raw = cfg.extractText(data)?.trim() ?? '';
-    // Strip markdown fences if present
+    const raw = cfg.extractText(data as Parameters<typeof cfg.extractText>[0])?.trim() ?? '';
     const cleaned = raw.replace(/^```(?:\w+)?\s*/i, '').replace(/\s*```$/, '').trim();
-    return cleaned.slice(0, 500) || null;
+    return cleaned.slice(0, 800) || null;
   } catch (err) {
     const name = (err as Error).name;
     if (name !== 'AbortError' && name !== 'TimeoutError') {
@@ -138,10 +157,6 @@ export async function callStorytellerLLM(
 
 // ── Deterministic fallback ───────────────────────────────────────────────────
 
-/**
- * Build a chapter summary without LLM — used when LLM is disabled, rate-limited,
- * or fails. Always returns a non-empty string.
- */
 export function buildFallbackChapter(
   goal: ColonyGoal,
   alive: Goblin[],

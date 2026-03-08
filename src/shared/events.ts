@@ -23,6 +23,8 @@ type Events = {
   restoreChronicle: Chapter[];
   /** Player enters/exits build mode for room placement. */
   buildMode: { roomType: RoomType } | null;
+  /** A batch of meals was cooked. */
+  mealsCooked: number;
 };
 
 export const bus = mitt<Events>();
