@@ -387,9 +387,10 @@ export function tickAgentUtility(
   }
 
   // ── Step 7: Handle Interrupted Cooking ────────────────────────────────────────
-  // If a goblin was cooking but their newly assigned task is NOT cooking, they lose all progress.
-  // We check if the task string includes "cooking" since that's what we set in `actions/cooking.ts`.
-  if (goblin.cookingProgress !== undefined && !goblin.task.includes('cooking')) {
+  // If a goblin was cooking but their newly assigned task is NOT cooking, they lose all progress
+  // — but only after cooking has been inactive for >40 ticks (grace window for brief interruptions).
+  const cookingIdle = currentTick - (goblin.cookingLastActiveTick ?? 0);
+  if (goblin.cookingProgress !== undefined && !goblin.task.includes('cooking') && cookingIdle > 40) {
     goblin.cookingProgress = undefined;
     if (shouldLog(goblin, 'cooking_interrupted', currentTick, 100)) {
       onLog?.(`🔥 ${goblin.name} abandoned their cooking! The food is ruined!`, 'warn');

@@ -7,7 +7,7 @@ import {
 } from '../agents';
 import { grantXp, skillOreBonus, skillYieldBonus } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, addWorkFatigue, totalLoad, nearestOreStockpile, nearestWoodStockpile } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestOreStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -72,7 +72,7 @@ export const mine: Action = {
           goblin.task = 'mining… looking for vein';
         }
       } else {
-        moveTo(goblin, oreTarget, grid);
+        moveToward(goblin, oreTarget, grid, currentTick);
         goblin.task = `mining → (${oreTarget.x},${oreTarget.y})`;
       }
       return;
@@ -100,7 +100,7 @@ export const mine: Action = {
           goblin.task = 'preparing to mine…';
         }
       } else {
-        moveTo(goblin, best, grid);
+        moveToward(goblin, best, grid, currentTick);
         goblin.task = `→ remembered ore (${best.x},${best.y})`;
       }
     }
@@ -179,7 +179,7 @@ export const chop: Action = {
           goblin.task = 'logging… looking for tree';
         }
       } else {
-        moveTo(goblin, woodTarget, grid);
+        moveToward(goblin, woodTarget, grid, currentTick);
         goblin.task = `logging → (${woodTarget.x},${woodTarget.y})`;
       }
       return;
@@ -205,7 +205,7 @@ export const chop: Action = {
           goblin.task = 'preparing to log…';
         }
       } else {
-        moveTo(goblin, best, grid);
+        moveToward(goblin, best, grid, currentTick);
         goblin.task = `→ remembered forest (${best.x},${best.y})`;
       }
     }

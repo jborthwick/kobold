@@ -135,6 +135,7 @@ export interface Goblin {
   wound?: Wound;       // active wound (undefined = healthy); heals at wound.healTick
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
   cookingProgress?: number;     // ticks spent accumulating progress while cooking
+  cookingLastActiveTick?: number;  // tick when cooking action last executed
 }
 
 export interface LogEntry {

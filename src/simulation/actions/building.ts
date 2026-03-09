@@ -3,7 +3,7 @@ import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
-import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile } from './helpers';
+import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile, getOrSetMoveTarget } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -47,10 +47,18 @@ export const buildWall: Action = {
     }
 
     if (nearestSlot) {
-      const next = pathNextStep({ x: goblin.x, y: goblin.y }, nearestSlot, grid);
-      if (next.x === nearestSlot.x && next.y === nearestSlot.y) {
-        const t = grid[nearestSlot.y][nearestSlot.x];
-        grid[nearestSlot.y][nearestSlot.x] = {
+      const committedSlot = getOrSetMoveTarget(goblin, nearestSlot, currentTick, 15);
+
+      // Validate: another goblin may have already built this slot
+      if (grid[committedSlot.y][committedSlot.x].type === TileType.Wall) {
+        goblin.moveTarget = null;  // invalidate — re-scan next tick
+        return;
+      }
+
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, committedSlot, grid);
+      if (next.x === committedSlot.x && next.y === committedSlot.y) {
+        const t = grid[committedSlot.y][committedSlot.x];
+        grid[committedSlot.y][committedSlot.x] = {
           ...t, type: TileType.Wall,
           foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
         };

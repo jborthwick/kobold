@@ -2,7 +2,7 @@ import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile, getOrSetMoveTarget } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';
@@ -103,9 +103,7 @@ export const cook: Action = {
             // Find a walkable spot inside the kitchen
             const targetX = kitchen.x + Math.floor(kitchen.w / 2);
             const targetY = kitchen.y + Math.floor(kitchen.h / 2);
-            const dest = getOrSetMoveTarget(goblin, { x: targetX, y: targetY }, currentTick, 20, 2);
-
-            moveTo(goblin, dest, grid);
+            moveToward(goblin, { x: targetX, y: targetY }, grid, currentTick, 20);
             goblin.task = '→ kitchen';
             return;
         }
@@ -129,6 +127,7 @@ export const cook: Action = {
 
         // 3. Process cooking
         goblin.cookingProgress += 1;
+        goblin.cookingLastActiveTick = currentTick;
 
         // Cooking accident chance
         if (Math.random() < FIRE_CHANCE_PER_TICK) {

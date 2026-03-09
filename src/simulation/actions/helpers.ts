@@ -62,6 +62,19 @@ export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: T
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
 }
 
+/** Move toward a target with committed path memory to prevent oscillations.
+ * Combines getOrSetMoveTarget + moveTo into a single call. */
+export function moveToward(
+  goblin: Goblin,
+  newTarget: { x: number; y: number },
+  grid: Tile[][],
+  currentTick: number,
+  expiry = 15,
+): void {
+  const dest = getOrSetMoveTarget(goblin, newTarget, currentTick, expiry);
+  moveTo(goblin, dest, grid);
+}
+
 export function addWorkFatigue(goblin: Goblin): void {
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate(goblin));
 }

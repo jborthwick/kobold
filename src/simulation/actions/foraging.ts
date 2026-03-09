@@ -8,7 +8,7 @@ import {
 } from '../agents';
 import { grantXp, skillYieldBonus } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile } from './helpers';
 import type { Action } from './types';
 
 // --- forage: scan for food, pathfind, harvest ---
@@ -58,7 +58,7 @@ export const forage: Action = {
 
     if (foodTarget) {
       if (goblin.x !== foodTarget.x || goblin.y !== foodTarget.y) {
-        moveTo(goblin, foodTarget, grid);
+        moveToward(goblin, foodTarget, grid, currentTick);
       }
       const here = grid[goblin.y][goblin.x];
 
@@ -161,7 +161,7 @@ export const forage: Action = {
         }
         // Fall through to let next tick harvest
       } else {
-        moveTo(goblin, best, grid);
+        moveToward(goblin, best, grid, currentTick);
         goblin.task = '→ remembered patch';
       }
     }
