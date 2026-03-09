@@ -18,7 +18,7 @@ import { woundDamageMultiplier } from './wounds';
 
 const RAID_INTERVAL_MIN    = 500;   // ticks between raids (min)
 const RAID_INTERVAL_MAX    = 900;   // ticks between raids (max)
-const WANDER_RANGE         = 15;    // tiles adventurers roam between raids
+const WANDER_RANGE         = Math.floor(GRID_SIZE / 4); // beyond this, wander; within, path to nearest goblin
 const RAID_MIN_SIZE        = 2;     // min adventurers per raid
 const RAID_MAX_SIZE        = 4;     // max adventurers per raid (= min + rand spread)
 const ADVENTURER_ATTACK_DAMAGE = 5; // damage adventurer deals to goblin per hit
