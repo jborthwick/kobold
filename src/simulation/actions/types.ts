@@ -20,8 +20,24 @@ export interface ActionContext {
   rooms?:          Room[];
 }
 
+/** Tags for trait-based action score biasing. Traits multiply scores by tag. */
+export type ActionTag =
+  | 'player'
+  | 'eat'
+  | 'rest'
+  | 'combat'
+  | 'safety'
+  | 'work'
+  | 'social'
+  | 'explore'
+  | 'comfort'
+  | 'fire'
+  | 'share'
+  | 'withdraw';
+
 export interface Action {
   name:         string;
+  tags:         ActionTag[];
   eligible:     (ctx: ActionContext) => boolean;
   score:        (ctx: ActionContext) => number;
   execute:      (ctx: ActionContext) => void;

@@ -39,6 +39,7 @@ function mostNeededStockpileType(
 
 export const establishStockpile: Action = {
   name: 'establishStockpile',
+  tags: ['work'],
   eligible: ({ rooms, foodStockpiles, goblins }) => {
     if (!rooms || rooms.length === 0) return false;
     // Need at least one unspecialized storage room

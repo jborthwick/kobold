@@ -52,6 +52,8 @@ interface TickSnapshot {
 
 const snapshots: TickSnapshot[] = [];
 const actionCounts: Record<string, number> = {};
+/** Per-trait action counts for trait-bias validation (brave vs flee, lazy rest, etc.) */
+const actionCountsByTrait: Record<string, Record<string, number>> = {};
 const deathLog: { tick: number; name: string; cause: string }[] = [];
 const raidLog: { tick: number; count: number }[] = [];
 const goalLog: { tick: number; type: string; generation: number }[] = [];
@@ -61,13 +63,18 @@ let fireTilesMax = 0;  // peak simultaneous fire tile count
 let fireTilesTotal = 0;  // cumulative tiles that burned or were extinguished
 let fireTilesRainedOut = 0;  // tiles extinguished by rain
 
-function recordAction(task: string) {
-  // Normalise task string to a bare action label.
-  // Tasks starting with → are navigation steps (traveling), not idle.
-  const key = task.startsWith('→')
+function normalizeTaskLabel(task: string): string {
+  return task.startsWith('→')
     ? 'traveling'
     : task.replace(/\s*[(→].*/, '').trim() || 'idle';
+}
+
+function recordAction(goblin: Goblin, task: string) {
+  const key = normalizeTaskLabel(task);
   actionCounts[key] = (actionCounts[key] ?? 0) + 1;
+  const trait = goblin.trait;
+  if (!actionCountsByTrait[trait]) actionCountsByTrait[trait] = {};
+  actionCountsByTrait[trait][key] = (actionCountsByTrait[trait][key] ?? 0) + 1;
 }
 
 // ── Stockpile expansion (replicated from WorldScene.findNextStockpileSlot) ────
@@ -215,7 +222,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
       metabolismModifier(weather), warmthField, dangerField, weather.type, rooms, mealStockpiles,
     );
-    if (g.alive) recordAction(g.task);
+    if (g.alive) recordAction(g, g.task);
     if (wasAlive && !g.alive) {
       deathLog.push({ tick, name: g.name, cause: g.causeOfDeath ?? 'unknown' });
       pendingSuccessions.push({ deadGoblinId: g.id, spawnAtTick: tick + SUCCESSION_DELAY });
@@ -395,18 +402,74 @@ if (goalLog.length > 0) {
 
 // Action frequency table — top 15
 console.log(`\n Action frequencies (top 15):`);
+const totalTicks = Object.values(actionCounts).reduce((a, b) => a + b, 0);
 const sorted = Object.entries(actionCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
 const maxCount = sorted[0]?.[1] ?? 1;
 for (const [action, count] of sorted) {
   const bar = '█'.repeat(Math.round((count / maxCount) * 20));
-  const pct = ((count / Object.values(actionCounts).reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+  const pct = totalTicks ? ((count / totalTicks) * 100).toFixed(1) : '0';
   console.log(`   ${action.padEnd(24)} ${bar.padEnd(20)} ${pct}%`);
+}
+
+// Trait bias sanity check: brave vs paranoid (fight vs flee), lazy (rest share)
+const traitsPresent = Object.keys(actionCountsByTrait);
+const restKeys = Object.entries(actionCounts).filter(([k]) => k.startsWith('resting'));
+const colonyRestTicks = restKeys.reduce((s, [, v]) => s + v, 0);
+const colonyRestPct = totalTicks ? (colonyRestTicks / totalTicks) * 100 : 0;
+const colonyFightTicks = Object.entries(actionCounts).reduce((s, [k, v]) => (k.startsWith('fighting') ? s + v : s), 0);
+const colonyFleeTicks = actionCounts['fleeing to safety'] ?? 0;
+const colonyCombatTicks = colonyFightTicks + colonyFleeTicks;
+
+if (traitsPresent.length > 0) {
+  console.log(`\n Trait bias check (action share by personality):`);
+  console.log(`   Colony totals: rest ${colonyRestTicks} ticks, fight ${colonyFightTicks}, flee ${colonyFleeTicks}${restKeys.length ? ` (rest keys: ${restKeys.map(([k, v]) => `${k}=${v}`).join(', ')})` : ' (no rest keys in action list)'}`);
+  let braveFightRatio: number | null = null;
+  let paranoidFightRatio: number | null = null;
+  let lazyRestPct: number | null = null;
+
+  for (const trait of traitsPresent.sort()) {
+    const byTrait = actionCountsByTrait[trait];
+    const traitTotal = Object.values(byTrait).reduce((a, b) => a + b, 0);
+    if (traitTotal < 50) continue; // skip traits with too few ticks to be meaningful
+    const rest = Object.entries(byTrait).reduce((s, [k, v]) => (k.startsWith('resting') ? s + v : s), 0);
+    const fight = Object.entries(byTrait).reduce((s, [k, v]) => (k.startsWith('fighting') ? s + v : s), 0);
+    const flee = byTrait['fleeing to safety'] ?? 0;
+    const combatTotal = fight + flee;
+    const restPct = traitTotal ? (rest / traitTotal) * 100 : 0;
+    const fightRatio = combatTotal > 10 ? fight / combatTotal : null;
+
+    if (trait === 'brave' && fightRatio !== null) braveFightRatio = fightRatio;
+    if (trait === 'paranoid' && fightRatio !== null) paranoidFightRatio = fightRatio;
+    if (trait === 'lazy') lazyRestPct = restPct;
+
+    const restVsColony = colonyRestPct > 0 ? (restPct / colonyRestPct).toFixed(2) : '—';
+    const combatNote = combatTotal > 10 ? ` fight/(fight+flee)=${(fightRatio! * 100).toFixed(0)}%` : '';
+    console.log(`   ${trait.padEnd(12)} rest ${restPct.toFixed(1)}% (${rest}/${traitTotal} ticks, vs colony ${restVsColony}x)${combatNote}`);
+  }
+
+  const checks: string[] = [];
+  if (braveFightRatio !== null && paranoidFightRatio !== null && braveFightRatio >= paranoidFightRatio) {
+    checks.push('brave fight ratio ≥ paranoid');
+  } else if (braveFightRatio !== null && paranoidFightRatio !== null) {
+    checks.push('brave fight ratio < paranoid (unexpected)');
+  }
+  if (lazyRestPct !== null && colonyRestPct > 0 && lazyRestPct >= colonyRestPct * 0.9) {
+    checks.push('lazy rest share ≥ colony avg');
+  } else if (lazyRestPct !== null && colonyRestPct > 0) {
+    checks.push('lazy rest share below colony avg');
+  }
+  if (checks.length > 0) {
+    console.log(`   → ${checks.join('; ')}`);
+  }
+  if (colonyRestTicks === 0 || colonyCombatTicks === 0) {
+    console.log(`   Tip: ${colonyRestTicks === 0 ? 'Rest action rarely wins in headless (fatigue stays low). ' : ''}${colonyCombatTicks === 0 ? 'No fight/flee ticks (raids or danger not in range). ' : ''}Trait bias applies when those actions occur.`);
+  }
 }
 
 if (DUMP_JSON) {
   const outPath = `headless-${seed}-${TICKS}.json`;
   const fs = await import('node:fs/promises');
-  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, warnLog, fireLog, fireTilesMax, fireTilesTotal }, null, 2));
+  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, actionCountsByTrait, warnLog, fireLog, fireTilesMax, fireTilesTotal }, null, 2));
   console.log(`\n JSON dumped → ${outPath}`);
 }
 

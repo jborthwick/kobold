@@ -31,6 +31,7 @@ function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
 
 export const cook: Action = {
     name: 'cook',
+    tags: ['work'],
     eligible: ({ rooms, foodStockpiles, woodStockpiles, goblin, grid, mealStockpiles }) => {
         if (!rooms || rooms.length === 0) return false;
 
@@ -86,12 +87,10 @@ export const cook: Action = {
 
         const base = foodAbundance * mealScarcity * 0.5 * inverseSigmoid(goblin.hunger, 50);
 
-        const traitMultiplier = goblin.trait === 'helpful' ? 1.5 : 1.0;
-
-        // Momentum for walking to the kitchen
+        // Momentum for walking to the kitchen (trait bias applied in utilityAI)
         const momentum = goblin.task.includes('kitchen') ? 0.15 : 0;
 
-        return Math.min(1.0, base * traitMultiplier + momentum);
+        return Math.min(1.0, base + momentum);
     },
 
     execute: (ctx) => {

@@ -91,7 +91,7 @@ Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare 
 2. **PIANO cognitive architecture** — last 5 decisions + goblin state compress into ~400-token LLM prompt for crisis decisions.
 3. **LLM is crisis-only** — ~95% deterministic Utility AI. LLM fires at decision points only. Cooldown. Off by default (🤖 toggle).
 4. **Always playable without LLM** — timeout (5 s) or disabled → silent fallback to deterministic AI.
-5. **Emergent over hardcoded:** – when adding actions, base eligibility/scoring on the goblin's personal state (hunger, warmth, etc.) not fixed map locations. Clustering near home should emerge from where goblins spend time, not proximity-to-homeTile gates.
+5. **Emergent over hardcoded:** – when adding actions, systems, agents, etc always favor building emergent behavior with overlapping simple systems.
 
 ---
 
@@ -112,7 +112,7 @@ Agent data model is in `src/shared/types.ts` (plain interfaces, no ECS). Roles a
 
 Every tick: `updateNeeds()` → starvation damage → expire LLM intent → stockpile
 deposit/withdraw → score all eligible actions (0–1 via sigmoid/ramp curves) → execute
-highest. Traits shift sigmoid midpoints. LLM intents add +0.5 to matching action scores.
+highest. Traits shift sigmoid midpoints and apply tag-based score multipliers (see `traitActionBias.ts`). LLM intents add +0.5 to matching action scores.
 Actions defined in `actions/`; see files for scoring formulas.
 
 **Close-call logging:** top two actions within 0.03 → "⚖ agonizing over X vs Y".
@@ -123,9 +123,8 @@ Actions defined in `actions/`; see files for scoring formulas.
 
 ## Game systems (see source files for exact values)
 
-- **Crisis detection** (`crisis.ts`): 5 crisis types trigger LLM calls.
 - **Mood system** (`mood.ts`, `utilityAI.ts`): RimWorld-style temporary Thoughts and staged, decaying Memories form a `targetMorale` that `goblin.morale` smoothly lerps toward.
-- **Traits** (`agents.ts` `TRAIT_MODS`): 8 traits shift sigmoid midpoints via `traitMod()`. See table in source.
+- **Traits** (`agents/roles.ts` `TRAIT_MODS`, `traitActionBias.ts`): 8 traits affect gameplay in two ways: (1) `traitMod()` shifts sigmoid midpoints and thresholds inside actions (eat threshold, flee threshold, wariness, etc.); (2) tag-based action score multipliers in `traitActionBias.ts` nudge close calls (e.g. brave → combat up / safety down, lazy → rest up / work down). See `TRAIT_MODS` and `TRAIT_TAG_MULT` in source.
 - **Weather** (`weather.ts`): clear/rain/drought/cold/storm modify growback + metabolism. Seasons cycle every 600 ticks. Storm = heavy rain + lightning strikes.
 - **Skills** (`skills.ts`): one skill per role, level = `floor(sqrt(xp/10))`. XP on primary action, +0.3 yield or +3 dmg per level.
 - **Wounds** (`wounds.ts`): single slot, 60% chance on hit. 4 types (bruised/leg/arm/eye). `effectiveVision()` replaces raw vision everywhere.
@@ -142,10 +141,6 @@ Actions defined in `actions/`; see files for scoring formulas.
 ---
 
 ## LLM integration
-
-**Crisis LLM** (`crisis.ts`): `buildPrompt()` compresses goblin state + situation + last 5
-memories into ~400 tokens. Returns JSON `{action, intent, reasoning, emotional_state, expectedOutcome}`.
-Model: `claude-haiku-4-5`. Max tokens: 256. Timeout: 5 s. Cooldown: 280 ticks/goblin.
 
 **Storyteller LLM** (`storyteller.ts`): fires once per goal completion. ~300 token prompt.
 Returns 2-4 sentence chapter. Timeout: 8 s. Falls back to deterministic text on failure.

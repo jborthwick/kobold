@@ -19,6 +19,7 @@ import { isWalkable } from './world';
 import { traitMod, pathNextStep } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
+import { applyTraitBias } from './traitActionBias';
 import { tickWoundHealing } from './wounds';
 import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 
@@ -355,7 +356,8 @@ export function tickAgentUtility(
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
-    const score = action.score(ctx);
+    const baseScore = action.score(ctx);
+    const score = applyTraitBias(goblin, action, baseScore);
     if (score > bestScore) {
       secondScore = bestScore;
       secondName = bestAction?.name ?? '';

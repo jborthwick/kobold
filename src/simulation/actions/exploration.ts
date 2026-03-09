@@ -10,6 +10,7 @@ import type { Action } from './types';
 // --- wander: default fallback exploration ---
 export const wander: Action = {
   name: 'wander',
+  tags: ['explore'],
   eligible: () => true,
   score: () => 0.05,
   execute: ({ goblin, grid, currentTick, onLog }) => {
@@ -87,6 +88,7 @@ const SEEK_WARMTH_SCORE_COLD          = 0.28;
 const SEEK_WARMTH_SCORE_DEFAULT       = 0.08;
 export const seekWarmth: Action = {
   name: 'seekWarmth',
+  tags: ['comfort'],
   eligible: ({ goblin, warmthField, grid, currentTick }) => {
     if (!warmthField) return false;
     // Use smoothed goblin.warmth to avoid single-step threshold crossings.

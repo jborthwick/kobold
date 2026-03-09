@@ -14,6 +14,7 @@ import type { Action } from './types';
 // --- forage: scan for food, pathfind, harvest ---
 export const forage: Action = {
   name: 'forage',
+  tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid }) => {
     const vision = effectiveVision(goblin);
@@ -171,6 +172,7 @@ export const forage: Action = {
 const DEPOSIT_KEEP_FOOD = 6; // food kept after deposit (prevents depositing everything)
 export const depositFood: Action = {
   name: 'depositFood',
+  tags: ['work'],
   eligible: ({ goblin, foodStockpiles }) => {
     if (goblin.inventory.food <= 0) return false;
     return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
@@ -200,6 +202,7 @@ export const depositFood: Action = {
 // --- withdrawFood: run to stockpile when hungry and low on food ---
 export const withdrawFood: Action = {
   name: 'withdrawFood',
+  tags: ['withdraw'],
   eligible: ({ goblin, foodStockpiles, mealStockpiles }) => {
     if (goblin.inventory.food >= 4 || goblin.inventory.meals >= 4) return false; // already have enough
     const hasMeals = mealStockpiles?.some(m => m.meals > 0) ?? false;

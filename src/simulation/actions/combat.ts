@@ -13,6 +13,7 @@ import type { Action } from './types';
 // --- fight: fighters hunt nearby adventurers ---
 export const fight: Action = {
   name: 'fight',
+  tags: ['combat'],
   eligible: ({ goblin, adventurers }) => {
     if (!adventurers || adventurers.length === 0) return false;
     const fleeAt = traitMod(goblin, 'fleeThreshold', 80);
@@ -63,6 +64,7 @@ export const fight: Action = {
 // --- seekSafety: flee to lowest-danger tile when threatened ---
 export const seekSafety: Action = {
   name: 'seekSafety',
+  tags: ['safety'],
   eligible: ({ goblin, dangerField }) => {
     if (!dangerField) return false;
     return getDanger(dangerField, goblin.x, goblin.y) > 60;

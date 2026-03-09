@@ -63,7 +63,7 @@ function nearestWater(
 
 export const fightFire: Action = {
   name: 'fightFire',
-
+  tags: ['fire', 'work'],
   eligible({ goblin, grid }) {
     // Only respond to fire within scan radius
     return nearestFire(goblin.x, goblin.y, grid, FIRE_SCAN_RADIUS) !== null;

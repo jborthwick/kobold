@@ -10,6 +10,7 @@ import type { Action } from './types';
 // --- share: gift food to a hungry neighbor ---
 export const share: Action = {
   name: 'share',
+  tags: ['share', 'social'],
   eligible: ({ goblin, goblins }) => {
     if (!goblins) return false;
     const shareThresh = traitMod(goblin, 'shareThreshold', 8);
@@ -72,6 +73,7 @@ export const share: Action = {
 // --- socialize: seek out a friendly goblin ---
 export const socialize: Action = {
   name: 'socialize',
+  tags: ['social'],
   eligible: ({ goblin, goblins }) => {
     if (goblin.social <= 30) return false;
     if (!goblins) return false;
@@ -126,6 +128,7 @@ export const socialize: Action = {
 // --- avoidRival: flee from nearby threats ---
 export const avoidRival: Action = {
   name: 'avoidRival',
+  tags: ['safety', 'social'],
   eligible: ({ goblin, goblins }) => {
     if (!goblins) return false;
     const avoidRadius = 3 + traitMod(goblin, 'wariness', 2);

@@ -10,6 +10,7 @@ import type { Action } from './types';
 // --- buildWall: any goblin can build walls around rooms ---
 export const buildWall: Action = {
   name: 'buildWall',
+  tags: ['work'],
   eligible: ({ rooms, oreStockpiles, goblin }) => {
     if (!rooms || rooms.length === 0) return false;
     // Need ore to build — either in stockpile or inventory
@@ -97,6 +98,7 @@ function getUnfurnishedKitchen(rooms: Room[] | undefined, grid: Tile[][]): Room 
 
 export const buildHearth: Action = {
   name: 'buildHearth',
+  tags: ['work', 'comfort'],
   eligible: ({ goblin, woodStockpiles, foodStockpiles, grid, currentTick, rooms }) => {
     const totalFood = foodStockpiles?.reduce((s, f) => s + f.food, 0) ?? 0;
     if (totalFood < 20) return false;

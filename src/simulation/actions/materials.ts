@@ -14,6 +14,7 @@ import type { Action } from './types';
 // --- mine: miners target ore tiles ---
 export const mine: Action = {
   name: 'mine',
+  tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, oreStockpiles }) => {
     const apt = ROLE_MINING_APT[goblin.role];
@@ -109,6 +110,7 @@ export const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 export const chop: Action = {
   name: 'chop',
+  tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, woodStockpiles }) => {
     const apt = ROLE_CHOP_APT[goblin.role];
@@ -213,6 +215,7 @@ export const chop: Action = {
 // --- depositOre: miners carry ore to stockpile ---
 export const depositOre: Action = {
   name: 'depositOre',
+  tags: ['work'],
   eligible: ({ goblin, oreStockpiles }) => {
     if (goblin.inventory.ore <= 0) return false;
     return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
@@ -241,6 +244,7 @@ export const depositOre: Action = {
 // --- depositWood: lumberjacks carry wood to stockpile ---
 export const depositWood: Action = {
   name: 'depositWood',
+  tags: ['work'],
   eligible: ({ goblin, woodStockpiles }) => {
     if (goblin.inventory.wood <= 0) return false;
     return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;

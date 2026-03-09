@@ -9,6 +9,7 @@ import type { Action } from './types';
 // --- commandMove: player override (always wins) ---
 export const commandMove: Action = {
   name: 'commandMove',
+  tags: ['player'],
   eligible: ({ goblin }) => goblin.commandTarget !== null,
   score: ({ goblin, adventurers }) => {
     // Drop to 0.8 during extreme starvation or active raid — survival instincts can override
@@ -32,6 +33,7 @@ export const commandMove: Action = {
 // --- eat: consume food from inventory, or graze from tile underfoot ---
 export const eat: Action = {
   name: 'eat',
+  tags: ['eat'],
   eligible: ({ goblin, grid }) => {
     if (goblin.inventory.food > 0 || goblin.inventory.meals > 0) return true;
     // Graze: standing on a forageable tile with food
@@ -80,6 +82,7 @@ export const eat: Action = {
 // --- rest: stay still, recover fatigue; warmth tiers bonus ---
 export const rest: Action = {
   name: 'rest',
+  tags: ['rest'],
   eligible: ({ goblin }) => goblin.hunger < 95,
   score: ({ goblin }) => {
     // Lower midpoint (50 instead of 60) makes resting more attractive earlier
