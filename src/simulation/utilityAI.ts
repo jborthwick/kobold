@@ -157,10 +157,8 @@ function updateNeeds(
   }
 
   // ── Fatigue ──────────────────────────────────────────────────────────────────
-  // Passive recovery of 0.5/tick. Actions that cost fatigue apply their drain inside
-  // execute(), not here. The 0.5 baseline is intentionally larger than the cold (0.25)
-  // and wound (0.05–0.30) penalties so recovery is always possible, just slower.
-  goblin.fatigue = Math.max(0, goblin.fatigue - 0.5);
+  // Passive recovery 0.08/tick so fatigue accumulates during activity and drains slowly when resting.
+  goblin.fatigue = Math.max(0, goblin.fatigue - 0.08);
   const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
     bruised: 0.30,
     leg: 0.15,
@@ -281,7 +279,7 @@ export function tickAgentUtility(
   const stumbleChance = ramp(goblin.fatigue, 70, 100) * 0.6 + 0.2;
   if (goblin.fatigue > 70 && Math.random() < stumbleChance) {
     goblin.task = 'exhausted…';
-    goblin.fatigue = Math.max(0, goblin.fatigue - 1.5); // forced rest, same recovery as the rest action
+    goblin.fatigue = Math.max(0, goblin.fatigue - 0.8); // forced rest
     return;
   }
 

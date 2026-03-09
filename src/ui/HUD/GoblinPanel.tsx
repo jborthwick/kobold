@@ -43,13 +43,18 @@ function traitColor(trait: GoblinTrait): string {
 }
 
 function Bar({
-  label, value, max, color,
-}: { label: string; value: number; max: number; color: string }) {
+  label, value, max, color, displayMax, showValue,
+}: { label: string; value: number; max: number; color: string; displayMax?: number; showValue?: boolean }) {
+  const effectiveMax = displayMax ?? max;
+  const pct = Math.min(100, (value / effectiveMax) * 100);
   return (
     <div style={{ marginBottom: 5 }}>
-      <div style={styles.barLabel}>{label}</div>
+      <div style={styles.barLabel}>
+        {label}
+        {showValue && <span style={{ color: '#888', fontWeight: 'normal', marginLeft: 4 }}>{value.toFixed(1)}</span>}
+      </div>
       <div style={styles.barTrack}>
-        <div style={{ ...styles.barFill, width: `${(value / max) * 100}%`, background: color }} />
+        <div style={{ ...styles.barFill, width: `${pct}%`, background: color }} />
       </div>
     </div>
   );
@@ -80,8 +85,8 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
       <Bar label="health" value={goblin.health}  max={goblin.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={goblin.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={goblin.morale}  max={100}             color="#3498db" />
-      <Bar label="fatigue" value={goblin.fatigue} max={100}            color="#9b59b6" />
-      <Bar label="social" value={goblin.social}  max={100}             color="#f39c12" />
+      <Bar label="fatigue" value={goblin.fatigue} max={100} showValue color="#9b59b6" />
+      <Bar label="social"  value={goblin.social}  max={100} showValue color="#f39c12" />
       <Bar label="warmth" value={goblin.warmth ?? 0} max={100}         color="#ff7733" />
       <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
         <span>🍄 {goblin.inventory.food.toFixed(1)}</span>

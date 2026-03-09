@@ -95,19 +95,19 @@ export const rest: Action = {
     const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;
     if (warmth >= 40) {
       // Sheltered by hearth — best recovery
-      goblin.fatigue = Math.max(0, goblin.fatigue - 2.5);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 1.4);
       accelerateHealing(goblin, 3);
       addThought(goblin, 'rested_by_hearth', currentTick);
       goblin.task = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
     } else if (warmth >= 20) {
       // Mild warmth — small bonus
-      goblin.fatigue = Math.max(0, goblin.fatigue - 2.0);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 1.1);
       accelerateHealing(goblin, 2);
       addThought(goblin, 'rested_near_warmth', currentTick);
       goblin.task = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
     } else {
       // Exposed — baseline
-      goblin.fatigue = Math.max(0, goblin.fatigue - 1.5);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 0.8);
       accelerateHealing(goblin, 2);
       addThought(goblin, 'slept_on_ground', currentTick);
       goblin.task = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
