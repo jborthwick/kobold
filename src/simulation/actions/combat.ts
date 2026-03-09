@@ -7,7 +7,7 @@ import { traitMod, pathNextStep, ROLE_COMBAT_APT } from '../agents';
 import { effectiveVision, isLegWoundSkip } from '../wounds';
 import { getDanger } from '../diffusion';
 import { grantXp } from '../skills';
-import { moveTo, fatigueRate } from './helpers';
+import { moveTo, fatigueRate, getOrSetMoveTarget } from './helpers';
 import type { Action } from './types';
 
 // --- fight: fighters hunt nearby adventurers ---
@@ -90,7 +90,7 @@ export const seekSafety: Action = {
 
     return sigmoid(currentDanger, 60, 0.12) * 0.65;
   },
-  execute: ({ goblin, grid, dangerField }) => {
+  execute: ({ goblin, grid, dangerField, currentTick }) => {
     if (!dangerField) return;
     const SCAN = Math.min(5, effectiveVision(goblin));
     let bestDanger = getDanger(dangerField, goblin.x, goblin.y);
@@ -106,7 +106,8 @@ export const seekSafety: Action = {
       }
     }
     if (bestTile) {
-      moveTo(goblin, bestTile, grid);
+      const dest = getOrSetMoveTarget(goblin, bestTile, currentTick, 20, 3);
+      moveTo(goblin, dest, grid);
       goblin.task = 'fleeing to safety';
     }
   },

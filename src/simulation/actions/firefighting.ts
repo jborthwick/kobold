@@ -14,7 +14,7 @@ import { TileType, type Tile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid } from '../utilityAI';
 import { effectiveVision } from '../wounds';
-import { moveTo, shouldLog, addWorkFatigue } from './helpers';
+import { moveTo, shouldLog, addWorkFatigue, getOrSetMoveTarget } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -108,7 +108,8 @@ export const fightFire: Action = {
           onLog?.(`💧 ${goblin.name} filled a bucket from the lake`, 'info');
         }
       } else {
-        moveTo(goblin, water, grid);
+        const dest = getOrSetMoveTarget(goblin, water, currentTick, 20, 1);
+        moveTo(goblin, dest, grid);
         goblin.task = `→ water (${dist} tiles)`;
       }
 
@@ -156,7 +157,8 @@ export const fightFire: Action = {
         }
 
       } else {
-        moveTo(goblin, fire, grid);
+        const dest = getOrSetMoveTarget(goblin, fire, currentTick, 20, 1);
+        moveTo(goblin, dest, grid);
         goblin.task = `→ fire (bucket ready, ${dist} tiles)`;
       }
     }

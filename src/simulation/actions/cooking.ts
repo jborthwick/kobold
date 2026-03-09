@@ -2,7 +2,7 @@ import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
+import { moveTo, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile, getOrSetMoveTarget } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';
@@ -94,7 +94,7 @@ export const cook: Action = {
     },
 
     execute: (ctx) => {
-        const { goblin, grid, rooms, foodStockpiles, woodStockpiles, onLog } = ctx;
+        const { goblin, grid, rooms, foodStockpiles, woodStockpiles, onLog, currentTick } = ctx;
         const kitchen = rooms!.find(r => r.type === 'kitchen');
         if (!kitchen) return;
 
@@ -103,8 +103,9 @@ export const cook: Action = {
             // Find a walkable spot inside the kitchen
             const targetX = kitchen.x + Math.floor(kitchen.w / 2);
             const targetY = kitchen.y + Math.floor(kitchen.h / 2);
+            const dest = getOrSetMoveTarget(goblin, { x: targetX, y: targetY }, currentTick, 20, 2);
 
-            moveTo(goblin, { x: targetX, y: targetY }, grid);
+            moveTo(goblin, dest, grid);
             goblin.task = '→ kitchen';
             return;
         }

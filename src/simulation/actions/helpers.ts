@@ -35,6 +35,24 @@ export function fatigueRate(goblin: Goblin): number {
   return traitMod(goblin, 'fatigueRate', 1.0);
 }
 
+/** Returns a committed movement target, or scanned target if expired/arrived. */
+export function getOrSetMoveTarget(
+  goblin: Goblin,
+  newTarget: { x: number; y: number },
+  currentTick: number,
+  expiry = 20,      // ticks before forced re-scan
+  arrivalRadius = 0 // Chebyshev distance considered "arrived"
+): { x: number; y: number } {
+  const t = goblin.moveTarget;
+  const arrived = t && Math.max(Math.abs(goblin.x - t.x), Math.abs(goblin.y - t.y)) <= arrivalRadius;
+  if (t && !arrived && currentTick < (goblin.moveExpiry ?? 0)) {
+    return t;  // committed — keep going
+  }
+  goblin.moveTarget = newTarget;
+  goblin.moveExpiry = currentTick + expiry;
+  return newTarget;
+}
+
 export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: Tile[][]): void {
   // Leg wound: 40% chance to skip this tick's movement (limp)
   if (isLegWoundSkip(goblin)) return;

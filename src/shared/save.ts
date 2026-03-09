@@ -55,6 +55,8 @@ export function loadGame(): SaveData | null {
       if (d.knownHearthSites === undefined) d.knownHearthSites = [];
       if (d.carryingWater === undefined) d.carryingWater = false;
       if (d.onFire === undefined) d.onFire = false;
+      if (d.moveTarget === undefined) d.moveTarget = null;
+      if (d.moveExpiry === undefined) d.moveExpiry = 0;
       // wound is optional (undefined = healthy) — no migration needed
       // Iteration 17: split inventory.materials → inventory.ore + inventory.wood
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -107,6 +107,8 @@ export interface Goblin {
   memories: ActiveMemory[];  // rimworld-style staged accumulation
   wanderTarget: { x: number; y: number } | null;  // persistent explore waypoint
   wanderExpiry: number;           // tick at which to repick a new wander waypoint
+  moveTarget?: { x: number; y: number } | null;  // committed nav waypoint (cooking, flee, firefighting)
+  moveExpiry?: number;                             // tick at which to re-pick a new target
   knownFoodSites: ResourceSite[];   // remembered food patches (cap: 5)
   knownOreSites: ResourceSite[];   // remembered ore veins (cap: 5)
   knownWoodSites: ResourceSite[];   // remembered forest wood sites (cap: 5)
