@@ -72,9 +72,12 @@ let fireTilesTotal = 0;  // cumulative tiles that burned or were extinguished
 let fireTilesRainedOut = 0;  // tiles extinguished by rain
 
 function normalizeTaskLabel(task: string): string {
-  return task.startsWith('→')
-    ? 'traveling'
-    : task.replace(/\s*[(→].*/, '').trim() || 'idle';
+  if (task.startsWith('→')) {
+    // Extract destination type: "→ kitchen", "→ water", "→ fire", "→ ore", etc.
+    const match = task.match(/→\s*([a-z]+)/);
+    return match ? `traveling to ${match[1]}` : 'traveling';
+  }
+  return task.replace(/\s*[(→].*/, '').trim() || 'idle';
 }
 
 function recordAction(goblin: Goblin, task: string) {
