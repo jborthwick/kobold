@@ -27,7 +27,8 @@ export const mine: Action = {
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
     if (!target) {
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * oreNeed;
+      // No ore in view: only score if we have remembered sites, and keep score modest so other actions get share
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * apt * oreNeed;
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * oreNeed;

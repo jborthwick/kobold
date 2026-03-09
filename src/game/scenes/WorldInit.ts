@@ -106,7 +106,8 @@ export function initializeWorld(scene: WorldScene) {
   scene.floorLayer = scene.map.createBlankLayer('floor', tileset)!.setDepth(0);
   scene.objectLayer = scene.map.createBlankLayer('objects', tileset)!.setDepth(2);
 
-  scene.ambientGfx = scene.add.graphics().setDepth(1);
+  // Ambient (danger/warmth) glow above all tile layers so trees don't hide it
+  scene.ambientGfx = scene.add.graphics().setDepth(3);
   scene.overlayGfx = scene.add.graphics().setDepth(10);
   scene.flagGfx = scene.add.graphics().setDepth(11);
   scene.selectionGfx = scene.add.graphics().setDepth(12);
