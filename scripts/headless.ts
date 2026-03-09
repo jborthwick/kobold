@@ -59,6 +59,13 @@ const raidLog: { tick: number; count: number }[] = [];
 const goalLog: { tick: number; type: string; generation: number }[] = [];
 const warnLog: { tick: number; name: string; message: string }[] = [];
 const fireLog: { tick: number; message: string }[] = [];
+const oscillationLog: Array<{
+  tick: number;
+  name: string;
+  role: string;
+  task: string;
+  positions: string[];
+}> = [];
 let fireTilesMax = 0;  // peak simultaneous fire tile count
 let fireTilesTotal = 0;  // cumulative tiles that burned or were extinguished
 let fireTilesRainedOut = 0;  // tiles extinguished by rain
@@ -187,6 +194,12 @@ const dangerPrev = createDangerField();
 
 setNextEventTick(300 + Math.floor(Math.random() * 300));
 
+// ── Oscillation tracking ──────────────────────────────────────────────────────
+const posHistory = new Map<string, Array<{x: number, y: number}>>();
+const HISTORY_LEN = 20;  // ticks of history to keep
+const OSCILLATION_THRESHOLD = 10;  // min ticks in loop to flag
+const MAX_UNIQUE_POSITIONS = 3;  // flag if cycling among ≤ this many tiles
+
 // ── Tick loop ─────────────────────────────────────────────────────────────────
 
 const t0 = Date.now();
@@ -226,6 +239,30 @@ for (let tick = 1; tick <= TICKS; tick++) {
     if (wasAlive && !g.alive) {
       deathLog.push({ tick, name: g.name, cause: g.causeOfDeath ?? 'unknown' });
       pendingSuccessions.push({ deadGoblinId: g.id, spawnAtTick: tick + SUCCESSION_DELAY });
+    }
+  }
+
+  // Record goblin positions and detect oscillation
+  for (const g of goblins) {
+    if (!g.alive) continue;
+    const hist = posHistory.get(g.id) ?? [];
+    hist.push({ x: g.x, y: g.y });
+    if (hist.length > HISTORY_LEN) hist.shift();
+    posHistory.set(g.id, hist);
+
+    // Check for oscillation: if recent history cycles among ≤ MAX_UNIQUE_POSITIONS
+    if (hist.length >= OSCILLATION_THRESHOLD) {
+      const recent = hist.slice(-OSCILLATION_THRESHOLD);
+      const unique = new Set(recent.map(p => `${p.x},${p.y}`));
+      if (unique.size <= MAX_UNIQUE_POSITIONS) {
+        oscillationLog.push({
+          tick,
+          name: g.name,
+          role: g.role,
+          task: g.task,
+          positions: [...unique],
+        });
+      }
     }
   }
 
@@ -466,10 +503,32 @@ if (traitsPresent.length > 0) {
   }
 }
 
+// Oscillation summary
+const oscGroups = new Map<string, number>(); // goblin name → count
+for (const e of oscillationLog) {
+  oscGroups.set(e.name, (oscGroups.get(e.name) ?? 0) + 1);
+}
+if (oscGroups.size > 0) {
+  console.log('\n=== OSCILLATION LOG ===');
+  // Dedupe: only print first occurrence per goblin
+  const seen = new Map<string, typeof oscillationLog[0]>();
+  for (const e of oscillationLog) {
+    if (!seen.has(e.name)) seen.set(e.name, e);
+  }
+  for (const [name, count] of [...oscGroups.entries()].sort((a, b) => b[1] - a[1])) {
+    const first = seen.get(name)!;
+    console.log(
+      `  ${name} (${first.role}): oscillated ${count} ticks | task="${first.task}" | tiles=[${first.positions.join(', ')}]`
+    );
+  }
+} else {
+  console.log('\n✓ No oscillation detected.');
+}
+
 if (DUMP_JSON) {
   const outPath = `headless-${seed}-${TICKS}.json`;
   const fs = await import('node:fs/promises');
-  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, actionCountsByTrait, warnLog, fireLog, fireTilesMax, fireTilesTotal }, null, 2));
+  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, actionCountsByTrait, warnLog, fireLog, fireTilesMax, fireTilesTotal, oscillationLog }, null, 2));
   console.log(`\n JSON dumped → ${outPath}`);
 }
 
