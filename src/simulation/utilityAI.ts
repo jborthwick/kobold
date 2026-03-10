@@ -347,7 +347,7 @@ export function tickAgentUtility(
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
-  const MOMENTUM_BONUS = 0.30;  // single tune point for action stickiness
+  const MOMENTUM_BONUS = 0.25;  // single tune point for action stickiness
   let bestAction: Action | null = null;
   let bestScore = -1;
   let secondName = '';
