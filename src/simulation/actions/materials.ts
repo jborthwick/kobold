@@ -3,9 +3,9 @@ import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import {
   bestMaterialTile, bestWoodTile, recordSite, SITE_RECORD_THRESHOLD,
-  ROLE_MINING_APT, ROLE_CHOP_APT, traitMod,
+  traitMod,
 } from '../agents';
-import { grantXp, skillOreBonus, skillYieldBonus } from '../skills';
+import { grantXp, skillOreBonus, skillChopBonus } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestOreStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
@@ -17,7 +17,6 @@ export const mine: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, oreStockpiles }) => {
-    const apt = ROLE_MINING_APT[goblin.role];
     // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
     const maxOre = oreStockpiles?.reduce((s, p) => s + p.maxOre, 0) ?? 1;
@@ -29,10 +28,10 @@ export const mine: Action = {
     const target = bestMaterialTile(goblin, grid, radius);
     if (!target) {
       // No ore in view: only score if we have remembered sites, and keep score modest so other actions get share
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * apt * oreNeed;
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * oreNeed;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * oreNeed;
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * oreNeed;
     return Math.min(1.0, base);
   },
   execute: (ctx) => {
@@ -63,7 +62,7 @@ export const mine: Action = {
           }
           goblin.inventory.ore += Math.min(mined, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
           addWorkFatigue(goblin);
-          grantXp(goblin, currentTick, onLog);
+          grantXp(goblin, 'mine', currentTick, onLog);
           addThought(goblin, 'mined_ore', currentTick);
           goblin.task = `mining (ore: ${here.materialValue.toFixed(0)})`;
         } else {
@@ -112,7 +111,6 @@ export const chop: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, woodStockpiles }) => {
-    const apt = ROLE_CHOP_APT[goblin.role];
     // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
     const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
     const maxWood = woodStockpiles?.reduce((s, p) => s + p.maxWood, 0) ?? 1;
@@ -123,10 +121,10 @@ export const chop: Action = {
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * apt * woodNeed;
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * woodNeed;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * apt * woodNeed;
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * woodNeed;
     return Math.min(1.0, base);
   },
   execute: (ctx) => {
@@ -149,8 +147,7 @@ export const chop: Action = {
           (here.type === TileType.TreeStump && here.materialValue >= 1);
         if (isWoodSource && here.materialValue >= 1) {
           const hadWood = here.materialValue;
-          const roleChopBonus = goblin.role === 'lumberjack' ? 15 : 0;
-          const baseChop = 5 + roleChopBonus + traitMod(goblin, 'chopPower', 0) + skillYieldBonus(goblin);
+          const baseChop = 5 + traitMod(goblin, 'chopPower', 0) + skillChopBonus(goblin);
           const chopYield = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
           const chopped = Math.min(hadWood, chopYield);
           here.materialValue = Math.max(0, hadWood - chopped);
@@ -172,7 +169,7 @@ export const chop: Action = {
           }
           goblin.inventory.wood += Math.min(chopped, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
           addWorkFatigue(goblin);
-          grantXp(goblin, currentTick, onLog);
+          grantXp(goblin, 'chop', currentTick, onLog);
         } else {
           goblin.task = 'logging… looking for tree';
         }

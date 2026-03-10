@@ -1,35 +1,11 @@
 /**
- * Roles, traits, and display: ROLE_*_APT, TRAIT_MODS, traitMod, getTraitDisplay, getRoleDisplay,
- * ROLE_ORDER, ROLE_STATS, GOBLIN_TRAITS, getGoblinBios, getGoblinGoals.
+ * Traits and display: TRAIT_MODS, traitMod, getTraitDisplay,
+ * GOBLIN_TRAITS, getGoblinBios, getGoblinGoals.
+ * Roles removed — all goblins have the same base stats; skills earned organically.
  */
 
-import type { Goblin, GoblinRole, GoblinTrait } from '../../shared/types';
+import type { Goblin, GoblinTrait } from '../../shared/types';
 import { getActiveFaction } from '../../shared/factions';
-
-// Role assignment order and vision ranges
-export const ROLE_ORDER: GoblinRole[] = ['forager', 'miner', 'scout', 'lumberjack', 'fighter'];
-
-export const ROLE_COMBAT_APT: Record<GoblinRole, number> = {
-  fighter:    1.0,
-  scout:      0.25,
-  miner:      0.15,
-  forager:    0.15,
-  lumberjack: 0.15,
-};
-export const ROLE_MINING_APT: Record<GoblinRole, number> = {
-  miner:      1.0,
-  fighter:    0.15,
-  scout:      0.15,
-  forager:    0.10,
-  lumberjack: 0.15,
-};
-export const ROLE_CHOP_APT: Record<GoblinRole, number> = {
-  lumberjack: 1.0,
-  scout:      0.15,
-  miner:      0.10,
-  forager:    0.10,
-  fighter:    0.10,
-};
 
 export interface TraitMods {
   shareThreshold?: number;
@@ -78,12 +54,6 @@ export const GOBLIN_TRAIT_DISPLAY = new Proxy({} as Record<GoblinTrait, string>,
   get: (_target, prop: string) => getActiveFaction().traitDisplay[prop as GoblinTrait],
 });
 
-export function getRoleDisplay(): Record<GoblinRole, string> {
-  return getActiveFaction().roleDisplay;
-}
-export const GOBLIN_ROLE_DISPLAY = new Proxy({} as Record<GoblinRole, string>, {
-  get: (_target, prop: string) => getActiveFaction().roleDisplay[prop as GoblinRole],
-});
 
 export const GOBLIN_TRAITS: GoblinTrait[] = [
   'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
@@ -96,10 +66,3 @@ export function getGoblinGoals(): string[] {
   return getActiveFaction().goals;
 }
 
-export const ROLE_STATS: Record<GoblinRole, { visionMin: number; visionMax: number; maxHealth: number }> = {
-  forager:    { visionMin: 5, visionMax: 8,  maxHealth: 100 },
-  miner:      { visionMin: 4, visionMax: 6,  maxHealth: 100 },
-  scout:      { visionMin: 7, visionMax: 12, maxHealth: 100 },
-  fighter:    { visionMin: 4, visionMax: 7,  maxHealth: 130 },
-  lumberjack: { visionMin: 5, visionMax: 8,  maxHealth: 100 },
-};

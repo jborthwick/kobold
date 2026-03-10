@@ -76,8 +76,14 @@ export interface MemoryEntry {
   outcome?: string;   // backfilled by VERIFY step (~40 ticks later)
 }
 
-// Agent role — assigned at spawn, permanent
-export type GoblinRole = 'forager' | 'miner' | 'scout' | 'fighter' | 'lumberjack';
+// ─ Skills system (replacing roles) ─────────────────────────────────────────
+export interface SkillSet {
+  forage: number;  // XP accumulated
+  mine: number;
+  chop: number;
+  combat: number;
+  scout: number;
+}
 
 // Injury system — single wound slot, heals over time
 export type WoundType = 'bruised' | 'leg' | 'arm' | 'eye';
@@ -114,7 +120,6 @@ export interface Goblin {
   knownWoodSites: ResourceSite[];   // remembered forest wood sites (cap: 5)
   knownHearthSites: ResourceSite[];   // remembered hearth locations (cap: 5)
   homeTile: { x: number; y: number };  // fort/stockpile center — the colony's home base
-  role: GoblinRole;
   relations: Record<string, number>;  // keyed by goblin.id; 0–100 (50 = neutral)
   trait: GoblinTrait;  // permanent personality trait
   bio: string;      // quirky backstory blurb
@@ -130,8 +135,7 @@ export interface Goblin {
   carryingWater?: boolean;                 // true when goblin has fetched water and is heading to douse fire
   onFire?: boolean;                 // goblin is currently burning
   onFireTick?: number;                  // tick when they caught fire
-  skillXp: number;      // lifetime XP for role skill (0+)
-  skillLevel: number;      // derived: floor(sqrt(xp / 10)) — cached, recomputed on XP grant
+  skills: SkillSet;      // XP per skill category (forage, mine, chop, combat, scout)
   wound?: Wound;       // active wound (undefined = healthy); heals at wound.healTick
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
   cookingProgress?: number;     // ticks spent accumulating progress while cooking

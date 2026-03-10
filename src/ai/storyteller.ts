@@ -100,7 +100,7 @@ export async function callStorytellerLLM(
     : tension < 30 ? 'hopeful, triumphant, warm'
       : 'neutral, matter-of-fact';
 
-  const roster = alive.map(d => `${d.name} (${d.role}, ${d.trait})`).join(', ');
+  const roster = alive.map(d => `${d.name} (${d.trait})`).join(', ');
   const eventBlock = significantEvents.length > 0
     ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
     : '\nA quiet chapter with no major events.';

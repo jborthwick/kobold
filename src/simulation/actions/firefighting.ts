@@ -14,7 +14,7 @@ import { TileType, type Tile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid } from '../utilityAI';
 import { effectiveVision } from '../wounds';
-import { moveTo, moveToward, shouldLog, addWorkFatigue } from './helpers';
+import { moveToward, shouldLog, addWorkFatigue } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 

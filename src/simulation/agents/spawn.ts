@@ -6,10 +6,7 @@ import type { Goblin, Tile, MemoryEntry } from '../../shared/types';
 import { INITIAL_GOBLINS } from '../../shared/constants';
 import { getActiveFaction } from '../../shared/factions';
 import { isWalkable } from '../world';
-import { xpToLevel } from '../skills';
 import {
-  ROLE_ORDER,
-  ROLE_STATS,
   TRAIT_MODS,
   GOBLIN_TRAITS,
   getGoblinBios,
@@ -42,11 +39,9 @@ export function spawnGoblins(
       y = spawnZone.y + rand(0, spawnZone.h - 1);
     } while (!isWalkable(grid, x, y));
 
-    const role = ROLE_ORDER[i % ROLE_ORDER.length];
-    const stats = ROLE_STATS[role];
     const trait = GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)];
     const healthBonus = TRAIT_MODS[trait]?.healthBonus ?? 0;
-    const maxHealth = Math.max(10, stats.maxHealth + healthBonus);
+    const maxHealth = Math.max(10, 100 + healthBonus);
 
     const factionNames = getActiveFaction().names;
     const baseName = factionNames[i % factionNames.length];
@@ -60,12 +55,11 @@ export function spawnGoblins(
       maxHealth,
       hunger:        rand(10, 30),
       metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
-      vision:        rand(stats.visionMin, stats.visionMax),
+      vision:        rand(5, 8),
       inventory:     { food: rand(8, 15), meals: 0, ore: 0, wood: 0 },
       morale:        70 + rand(0, 20),
       alive:         true,
       task:          'idle',
-      role,
       commandTarget: null,
       memory:        [],
       thoughts:      [],
@@ -86,8 +80,7 @@ export function spawnGoblins(
       social:          0,
       lastSocialTick:  0,
       lastLoggedTicks:  { morale_high: 0 },
-      skillXp:         0,
-      skillLevel:      0,
+      skills:          { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 },
     });
   }
   return goblins;
@@ -107,11 +100,9 @@ export function spawnSuccessor(
   const generation = dead.generation + 1;
   const name = generation === 1 ? baseName : `${baseName} ${toRoman(generation)}`;
 
-  const role = ROLE_ORDER[Math.floor(Math.random() * ROLE_ORDER.length)];
-  const stats = ROLE_STATS[role];
   const trait = GOBLIN_TRAITS[Math.floor(Math.random() * GOBLIN_TRAITS.length)];
   const healthBonus = TRAIT_MODS[trait]?.healthBonus ?? 0;
-  const maxHealth = Math.max(10, stats.maxHealth + healthBonus);
+  const maxHealth = Math.max(10, 100 + healthBonus);
 
   let x: number, y: number;
   do {
@@ -152,6 +143,15 @@ export function spawnSuccessor(
     relations[id2] = Math.round(50 + (score - 50) * 0.5);
   }
 
+  // Inherit 25% of XP across all skills from deceased
+  const inheritedSkills = {
+    forage: Math.floor(dead.skills.forage * 0.25),
+    mine:   Math.floor(dead.skills.mine * 0.25),
+    chop:   Math.floor(dead.skills.chop * 0.25),
+    combat: Math.floor(dead.skills.combat * 0.25),
+    scout:  Math.floor(dead.skills.scout * 0.25),
+  };
+
   return {
     id:            `goblin-${Date.now()}`,
     name,
@@ -162,12 +162,11 @@ export function spawnSuccessor(
     maxHealth,
     hunger:        rand(10, 30),
     metabolism:    Math.round((0.15 + Math.random() * 0.2) * 100) / 100,
-    vision:        rand(stats.visionMin, stats.visionMax),
+    vision:        rand(5, 8),
     inventory:     { food: rand(5, 12), meals: 0, ore: 0, wood: 0 },
     morale:        60 + rand(0, 20),
     alive:         true,
     task:          'just arrived',
-    role,
     commandTarget:   null,
     memory:          inheritedMemory,
     thoughts:        [],
@@ -188,7 +187,6 @@ export function spawnSuccessor(
     social:          0,
     lastSocialTick:  0,
     lastLoggedTicks:  { morale_high: 0 },
-    skillXp:         Math.floor(dead.skillXp * 0.25),
-    skillLevel:      xpToLevel(Math.floor(dead.skillXp * 0.25)),
+    skills:          inheritedSkills,
   };
 }

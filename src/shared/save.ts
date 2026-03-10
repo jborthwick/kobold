@@ -48,8 +48,6 @@ export function loadGame(): SaveData | null {
     const data = JSON.parse(s) as SaveData;
     // Backward compat: add skill/wound fields if missing (pre-Iteration 10 saves)
     for (const d of data.goblins) {
-      if (d.skillXp === undefined) d.skillXp = 0;
-      if (d.skillLevel === undefined) d.skillLevel = 0;
       if (d.thoughts === undefined) d.thoughts = [];
       if (d.memories === undefined) d.memories = [];
       if (d.knownHearthSites === undefined) d.knownHearthSites = [];
@@ -63,14 +61,33 @@ export function loadGame(): SaveData | null {
       // Iteration 17: split inventory.materials → inventory.ore + inventory.wood
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const inv = d.inventory as any;
+      const role = (d as any).role as string | undefined;
       if (inv.materials !== undefined) {
-        d.inventory.ore = d.role === 'miner' ? (inv.materials ?? 0) : 0;
-        d.inventory.wood = d.role === 'lumberjack' ? (inv.materials ?? 0) : 0;
+        d.inventory.ore = role === 'miner' ? (inv.materials ?? 0) : 0;
+        d.inventory.wood = role === 'lumberjack' ? (inv.materials ?? 0) : 0;
         delete inv.materials;
       }
       if (d.inventory.ore === undefined) d.inventory.ore = 0;
       if (d.inventory.wood === undefined) d.inventory.wood = 0;
       if (d.inventory.meals === undefined) d.inventory.meals = 0;
+
+      // Migration: convert old role + skillXp to new skills SkillSet
+      if ((d as any).role !== undefined) {
+        const oldSkillXp = (d as any).skillXp ?? 0;
+        const roleSkillMap: Record<string, keyof typeof d.skills> = {
+          forager: 'forage', miner: 'mine', lumberjack: 'chop',
+          fighter: 'combat', scout: 'scout'
+        };
+        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 };
+        const skillKey = roleSkillMap[role ?? ''];
+        if (skillKey) d.skills[skillKey] = oldSkillXp;
+        delete (d as any).role;
+        delete (d as any).skillXp;
+        delete (d as any).skillLevel;
+      } else if (!d.skills) {
+        // Fresh save with new format
+        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 };
+      }
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];

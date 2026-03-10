@@ -6,7 +6,7 @@ import { sigmoid, inverseSigmoid, ramp } from '../utilityAI';
 import {
   bestFoodTile, recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS, traitMod,
 } from '../agents';
-import { grantXp, skillYieldBonus } from '../skills';
+import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile } from './helpers';
 import type { Action } from './types';
@@ -61,10 +61,10 @@ export const forage: Action = {
       const here = grid[goblin.y][goblin.x];
 
       // Contest yield — if a higher-priority goblin is on the same tile, yield.
-      // Priority = hunger + skillLevel * 5 so experienced foragers can hold their tile
+      // Priority = hunger + forage skill level * 5 so experienced foragers can hold their tile
       // against a slightly hungrier but unskilled rival (skill = social status).
       if (goblins) {
-        const contestPriority = (g: typeof goblin) => g.hunger + g.skillLevel * 5;
+        const contestPriority = (g: typeof goblin) => g.hunger + xpToLevel(g.skills.forage) * 5;
         const rival = goblins.find(d =>
           d.alive && d.id !== goblin.id &&
           d.x === goblin.x && d.y === goblin.y &&
@@ -100,9 +100,8 @@ export const forage: Action = {
       // Harvest
       const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
       if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
-        // Role provides base gathering bonus; trait can further augment it
-        const roleBonus = goblin.role === 'forager' ? 1 : 0;
-        const gatherBonus = roleBonus + traitMod(goblin, 'gatheringPower', 0);
+        // Trait can augment gathering power; skill yield bonus from forage skill level
+        const gatherBonus = traitMod(goblin, 'gatheringPower', 0);
         const depletionRate = 5 + gatherBonus;
         const baseYield = 1 + gatherBonus + skillYieldBonus(goblin);
         const moraleScale = 0.5 + (goblin.morale / 100) * 0.5;
@@ -116,8 +115,8 @@ export const forage: Action = {
         const amount = Math.min(harvestYield, depleted, headroom);
         goblin.inventory.food += amount;
         addWorkFatigue(goblin);
-        // Forager XP — grant on successful harvest
-        if (goblin.role === 'forager') grantXp(goblin, currentTick, onLog);
+        // Forage XP — grant on successful harvest
+        grantXp(goblin, 'forage', currentTick, onLog);
         goblin.task = `harvesting (food: ${goblin.inventory.food.toFixed(0)})`;
       } else {
         goblin.task = `foraging → (${foodTarget.x},${foodTarget.y})`;

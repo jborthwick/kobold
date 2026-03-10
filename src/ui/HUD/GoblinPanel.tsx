@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import { getTraitDisplay, getRoleDisplay } from '../../simulation/agents';
+import { getTraitDisplay } from '../../simulation/agents';
+import { topSkill } from '../../simulation/skills';
 import { THOUGHT_DEFS, MEMORY_DEFS } from '../../simulation/mood';
-import type { GameState, Goblin, GoblinRole, GoblinTrait } from '../../shared/types';
+import type { GameState, Goblin, GoblinTrait } from '../../shared/types';
 
 function topRelation(
   goblin: Goblin,
@@ -18,14 +19,6 @@ function topRelation(
   if (mode === 'ally'  && top.score <= 55) return null;
   if (mode === 'rival' && top.score >= 45) return null;
   return top;
-}
-
-function roleColor(role: GoblinRole): string {
-  return role === 'forager'    ? '#56d973'
-       : role === 'miner'      ? '#ff8800'
-       : role === 'fighter'    ? '#e74c3c'
-       : role === 'lumberjack' ? '#8bc34a'
-       : '#7ec8e3';
 }
 
 const TRAIT_COLORS: Record<GoblinTrait, string> = {
@@ -68,7 +61,11 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
     <div style={{ ...styles.panel, ...(!goblin.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{goblin.name}</div>
       {goblin.alive
-        ? <div style={{ color: roleColor(goblin.role), fontSize: 10, marginBottom: 4 }}>[{getRoleDisplay()[goblin.role]}]</div>
+        ? (() => {
+            const top = topSkill(goblin);
+            const skillDisplay = top ? `[${top.skill.toUpperCase()} Lv.${top.level}]` : '[no skills]';
+            return <div style={{ color: '#ffd700', fontSize: 10, marginBottom: 4 }}>{skillDisplay}</div>;
+          })()
         : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>
             [DECEASED{goblin.causeOfDeath ? ` — ${goblin.causeOfDeath}` : ''}]
           </div>
@@ -97,13 +94,10 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
           <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.wood.toFixed(1)}</span>
         )}
         {goblin.inventory.meals > 0 && (
-          <span style={{ color: '#ffbb88' }}>🍽 {goblin.inventory.meals.toFixed(0)}</span>
+          <span style={{ color: '#ffbb88' }}>🍽 {goblin.inventory.meals.toFixed(1)}</span>
         )}
         {goblin.adventurerKills > 0 && (
           <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
-        )}
-        {(goblin.skillLevel ?? 0) > 0 && (
-          <span style={{ color: '#ffd700' }}>⭐ Lv.{goblin.skillLevel} {goblin.role}</span>
         )}
       </div>
       {goblin.wound && (

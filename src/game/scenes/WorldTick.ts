@@ -6,6 +6,7 @@ import { tickWeather, growbackModifier, metabolismModifier } from '../../simulat
 import { findHearths, computeWarmth, computeDanger, updateTraffic } from '../../simulation/diffusion';
 import { tickAgentUtility } from '../../simulation/utilityAI';
 import { SUCCESSION_DELAY, spawnSuccessor } from '../../simulation/agents';
+import { topSkill } from '../../simulation/skills';
 import { growback } from '../../simulation/world';
 import { tickBurningGoblins, tickFire } from '../../simulation/fire';
 import { tickPooling } from '../../simulation/pooling';
@@ -250,7 +251,11 @@ export function gameTick(scene: WorldScene) {
             tick: scene.tick,
             goblinId: successor.id,
             goblinName: successor.name,
-            message: `arrives to take ${dead.name} 's place. [${successor.role.toUpperCase()}]`,
+            message: (() => {
+                const skill = topSkill(successor);
+                const skillLabel = skill ? `[${skill.skill.toUpperCase()} Lv.${skill.level}]` : '';
+                return `arrives to take ${dead.name}'s place. ${skillLabel}`;
+            })(),
             level: 'info',
         });
 

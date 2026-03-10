@@ -2,7 +2,7 @@ import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveTo, moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
+import { moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';

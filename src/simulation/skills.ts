@@ -1,5 +1,6 @@
 /**
- * Skills & XP system — one skill per role, XP accrues on primary actions.
+ * Skills & XP system — all goblins have the same skill slots.
+ * XP accrues per action type; no role-based specialization.
  *
  * Level = floor(sqrt(xp / 10)):
  *   Level 0 →  1 at  10 XP
@@ -12,7 +13,7 @@
  * automatically because they read the same stat fields.
  */
 
-import type { Goblin } from '../shared/types';
+import type { Goblin, SkillSet } from '../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -23,42 +24,68 @@ export function xpToLevel(xp: number): number {
 }
 
 /**
- * Grant 1 XP to the goblin's role skill, recompute level.
- * Returns true if the goblin leveled up (caller may want to log).
+ * Grant 1 XP to a specific skill.
+ * Returns true if the goblin leveled up in that skill (caller may want to log).
  */
-export function grantXp(goblin: Goblin, _tick: number, onLog?: LogFn): boolean {
-  goblin.skillXp += 1;
-  const newLevel = xpToLevel(goblin.skillXp);
-  if (newLevel > goblin.skillLevel) {
-    goblin.skillLevel = newLevel;
-    onLog?.(`⭐ leveled up to ${goblin.role} Lv.${newLevel}!`, 'info');
+export function grantXp(
+  goblin: Goblin,
+  skill: keyof SkillSet,
+  _tick: number,
+  onLog?: LogFn
+): boolean {
+  const oldLevel = xpToLevel(goblin.skills[skill]);
+  goblin.skills[skill] += 1;
+  const newLevel = xpToLevel(goblin.skills[skill]);
+
+  if (newLevel > oldLevel) {
+    onLog?.(`⭐ ${skill} Lv.${newLevel}!`, 'info');
     return true;
   }
   return false;
 }
 
-// ── Role-specific bonuses ───────────────────────────────────────────────────
+// ── Skill-based bonuses ────────────────────────────────────────────────────
 
-/** Bonus harvest yield for foragers/lumberjacks: +0.3 per skill level. */
+/** Bonus harvest yield for foragers: +0.3 per forage skill level. */
 export function skillYieldBonus(goblin: Goblin): number {
-  if (goblin.role !== 'forager' && goblin.role !== 'lumberjack') return 0;
-  return goblin.skillLevel * 0.3;
+  return xpToLevel(goblin.skills.forage) * 0.3;
 }
 
-/** Bonus ore yield for miners: +0.3 per skill level. */
+/** Bonus ore yield for miners: +0.3 per mine skill level. */
 export function skillOreBonus(goblin: Goblin): number {
-  if (goblin.role !== 'miner') return 0;
-  return goblin.skillLevel * 0.3;
+  return xpToLevel(goblin.skills.mine) * 0.3;
 }
 
-/** Bonus combat damage for fighters: +3 per skill level. */
+/** Bonus chop yield for lumberjacks: +0.3 per chop skill level. */
+export function skillChopBonus(goblin: Goblin): number {
+  return xpToLevel(goblin.skills.chop) * 0.3;
+}
+
+/** Bonus combat damage for fighters: +3 per combat skill level. */
 export function skillDamageBonus(goblin: Goblin): number {
-  if (goblin.role !== 'fighter') return 0;
-  return goblin.skillLevel * 3;
+  return xpToLevel(goblin.skills.combat) * 3;
 }
 
-/** Bonus vision radius for scouts: +1 per skill level (integer). */
+/** Bonus vision radius for scouts: +1 per scout skill level (integer). */
 export function skillVisionBonus(goblin: Goblin): number {
-  if (goblin.role !== 'scout') return 0;
-  return goblin.skillLevel;
+  return xpToLevel(goblin.skills.scout);
+}
+
+/**
+ * Return the goblin's highest skill name and level (for HUD display).
+ * If all skills are 0, returns null.
+ */
+export function topSkill(goblin: Goblin): { skill: keyof SkillSet; level: number } | null {
+  let bestSkill: keyof SkillSet | null = null;
+  let bestLevel = 0;
+
+  for (const skill of ['forage', 'mine', 'chop', 'combat', 'scout'] as const) {
+    const level = xpToLevel(goblin.skills[skill]);
+    if (level > bestLevel) {
+      bestSkill = skill;
+      bestLevel = level;
+    }
+  }
+
+  return bestSkill ? { skill: bestSkill, level: bestLevel } : null;
 }

@@ -5,7 +5,7 @@
  * names, bios, goals, trait/role display labels, LLM prompt tone, and UI text.
  */
 
-import type { GoblinRole, GoblinTrait } from './types';
+import type { GoblinTrait } from './types';
 
 export interface FactionConfig {
   /** Singular noun shown in UI. */
@@ -30,17 +30,13 @@ export interface FactionConfig {
   goals: string[];
   /** Display labels for traits. */
   traitDisplay: Record<GoblinTrait, string>;
-  /** Display labels for roles. */
-  roleDisplay: Record<GoblinRole, string>;
 
   // ── LLM prompt flavor ───────────────────────────────────────────────────────
   /** Species noun used in LLM prompts. */
   llmSpecies: string;
-  /** One-line role descriptions for LLM prompts. */
-  llmRoleLabels: Record<GoblinRole, string>;
   /** Storyteller narrator tone instruction. */
   narratorTone: string;
-  /** Succession LLM prompt template (placeholders: {name}, {deadName}, {deadRole}, {memSnippet}). */
+  /** Succession LLM prompt template (placeholders: {name}, {deadName}, {memSnippet}). */
   successionPrompt: string;
 
   // ── Event message flavor ────────────────────────────────────────────────────
@@ -106,26 +102,12 @@ export const GOBLIN_FACTION: FactionConfig = {
     mean: 'Mean: Bitey',
     forgetful: 'Forgetful: What Was I Doing?',
   },
-  roleDisplay: {
-    forager: 'SCAVENGER',
-    miner: 'ROCK BITER',
-    scout: 'SNEAKY GIT',
-    fighter: 'BASHER',
-    lumberjack: 'TREE PUNCHER',
-  },
 
   llmSpecies: 'goblin',
-  llmRoleLabels: {
-    forager: 'Scavenger — you find food that hasn\'t gone completely bad yet.',
-    miner: 'Rock Biter — you chew through stone and sometimes find shiny things.',
-    scout: 'Sneaky Git — you have wide vision and detect threats early (mostly by being paranoid).',
-    fighter: 'Basher — you clobber adventurers who dare enter the colony.',
-    lumberjack: 'Tree Puncher — you punch trees until they fall down (usually).',
-  },
   narratorTone: 'darkly humorous, chaotic, told with affection for the hapless goblins',
   successionPrompt:
     'You are {name}, a new goblin stumbling into a chaotic colony. ' +
-    '{deadName} ({deadRole}) recently died here.{memSnippet} ' +
+    '{deadName} recently died here.{memSnippet} ' +
     'In one sentence (max 15 words), what is your first thought? Be funny and goblin-like. ' +
     'Reply with just the sentence, no quotes.',
 

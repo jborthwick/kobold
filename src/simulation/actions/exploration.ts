@@ -27,7 +27,7 @@ export const wander: Action = {
 
     // Scout XP — grant on reaching wander target
     if (goblin.wanderTarget && goblin.x === goblin.wanderTarget.x && goblin.y === goblin.wanderTarget.y) {
-      if (goblin.role === 'scout') grantXp(goblin, currentTick, onLog);
+      grantXp(goblin, 'scout', currentTick, onLog);
     }
 
     if (!goblin.wanderTarget || currentTick >= goblin.wanderExpiry

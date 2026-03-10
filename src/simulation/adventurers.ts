@@ -22,8 +22,7 @@ const WANDER_RANGE         = Math.floor(GRID_SIZE / 4); // beyond this, wander; 
 const RAID_MIN_SIZE        = 2;     // min adventurers per raid
 const RAID_MAX_SIZE        = 4;     // max adventurers per raid (= min + rand spread)
 const ADVENTURER_ATTACK_DAMAGE = 5; // damage adventurer deals to goblin per hit
-const GOBLIN_FIGHT_BACK    = 8;     // damage non-fighter goblin deals per hit
-const FIGHTER_FIGHT_BACK   = 18;    // damage fighter goblin deals per hit
+const GOBLIN_FIGHT_BACK    = 8;     // base damage goblin deals per hit (+ combat skill bonus)
 const STAGGER_TICKS        = 12;    // ticks a goblin is staggered after being hit
 const ADVENTURER_MOVE_SKIP = 4;     // adventurers skip movement every Nth tick (speed ratio)
 
@@ -165,8 +164,7 @@ export function tickAdventurers(
     if (dist === 0) {
       // ── Attack ──────────────────────────────────────────────────────
       result.attacks.push({ goblinId: target.id, damage: ADVENTURER_ATTACK_DAMAGE });
-      const baseDmg = target.role === 'fighter' ? FIGHTER_FIGHT_BACK : GOBLIN_FIGHT_BACK;
-      const dmg     = Math.round((baseDmg + skillDamageBonus(target)) * woundDamageMultiplier(target));
+      const dmg = Math.round((GOBLIN_FIGHT_BACK + skillDamageBonus(target)) * woundDamageMultiplier(target));
       g.health -= dmg;
       // Stagger: adventurer can't move after being hit
       g.staggeredUntil = tick + STAGGER_TICKS;

@@ -12,21 +12,14 @@ export {
 } from './sites';
 
 export {
-  ROLE_ORDER,
-  ROLE_COMBAT_APT,
-  ROLE_MINING_APT,
-  ROLE_CHOP_APT,
   type TraitMods,
   TRAIT_MODS,
   traitMod,
   getTraitDisplay,
-  getRoleDisplay,
   GOBLIN_TRAIT_DISPLAY,
-  GOBLIN_ROLE_DISPLAY,
   GOBLIN_TRAITS,
   getGoblinBios,
   getGoblinGoals,
-  ROLE_STATS,
 } from './roles';
 
 export {

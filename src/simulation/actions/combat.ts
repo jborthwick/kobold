@@ -3,11 +3,11 @@ import { GRID_SIZE } from '../../shared/constants';
 import { getActiveFaction } from '../../shared/factions';
 import { isWalkable } from '../world';
 import { sigmoid, inverseSigmoid } from '../utilityAI';
-import { traitMod, pathNextStep, ROLE_COMBAT_APT } from '../agents';
+import { traitMod, pathNextStep } from '../agents';
 import { effectiveVision, isLegWoundSkip } from '../wounds';
 import { getDanger } from '../diffusion';
 import { grantXp } from '../skills';
-import { moveTo, moveToward, fatigueRate } from './helpers';
+import { moveToward, fatigueRate } from './helpers';
 import type { Action } from './types';
 
 // --- fight: fighters hunt nearby adventurers ---
@@ -28,10 +28,8 @@ export const fight: Action = {
     }, null);
     if (!nearest || nearest.dist > HUNT_RADIUS) return 0;
     // Closer adventurers score higher; less hungry = more willing to fight
-    // Role aptitude scales the score so non-fighters rarely choose this over foraging
     return inverseSigmoid(nearest.dist, HUNT_RADIUS * 0.5, 0.2)
-      * inverseSigmoid(goblin.hunger, 60)
-      * ROLE_COMBAT_APT[goblin.role];
+      * inverseSigmoid(goblin.hunger, 60);
   },
   execute: ({ goblin, adventurers, grid, currentTick, onLog }) => {
     if (!adventurers) return;
@@ -56,8 +54,8 @@ export const fight: Action = {
     const distAfter = Math.abs(nearest.g.x - goblin.x) + Math.abs(nearest.g.y - goblin.y);
     const enemySing = getActiveFaction().enemyNounPlural.replace(/s$/, '');
     goblin.task = distAfter === 0 ? `fighting ${enemySing}!` : `→ ${enemySing} (${distAfter} tiles)`;
-    // Fighter XP — grant on engaging in combat
-    if (distAfter === 0) grantXp(goblin, currentTick, onLog);
+    // Combat XP — grant on engaging in combat
+    if (distAfter === 0) grantXp(goblin, 'combat', currentTick, onLog);
   },
 };
 
