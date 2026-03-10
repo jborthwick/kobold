@@ -58,6 +58,7 @@ export function loadGame(): SaveData | null {
       if (d.moveTarget === undefined) d.moveTarget = null;
       if (d.moveExpiry === undefined) d.moveExpiry = 0;
       if (d.cookingLastActiveTick === undefined) d.cookingLastActiveTick = 0;
+      if (d.lastActionName === undefined) d.lastActionName = '';
       // wound is optional (undefined = healthy) — no migration needed
       // Iteration 17: split inventory.materials → inventory.ore + inventory.wood
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

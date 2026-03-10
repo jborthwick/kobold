@@ -80,11 +80,8 @@ export const fightFire: Action = {
     // 0.8 at distance 1, 0.2 at scan limit.
     const base = 0.8 * inverseSigmoid(dist, vision, 0.2);
 
-    // Momentum: if already fetching water or fighting fire, stay committed.
-    const active = goblin.task.includes('fire') || goblin.task.includes('water') || goblin.carryingWater;
-    const momentum = active ? 0.15 : 0;
-
-    return Math.min(1.0, base + momentum);
+    // Centralized momentum applied in utilityAI — no per-action bonus needed
+    return Math.min(1.0, base);
   },
 
   execute({ goblin, grid, currentTick, onLog }) {

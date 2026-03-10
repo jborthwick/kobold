@@ -31,11 +31,9 @@ export const forage: Action = {
       return 0;
     }
     const base = sigmoid(goblin.hunger, 40) * 0.8;
-    // Momentum: if already foraging, keep at it to prevent 2-tile loops
-    const momentum = (goblin.task.includes('foraging') || goblin.task.includes('harvesting') || goblin.task.includes('remembered')) ? 0.15 : 0;
-    const score = Math.min(1.0, base + momentum);
+    const score = Math.min(1.0, base);
 
-    // Starvation penalty: if desperately hungry, stop looking for new patches 
+    // Starvation penalty: if desperately hungry, stop looking for new patches
     // and let survival/eat/withdraw take over.
     return goblin.hunger > 85 ? score * 0.4 : score;
   },

@@ -26,8 +26,7 @@ export const buildWall: Action = {
     if (wallSlots.length === 0) return 0;
 
     const base = ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
-    const momentum = (goblin.task.includes('wall')) ? 0.15 : 0;
-    return Math.min(1.0, base + momentum);
+    return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return;
@@ -146,9 +145,8 @@ export const buildHearth: Action = {
         * 0.5;
     }
 
-    // Momentum: already en route → commit, but only while base conditions still hold
-    const momentum = (goblin.task.includes('hearth') && base > 0) ? 0.15 : 0;
-    return Math.min(1.0, base + momentum);
+    // Centralized momentum applied in utilityAI — no per-action bonus needed
+    return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, woodStockpiles, currentTick, onLog, rooms }) => {
     // Consume wood from inventory first, then pull from nearest stockpile

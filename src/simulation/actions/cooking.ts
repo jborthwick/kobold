@@ -87,10 +87,8 @@ export const cook: Action = {
 
         const base = foodAbundance * mealScarcity * 0.5 * inverseSigmoid(goblin.hunger, 50);
 
-        // Momentum for walking to the kitchen (trait bias applied in utilityAI)
-        const momentum = goblin.task.includes('kitchen') ? 0.15 : 0;
-
-        return Math.min(1.0, base + momentum);
+        // Centralized momentum applied in utilityAI — no per-action bonus needed
+        return Math.min(1.0, base);
     },
 
     execute: (ctx) => {

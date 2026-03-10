@@ -88,8 +88,8 @@ export const socialize: Action = {
   },
   score: ({ goblin }) => {
     const base = sigmoid(goblin.social, 50) * 0.6;
-    const momentum = (goblin.task.includes('socializing')) ? 0.15 : 0;
-    return Math.min(1.0, base + momentum);
+    // Centralized momentum applied in utilityAI — no per-action bonus needed
+    return Math.min(1.0, base);
   },
   execute: ({ goblin, goblins, grid, currentTick }) => {
     if (!goblins) { goblin.task = 'lonely'; return; }

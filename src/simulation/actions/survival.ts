@@ -87,9 +87,9 @@ export const rest: Action = {
   score: ({ goblin }) => {
     // Lower midpoint (50 instead of 60) makes resting more attractive earlier
     const base = sigmoid(goblin.fatigue, 50);
-    // Momentum: once resting, stay committed until fatigue < 40 (hysteresis)
-    const momentum = (goblin.task.includes('resting') && goblin.fatigue > 40) ? 0.15 : 0;
-    return Math.min(1.0, base + momentum);
+    // Hysteresis: once resting, stay committed until fatigue < 40 (exit gate, not action momentum)
+    const hysteresis = (goblin.task.includes('resting') && goblin.fatigue > 40) ? 0.15 : 0;
+    return Math.min(1.0, base + hysteresis);
   },
   execute: ({ goblin, warmthField, currentTick }) => {
     const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;

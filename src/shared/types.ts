@@ -136,6 +136,7 @@ export interface Goblin {
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
   cookingProgress?: number;     // ticks spent accumulating progress while cooking
   cookingLastActiveTick?: number;  // tick when cooking action last executed
+  lastActionName?: string;  // name of action that won last tick; drives momentum bonus
 }
 
 export interface LogEntry {

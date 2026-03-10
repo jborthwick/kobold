@@ -347,6 +347,7 @@ export function tickAgentUtility(
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
+  const MOMENTUM_BONUS = 0.30;  // single tune point for action stickiness
   let bestAction: Action | null = null;
   let bestScore = -1;
   let secondName = '';
@@ -354,8 +355,12 @@ export function tickAgentUtility(
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
-    const baseScore = action.score(ctx);
-    const score = applyTraitBias(goblin, action, baseScore);
+    let score = action.score(ctx);
+    score = applyTraitBias(goblin, action, score);
+    // Centralized momentum: sticky bonus for the action that won last tick
+    if (action.name === goblin.lastActionName) {
+      score = Math.min(1.0, score + MOMENTUM_BONUS);
+    }
     if (score > bestScore) {
       secondScore = bestScore;
       secondName = bestAction?.name ?? '';
@@ -384,6 +389,10 @@ export function tickAgentUtility(
   goblin.task = idleDescription(goblin);
   if (bestAction) {
     bestAction.execute(ctx);
+    // Record winner for momentum bonus next tick
+    goblin.lastActionName = bestAction.name;
+  } else {
+    goblin.lastActionName = '';
   }
 
   // ── Step 7: Handle Interrupted Cooking ────────────────────────────────────────
