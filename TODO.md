@@ -4,26 +4,33 @@
 [x] Update colony HUD to also track meals stored (along with food, wood, and ore)
 [x] Add meals in inventory to goblin HUD
 [x] Add oscillation logging to headless to catch goblins stuck in a loop between 2 or 3 squares for extended periods
-[ ] Remove goblin roles, and let actions be more defined by colony needs. Goblins can still level up skills, but now can level up any skill, not just a single sepcialty.
-[ ] Instead of building generic storage rooms and having goblins designate them, turn storage rooms in specialized rooms. 
-- [ ] Generalize storage rooms. Any kind of stockpile can go in here at all times.
-[ ] New room: Lumber Hut
-- [ ] Comes with 1 saw tool. Saws convert wood into planks over a brief time.
-- [ ] Comes with 1 wood stockpile in a corner.
-- [ ] Up to 3 wood stockpiles can be built in the lumber hut
-[ ] New room: Blacksmith
-- [ ] Comes with 1 anvil tool. Anvils convert ore into bars over a brief time.
-- [ ] Comes with 1 ore stockpile in a corner.
-- [ ] Up to 3 wood stockpiles can be built in the lumber hut.
-[ ] Update headless to mockup new room placement and remove multiple storage rooms at gen
+[X] Remove goblin roles, and let actions be more defined by colony needs. Goblins can still level up skills, but now can level up any skill, not just a single sepcialty.
+[X] Update storage rooms to remain generalized. Goblins won't set specific (e.g wood, meal, ore, etc) rooms anymore. Goblins will no longer disginate rooms.
+[X] Goblins can create any kind of stockpile in any storage room now, up to a max of 20.
+[X] Goblins should cluster stockpiles near like stockpiles in storage rooms when they're able.
+[X] Add New room type: Lumber Hut
+- [X] Comes with 1 saw tool. Saws convert wood into planks over a brief time, like cooking.
+- [X] Comes with 1 wood stockpile in a corner.
+- [X] Up to 3 wood stockpiles can be built in the lumber hut
+[X] Add New room type: Blacksmith
+- [X] Comes with 1 anvil tool. Anvils convert ore into bars over a brief time, like cooking.
+- [X] Comes with 1 ore stockpile in a corner.
+- [X] Up to 3 wood stockpiles can be built in the lumber hut.
+[X] Update headless to mockup new room placement and remove multiple storage rooms at gen
+[X] Hide Fire Events from headless
+[ ] Add placeholder sprites for saw and anvil. I'll set them the tile configurator
 
 
 ## Bugs:
+[ ] bug: goblins sometimes build single walls away from rooms
+[ ] bug: goblins get stuck not moving with "rembered patch" and "room wall". add headless logging for goblins sitting still for long stretches.
+[ ] bug: if a kitchen is built before a storage room, goblins will delay placing a hearth in the kitchen and start cooking.
 [X] bug: Adventurers explore range seems too limited
 [X] bug: Constant glow GFX around danger (e.g. adventurer) is hidden by tree tiles. The glow effect should be at the top of all the tile layers.
 [X] bug: Saw goblins sit in the kitchen (on top of the meals stockpile) for hundreds of ticks with the label "mining.. looking for vein". But really just waiting for hunger to tick up and then eating a meal from the stockpile.
 [X] bug: running headless shows 50% of time is spent "mining ... lookking for vein". way more than any other action
 
+## Don't start without approval
 
 [ ] Some oscillation bugs remain. Not a current priority.
 

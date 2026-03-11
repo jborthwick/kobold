@@ -20,9 +20,9 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Mushroom]: [554],
   [TileType.Wall]: [637, 843, 844, 845, 892, 893],
   [TileType.Hearth]: [504],
-  [TileType.TreeStump]: [104],
+  [TileType.Treestump]: [],
   [TileType.Fire]: [505],
-  [TileType.Pool]: [253],  // same base frame as Water; tinted lighter blue in WorldScene
+  [TileType.Pool]: [208, 253],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
@@ -33,4 +33,6 @@ export const SPRITE_CONFIG: Record<string, number> = {
   foodStockpile: 439,
   oreStockpile: 241,
   woodStockpile: 261,
+  saw: 592,
+  anvil: 401,
 };

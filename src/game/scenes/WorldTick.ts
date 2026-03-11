@@ -15,7 +15,7 @@ import { maybeSpawnRaid, tickAdventurers } from '../../simulation/adventurers';
 import { addMemory } from '../../simulation/mood';
 import { rollWound, woundLabel } from '../../simulation/wounds';
 import { tickWorldEvents, tickMushroomSprout } from '../../simulation/events';
-import { expandStockpilesInRooms } from '../../simulation/rooms';
+import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../../simulation/rooms';
 import { saveGame } from '../../shared/save';
 import * as WorldGoals from './WorldGoals';
 import { emitGameState, emitMiniMap, buildSaveData } from './WorldState';
@@ -70,7 +70,8 @@ export function gameTick(scene: WorldScene) {
             scene.foodStockpiles, scene.adventurers, scene.oreStockpiles,
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
             metabolismModifier(scene.weather), scene.warmthField, scene.dangerField,
-            scene.weather.type, scene.rooms, scene.mealStockpiles
+            scene.weather.type, scene.rooms, scene.mealStockpiles,
+            scene.plankStockpiles, scene.barStockpiles
         );
     }
 
@@ -276,6 +277,15 @@ export function gameTick(scene: WorldScene) {
     while (scene.woodStockpileGfxList.length < scene.woodStockpiles.length) {
         scene.addWoodStockpileGraphics(scene.woodStockpiles[scene.woodStockpileGfxList.length]);
     }
+    while (scene.plankStockpileGfxList.length < scene.plankStockpiles.length) {
+        scene.addPlankStockpileGraphics(scene.plankStockpiles[scene.plankStockpileGfxList.length]);
+    }
+    while (scene.barStockpileGfxList.length < scene.barStockpiles.length) {
+        scene.addBarStockpileGraphics(scene.barStockpiles[scene.barStockpileGfxList.length]);
+    }
+
+    scene.syncSawSprites();
+    scene.syncAnvilSprites();
 
     // ── Storage expansion — new stockpile within owning room when last fills ──
     expandStockpilesInRooms(
@@ -287,6 +297,22 @@ export function gameTick(scene: WorldScene) {
         (pile) => scene.addFoodStockpileGraphics(pile),
         (pile) => scene.addOreStockpileGraphics(pile),
         (pile) => scene.addWoodStockpileGraphics(pile)
+    );
+    expandLumberHutWoodStockpiles(
+        scene.grid,
+        scene.rooms,
+        scene.foodStockpiles,
+        scene.oreStockpiles,
+        scene.woodStockpiles,
+        (pile) => scene.addWoodStockpileGraphics(pile)
+    );
+    expandBlacksmithOreStockpiles(
+        scene.grid,
+        scene.rooms,
+        scene.foodStockpiles,
+        scene.oreStockpiles,
+        scene.woodStockpiles,
+        (pile) => scene.addOreStockpileGraphics(pile)
     );
 
     scene.terrainDirty = true;

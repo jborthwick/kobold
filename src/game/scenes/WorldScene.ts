@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
 import { canPlaceRoom } from '../../simulation/rooms';
-import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
+import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpile, drawPlankStockpile, drawBarStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
 import * as WorldGoals from './WorldGoals';
@@ -84,6 +84,16 @@ export class WorldScene extends Phaser.Scene {
   public oreStockpileImgList: Phaser.GameObjects.Image[] = [];
   public woodStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
   public woodStockpileImgList: Phaser.GameObjects.Image[] = [];
+  public plankStockpiles: PlankStockpile[] = [];
+  public barStockpiles: BarStockpile[] = [];
+  public plankStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  public plankStockpileImgList: Phaser.GameObjects.Image[] = [];
+  public barStockpileGfxList: Phaser.GameObjects.Graphics[] = [];
+  public barStockpileImgList: Phaser.GameObjects.Image[] = [];
+
+  // Furniture sprites at room centers (saw in lumber_hut, anvil in blacksmith)
+  public sawSprites: Phaser.GameObjects.Image[] = [];
+  public anvilSprites: Phaser.GameObjects.Image[] = [];
 
   // Event log history (persisted to save, restored on load)
   public logHistory: LogEntry[] = [];
@@ -172,7 +182,20 @@ export class WorldScene extends Phaser.Scene {
     };
     this.rooms.push(room);
 
-    const roomName = this.buildMode === 'storage' ? 'Storage zone' : 'Kitchen';
+    if (this.buildMode === 'lumber_hut') {
+      const wx = x + 1, wy = y + 1;
+      this.woodStockpiles.push({ x: wx, y: wy, wood: 0, maxWood: 200 });
+      this.addWoodStockpileGraphics(this.woodStockpiles[this.woodStockpiles.length - 1]);
+    } else if (this.buildMode === 'blacksmith') {
+      const ox = x + 1, oy = y + 1;
+      this.oreStockpiles.push({ x: ox, y: oy, ore: 0, maxOre: 200 });
+      this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpiles.length - 1]);
+    }
+
+    const roomName = this.buildMode === 'storage' ? 'Storage zone'
+      : this.buildMode === 'kitchen' ? 'Kitchen'
+        : this.buildMode === 'lumber_hut' ? 'Lumber Hut'
+          : 'Blacksmith';
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',
@@ -250,7 +273,63 @@ export class WorldScene extends Phaser.Scene {
     this.mealStockpileGfxList.push(this.add.graphics().setDepth(3));
   }
 
+  public addPlankStockpileGraphics(stockpile: PlankStockpile): void {
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.plankStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.woodStockpile).setDepth(3).setTint(0x8b7355));
+    this.plankStockpileGfxList.push(this.add.graphics().setDepth(3));
+  }
 
+  public addBarStockpileGraphics(stockpile: BarStockpile): void {
+    const cx = stockpile.x * TILE_SIZE + TILE_SIZE / 2;
+    const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
+    this.barStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile).setDepth(3).setTint(0x888899));
+    this.barStockpileGfxList.push(this.add.graphics().setDepth(3));
+  }
+
+  /** Sync saw sprites to lumber_hut room centers (one sprite per room). */
+  public syncSawSprites(): void {
+    const lumberHuts = this.rooms.filter(r => r.type === 'lumber_hut');
+    while (this.sawSprites.length < lumberHuts.length) {
+      const room = lumberHuts[this.sawSprites.length];
+      const cx = (room.x + Math.floor(room.w / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const cy = (room.y + Math.floor(room.h / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const frame = SPRITE_CONFIG.saw ?? 0;
+      this.sawSprites.push(this.add.image(cx, cy, 'tiles', frame).setDepth(3));
+    }
+    while (this.sawSprites.length > lumberHuts.length) {
+      this.sawSprites.pop()?.destroy();
+    }
+    for (let i = 0; i < this.sawSprites.length; i++) {
+      const room = lumberHuts[i];
+      const cx = (room.x + Math.floor(room.w / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const cy = (room.y + Math.floor(room.h / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      this.sawSprites[i].setPosition(cx, cy);
+      this.sawSprites[i].setFrame(SPRITE_CONFIG.saw ?? 0);
+    }
+  }
+
+  /** Sync anvil sprites to blacksmith room centers (one sprite per room). */
+  public syncAnvilSprites(): void {
+    const blacksmiths = this.rooms.filter(r => r.type === 'blacksmith');
+    while (this.anvilSprites.length < blacksmiths.length) {
+      const room = blacksmiths[this.anvilSprites.length];
+      const cx = (room.x + Math.floor(room.w / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const cy = (room.y + Math.floor(room.h / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const frame = SPRITE_CONFIG.anvil ?? 0;
+      this.anvilSprites.push(this.add.image(cx, cy, 'tiles', frame).setDepth(3));
+    }
+    while (this.anvilSprites.length > blacksmiths.length) {
+      this.anvilSprites.pop()?.destroy();
+    }
+    for (let i = 0; i < this.anvilSprites.length; i++) {
+      const room = blacksmiths[i];
+      const cx = (room.x + Math.floor(room.w / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      const cy = (room.y + Math.floor(room.h / 2)) * TILE_SIZE + TILE_SIZE / 2;
+      this.anvilSprites[i].setPosition(cx, cy);
+      this.anvilSprites[i].setFrame(SPRITE_CONFIG.anvil ?? 0);
+    }
+  }
 
   // ── Main loop ──────────────────────────────────────────────────────────
 
@@ -272,6 +351,8 @@ export class WorldScene extends Phaser.Scene {
     drawMealStockpile(this);
     drawOreStockpile(this);
     drawWoodStockpile(this);
+    drawPlankStockpile(this);
+    drawBarStockpile(this);
     drawOffScreenIndicator(this);
     updateWeatherFX(this, delta);
   }

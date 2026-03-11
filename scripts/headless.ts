@@ -23,10 +23,11 @@ import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventur
 import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
 import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
+import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../src/simulation/rooms';
 import { rollWound } from '../src/simulation/wounds';
 import { getActiveFaction } from '../src/shared/factions';
 import { GRID_SIZE } from '../src/shared/constants';
-import type { Goblin, Tile, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
+import type { Goblin, Tile, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
 import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
@@ -88,38 +89,6 @@ function recordAction(goblin: Goblin, task: string) {
   actionCountsByTrait[trait][key] = (actionCountsByTrait[trait][key] ?? 0) + 1;
 }
 
-// ── Stockpile expansion (replicated from WorldScene.findNextStockpileSlot) ────
-
-function findNextStockpileSlot(
-  existing: Array<{ x: number; y: number }>,
-  allOccupied: Array<{ x: number; y: number }>,
-  grid: Tile[][],
-  otherGroup?: Array<{ x: number; y: number }>,
-): { x: number; y: number } | null {
-  const anchor = existing[0];
-  const occupiedSet = new Set(allOccupied.map(p => `${p.x},${p.y}`));
-  const expandDir = (!otherGroup || otherGroup.length === 0)
-    ? -1
-    : (otherGroup[0].x > anchor.x ? -1 : 1);
-  const colOffsets = [0, expandDir * 1, expandDir * 2];
-  const isValid = (x: number, y: number) =>
-    x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE
-    && !occupiedSet.has(`${x},${y}`)
-    && grid[y][x].type !== TileType.Water
-    && grid[y][x].type !== TileType.Wall;
-  const rows = [...new Set(existing.map(p => p.y))].sort((a, b) => a - b);
-  for (const row of rows) {
-    for (const off of colOffsets) {
-      if (isValid(anchor.x + off, row)) return { x: anchor.x + off, y: row };
-    }
-  }
-  const nextRow = (rows[rows.length - 1] ?? anchor.y) + 1;
-  for (const off of colOffsets) {
-    if (isValid(anchor.x + off, nextRow)) return { x: anchor.x + off, y: nextRow };
-  }
-  return null;
-}
-
 // ── Goal helpers (replicated from WorldScene) ─────────────────────────────────
 
 type GoalType = ColonyGoal['type'];
@@ -167,21 +136,25 @@ resetAdventurers();
 const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
 const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
 
-// Auto-place 3 rooms with pre-set specializations for headless sim
+// Mockup rooms: one generalized storage, one kitchen, one lumber hut, one blacksmith
+const storageRoom = { id: 'room-storage', type: 'storage' as const, x: depotX - 2, y: depotY - 2, w: 5, h: 5 };
 const rooms: Room[] = [
-  { id: 'room-food', type: 'storage', x: depotX - 2, y: depotY - 2, w: 5, h: 5, specialization: 'food' },
-  { id: 'room-ore', type: 'storage', x: depotX + 6, y: depotY - 2, w: 5, h: 5, specialization: 'ore' },
-  { id: 'room-wood', type: 'storage', x: depotX - 10, y: depotY - 2, w: 5, h: 5, specialization: 'wood' },
+  storageRoom,
   { id: 'room-kitchen', type: 'kitchen', x: depotX + 6, y: depotY + 6, w: 5, h: 5 },
+  { id: 'room-lumber', type: 'lumber_hut', x: depotX - 10, y: depotY - 2, w: 5, h: 5 },
+  { id: 'room-blacksmith', type: 'blacksmith', x: depotX + 6, y: depotY - 2, w: 5, h: 5 },
 ];
 
-// Give them a hearth right in the middle of the kitchen!
+// Hearth in kitchen
 grid[depotY + 8][depotX + 8].type = TileType.Hearth;
 
-const foodStockpiles: FoodStockpile[] = [{ x: depotX, y: depotY, food: 0, maxFood: 200 }];
-const mealStockpiles: MealStockpile[] = [{ x: depotX, y: depotY + 8, meals: 0, maxMeals: 100 }];
-const oreStockpiles: OreStockpile[] = [{ x: depotX + 8, y: depotY, ore: 150, maxOre: 200 }];
-const woodStockpiles: WoodStockpile[] = [{ x: depotX - 8, y: depotY, wood: 0, maxWood: 200 }];
+// Initial stockpiles: one of each type inside the single storage room; meals in kitchen; wood in lumber hut corner; ore in blacksmith corner
+const foodStockpiles: FoodStockpile[] = [{ x: storageRoom.x + 1, y: storageRoom.y + 1, food: 0, maxFood: 200 }];
+const mealStockpiles: MealStockpile[] = [{ x: depotX + 7, y: depotY + 7, meals: 0, maxMeals: 100 }];
+const oreStockpiles: OreStockpile[] = [{ x: depotX + 7, y: depotY - 1, ore: 150, maxOre: 200 }];
+const woodStockpiles: WoodStockpile[] = [{ x: depotX - 9, y: depotY - 1, wood: 0, maxWood: 200 }];
+const plankStockpiles: PlankStockpile[] = [];
+const barStockpiles: BarStockpile[] = [];
 
 for (const g of goblins) g.homeTile = { x: depotX, y: depotY };
 
@@ -238,6 +211,7 @@ for (let tick = 1; tick <= TICKS; tick++) {
       },
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
       metabolismModifier(weather), warmthField, dangerField, weather.type, rooms, mealStockpiles,
+      plankStockpiles, barStockpiles,
     );
     if (g.alive) recordAction(g, g.task);
     if (wasAlive && !g.alive) {
@@ -346,25 +320,14 @@ for (let tick = 1; tick <= TICKS; tick++) {
     successor.memory.push({ tick, crisis: 'arrival', action: `arrived to replace ${dead.name}` });
   }
 
-  // Stockpile expansion
-  const lastFood = foodStockpiles[foodStockpiles.length - 1];
-  if (lastFood.food >= lastFood.maxFood) {
-    const all = [...foodStockpiles, ...oreStockpiles, ...woodStockpiles];
-    const pos = findNextStockpileSlot(foodStockpiles, all, grid, oreStockpiles);
-    if (pos) foodStockpiles.push({ ...pos, food: 0, maxFood: 200 });
-  }
-  const lastOre = oreStockpiles[oreStockpiles.length - 1];
-  if (lastOre.ore >= lastOre.maxOre) {
-    const all = [...foodStockpiles, ...oreStockpiles, ...woodStockpiles];
-    const pos = findNextStockpileSlot(oreStockpiles, all, grid, foodStockpiles);
-    if (pos) oreStockpiles.push({ ...pos, ore: 0, maxOre: 200 });
-  }
-  const lastWood = woodStockpiles[woodStockpiles.length - 1];
-  if (lastWood && lastWood.wood >= lastWood.maxWood) {
-    const all = [...foodStockpiles, ...oreStockpiles, ...woodStockpiles];
-    const pos = findNextStockpileSlot(woodStockpiles, all, grid);
-    if (pos) woodStockpiles.push({ ...pos, wood: 0, maxWood: 200 });
-  }
+  // Stockpile expansion (generalized storage + lumber hut + blacksmith)
+  const noop = () => {};
+  expandStockpilesInRooms(
+    grid, rooms, foodStockpiles, oreStockpiles, woodStockpiles,
+    noop, noop, noop,
+  );
+  expandLumberHutWoodStockpiles(grid, rooms, foodStockpiles, oreStockpiles, woodStockpiles, noop);
+  expandBlacksmithOreStockpiles(grid, rooms, foodStockpiles, oreStockpiles, woodStockpiles, noop);
 
   // Goal progress
   const alive = goblins.filter(g => g.alive);
@@ -421,13 +384,6 @@ console.log(` Avg hunger:  ${last?.avgHunger.toFixed(1) ?? '?'}`);
 console.log(` Avg morale:  ${last?.avgMorale.toFixed(1) ?? '?'}`);
 console.log(` Avg fatigue: ${last?.avgFatigue.toFixed(1) ?? '?'}`);
 console.log(` Fire events: ${fireLog.length} ignitions · ${fireTilesTotal} tiles burned · ${fireTilesRainedOut} rained out · peak ${fireTilesMax} simultaneous`);
-
-if (fireLog.length > 0) {
-  console.log(`\n Fire events:`);
-  for (const f of fireLog) {
-    console.log(`   [${f.tick}] ${f.message}`);
-  }
-}
 
 if (deathLog.length > 0) {
   console.log(`\n Deaths:`);

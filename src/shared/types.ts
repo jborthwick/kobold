@@ -140,6 +140,10 @@ export interface Goblin {
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
   cookingProgress?: number;     // ticks spent accumulating progress while cooking
   cookingLastActiveTick?: number;  // tick when cooking action last executed
+  sawingProgress?: number;      // ticks spent sawing (wood → planks)
+  sawingLastActiveTick?: number;
+  smithingProgress?: number;    // ticks spent smithing (ore → bars)
+  smithingLastActiveTick?: number;
   lastActionName?: string;  // name of action that won last tick; drives momentum bonus
 }
 
@@ -197,6 +201,22 @@ export interface WoodStockpile {
   maxWood: number;  // storage cap
 }
 
+// Plank stockpile — in lumber hut; filled by sawing (wood → planks).
+export interface PlankStockpile {
+  x: number;
+  y: number;
+  planks: number;
+  maxPlanks: number;
+}
+
+// Bar stockpile — in blacksmith; filled by smithing (ore → bars).
+export interface BarStockpile {
+  x: number;
+  y: number;
+  bars: number;
+  maxBars: number;
+}
+
 export interface TileInfo {
   x: number;
   y: number;
@@ -231,8 +251,7 @@ export interface Chapter {
   tick: number;
 }
 
-export type RoomType = 'storage' | 'kitchen';
-export type StorageSpecialization = 'food' | 'ore' | 'wood';
+export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith';
 
 export interface Room {
   id: string;
@@ -241,7 +260,6 @@ export interface Room {
   y: number;          // top-left tile Y
   w: number;          // always 5
   h: number;          // always 5
-  specialization?: StorageSpecialization;
 }
 
 export interface GameState {
@@ -260,6 +278,8 @@ export interface GameState {
   mealStockpiles: MealStockpile[];
   oreStockpiles: OreStockpile[];
   woodStockpiles: WoodStockpile[];
+  plankStockpiles: PlankStockpile[];
+  barStockpiles: BarStockpile[];
   /** Current weather / season (affects growback & metabolism). */
   weatherSeason?: Season;
   weatherType?: WeatherType;

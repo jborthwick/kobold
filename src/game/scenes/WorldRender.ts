@@ -62,6 +62,30 @@ export function drawMealStockpile(scene: WorldScene) {
     }
 }
 
+export function drawPlankStockpile(scene: WorldScene) {
+    for (let i = 0; i < scene.plankStockpiles.length; i++) {
+        const p = scene.plankStockpiles[i];
+        const gfx = scene.plankStockpileGfxList[i];
+        if (!gfx) continue;
+        const px = p.x * TILE_SIZE, py = p.y * TILE_SIZE;
+        gfx.clear();
+        gfx.lineStyle(2, 0x8b7355, 0.9);
+        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+}
+
+export function drawBarStockpile(scene: WorldScene) {
+    for (let i = 0; i < scene.barStockpiles.length; i++) {
+        const b = scene.barStockpiles[i];
+        const gfx = scene.barStockpileGfxList[i];
+        if (!gfx) continue;
+        const px = b.x * TILE_SIZE, py = b.y * TILE_SIZE;
+        gfx.clear();
+        gfx.lineStyle(2, 0x888899, 0.9);
+        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+}
+
 export function drawTerrain(scene: WorldScene) {
     const OBJECT_TILES = new Set([
         TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.Hearth, TileType.Fire,
@@ -121,11 +145,27 @@ export function drawTerrain(scene: WorldScene) {
 
             for (const room of scene.rooms) {
                 if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
-                    const roomTint = room.type === 'kitchen' ? 0xffbb88
-                        : room.specialization === 'food' ? 0xccffcc
-                            : room.specialization === 'ore' ? 0xffddaa
-                                : room.specialization === 'wood' ? 0xddffcc
-                                    : 0xccccff;
+                    let roomTint: number;
+                    if (room.type === 'kitchen') {
+                        roomTint = 0xffbb88;
+                    } else if (room.type === 'lumber_hut') {
+                        roomTint = 0xddffcc;
+                    } else if (room.type === 'blacksmith') {
+                        roomTint = 0xffddaa;
+                    } else if (room.type === 'storage') {
+                        const inR = (px: number, py: number) =>
+                            px >= room.x && px < room.x + room.w && py >= room.y && py < room.y + room.h;
+                        const hasFood = scene.foodStockpiles.some(s => inR(s.x, s.y));
+                        const hasOre = scene.oreStockpiles.some(s => inR(s.x, s.y));
+                        const hasWood = scene.woodStockpiles.some(s => inR(s.x, s.y));
+                        if (hasFood && !hasOre && !hasWood) roomTint = 0xccffcc;
+                        else if (hasOre && !hasFood && !hasWood) roomTint = 0xffddaa;
+                        else if (hasWood && !hasFood && !hasOre) roomTint = 0xddffcc;
+                        else if (hasFood || hasOre || hasWood) roomTint = 0xddddff;
+                        else roomTint = 0xccccff;
+                    } else {
+                        roomTint = 0xccccff;
+                    }
                     const tr = (t.tint >> 16) & 0xff, tg = (t.tint >> 8) & 0xff, tb = t.tint & 0xff;
                     const rr = (roomTint >> 16) & 0xff, rg = (roomTint >> 8) & 0xff, rb = roomTint & 0xff;
                     t.tint = (((tr * rr) >> 8) << 16) | (((tg * rg) >> 8) << 8) | ((tb * rb) >> 8);

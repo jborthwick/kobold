@@ -107,6 +107,36 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                             </div>
                         </button>
                     </div>
+
+                    <div style={styles.section}>
+                        <div style={styles.sectionLabel}>Crafting</div>
+                        <button
+                            onClick={() => selectRoom('lumber_hut')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'lumber_hut' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>🪵</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Lumber Hut</div>
+                                <div style={styles.btnDesc}>Saw wood into planks; 1–3 wood stockpiles</div>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => selectRoom('blacksmith')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'blacksmith' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>⚒</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Blacksmith</div>
+                                <div style={styles.btnDesc}>Anvil ore into bars; 1–3 ore stockpiles</div>
+                            </div>
+                        </button>
+                    </div>
                 </>
             )}
         </div>

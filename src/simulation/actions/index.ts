@@ -10,6 +10,8 @@ import { seekWarmth, wander } from './exploration';
 import { fightFire } from './firefighting';
 import { establishStockpile } from './stockpiling';
 import { cook } from './cooking';
+import { saw } from './sawing';
+import { smith } from './smithing';
 import type { Action } from './types';
 
 export const ALL_ACTIONS: Action[] = [
@@ -23,6 +25,8 @@ export const ALL_ACTIONS: Action[] = [
   buildHearth,
   establishStockpile,
   cook,
+  saw,
+  smith,
   forage,
   depositFood,
   withdrawFood,

@@ -1,4 +1,4 @@
-import type { Goblin, Tile, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
+import type { Goblin, Tile, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -13,6 +13,8 @@ export interface ActionContext {
   adventurers?:        Adventurer[];
   oreStockpiles?:  OreStockpile[];
   woodStockpiles?: WoodStockpile[];
+  plankStockpiles?: PlankStockpile[];
+  barStockpiles?: BarStockpile[];
   colonyGoal?:     ColonyGoal;
   warmthField?:    Float32Array;  // diffusion field: warmth 0–100 per tile
   dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile

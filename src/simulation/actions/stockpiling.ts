@@ -1,9 +1,12 @@
 import type { Room, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
 import { inverseSigmoid } from '../utilityAI';
 import { moveTo, addWorkFatigue } from './helpers';
+import { countStockpilesInRoom, findRoomStockpileSlotPreferClustering } from '../rooms';
 import type { Action, ActionContext } from './types';
 
-/** Pick the storage type the colony needs most, avoiding duplicates with spare capacity. */
+const MAX_STOCKPILES_PER_STORAGE_ROOM = 20;
+
+/** Pick the storage type the colony needs most (by fill ratio). */
 function mostNeededStockpileType(
   ctx: ActionContext,
 ): 'food' | 'ore' | 'wood' {
@@ -18,35 +21,65 @@ function mostNeededStockpileType(
   const oreRatio  = oreCap  > 0 ? oreAmt  / oreCap  : 0;
   const woodRatio = woodCap > 0 ? woodAmt / woodCap : 0;
 
-  const rooms = ctx.rooms ?? [];
-
-  // Rank by ratio (lower = more needed). Skip types that have an unfull room already.
   const candidates: Array<{ type: 'food' | 'ore' | 'wood'; ratio: number }> = [
     { type: 'food', ratio: foodRatio },
     { type: 'ore',  ratio: oreRatio },
     { type: 'wood', ratio: woodRatio },
   ];
-
-  // Dedup: if a room already specializes in this type and has capacity, bump its ratio
-  for (const c of candidates) {
-    const hasUnfull = rooms.some(r => r.specialization === c.type);
-    if (hasUnfull && c.ratio < 1) c.ratio += 10;  // push to bottom
-  }
-
   candidates.sort((a, b) => a.ratio - b.ratio);
   return candidates[0].type;
+}
+
+function stockpilesInRoom(room: Room, food: FoodStockpile[], ore: OreStockpile[], wood: WoodStockpile[]) {
+  const inR = (x: number, y: number) =>
+    x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
+  return {
+    food: food.filter(s => inR(s.x, s.y)),
+    ore: ore.filter(s => inR(s.x, s.y)),
+    wood: wood.filter(s => inR(s.x, s.y)),
+  };
+}
+
+/** True if we're allowed to add one more stockpile of type T in this room: room has capacity, and either no pile of type T yet or the last one is full. */
+function roomCanAddStockpileOfType(
+  room: Room,
+  type: 'food' | 'ore' | 'wood',
+  food: FoodStockpile[],
+  ore: OreStockpile[],
+  wood: WoodStockpile[],
+): boolean {
+  if (room.type !== 'storage') return false;
+  const total = countStockpilesInRoom(room, food, ore, wood);
+  if (total >= MAX_STOCKPILES_PER_STORAGE_ROOM) return false;
+  const inRoom = stockpilesInRoom(room, food, ore, wood);
+  if (type === 'food') {
+    if (inRoom.food.length === 0) return true;
+    const last = inRoom.food[inRoom.food.length - 1];
+    return last.food >= last.maxFood;
+  }
+  if (type === 'ore') {
+    if (inRoom.ore.length === 0) return true;
+    const last = inRoom.ore[inRoom.ore.length - 1];
+    return last.ore >= last.maxOre;
+  }
+  if (inRoom.wood.length === 0) return true;
+  const last = inRoom.wood[inRoom.wood.length - 1];
+  return last.wood >= last.maxWood;
 }
 
 export const establishStockpile: Action = {
   name: 'establishStockpile',
   tags: ['work'],
-  eligible: ({ rooms, foodStockpiles, goblins }) => {
+  eligible: (ctx) => {
+    const { rooms, foodStockpiles, oreStockpiles, woodStockpiles, goblins } = ctx;
     if (!rooms || rooms.length === 0) return false;
-    // Need at least one unspecialized storage room
-    if (!rooms.some(r => r.type === 'storage' && r.specialization === undefined)) return false;
-    // Colony not starving — don't divert from foraging
-    const totalFood = (foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0)
-      + (goblins?.reduce((s, g) => g.alive ? s + g.inventory.food : s, 0) ?? 0);
+    const food = foodStockpiles ?? [];
+    const ore = oreStockpiles ?? [];
+    const wood = woodStockpiles ?? [];
+    const specType = mostNeededStockpileType(ctx);
+    const canAddSomewhere = rooms.some(r => roomCanAddStockpileOfType(r, specType, food, ore, wood));
+    if (!canAddSomewhere) return false;
+    const totalFood = food.reduce((s, sp) => s + sp.food, 0) + (goblins?.reduce((s, g) => g.alive ? s + g.inventory.food : s, 0) ?? 0);
     if (totalFood < 5) return false;
     return true;
   },
@@ -55,13 +88,14 @@ export const establishStockpile: Action = {
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, foodStockpiles, oreStockpiles, woodStockpiles, onLog } = ctx;
-    if (!rooms) return;
+    if (!rooms || !foodStockpiles || !oreStockpiles || !woodStockpiles) return;
 
-    // Find nearest unspecialized room
+    const specType = mostNeededStockpileType(ctx);
+    // Find nearest storage room where we're allowed to add a pile of specType (last of that type full, or none yet)
     let nearest: Room | null = null;
     let nearDist = Infinity;
     for (const r of rooms) {
-      if (r.type !== 'storage' || r.specialization !== undefined) continue;
+      if (!roomCanAddStockpileOfType(r, specType, foodStockpiles, oreStockpiles, woodStockpiles)) continue;
       const cx = r.x + 2, cy = r.y + 2;
       const dist = Math.abs(cx - goblin.x) + Math.abs(cy - goblin.y);
       if (dist < nearDist) { nearDist = dist; nearest = r; }
@@ -70,27 +104,36 @@ export const establishStockpile: Action = {
 
     const cx = nearest.x + 2, cy = nearest.y + 2;
 
-    // Navigate to room center
     if (goblin.x !== cx || goblin.y !== cy) {
       moveTo(goblin, { x: cx, y: cy }, grid);
       goblin.task = '→ storage room';
       return;
     }
 
-    // Arrived — pick specialization and create stockpile
-    const specType = mostNeededStockpileType(ctx);
-    nearest.specialization = specType;
+    const inRoom = stockpilesInRoom(nearest, foodStockpiles, oreStockpiles, woodStockpiles);
+    const sameTypeCoords = specType === 'food'
+      ? inRoom.food.map(s => ({ x: s.x, y: s.y }))
+      : specType === 'ore'
+        ? inRoom.ore.map(s => ({ x: s.x, y: s.y }))
+        : inRoom.wood.map(s => ({ x: s.x, y: s.y }));
+    const allOccupied = new Set([
+      ...foodStockpiles.map(s => `${s.x},${s.y}`),
+      ...oreStockpiles.map(s => `${s.x},${s.y}`),
+      ...woodStockpiles.map(s => `${s.x},${s.y}`),
+    ]);
+    const pos = findRoomStockpileSlotPreferClustering(grid, nearest, allOccupied, sameTypeCoords);
+    if (!pos) return;
 
-    if (specType === 'food' && foodStockpiles) {
-      foodStockpiles.push({ x: cx, y: cy, food: 0, meals: 0, maxFood: 200 } as FoodStockpile);
-    } else if (specType === 'ore' && oreStockpiles) {
-      oreStockpiles.push({ x: cx, y: cy, ore: 0, maxOre: 200 } as OreStockpile);
-    } else if (specType === 'wood' && woodStockpiles) {
-      woodStockpiles.push({ x: cx, y: cy, wood: 0, maxWood: 200 } as WoodStockpile);
+    if (specType === 'food') {
+      foodStockpiles.push({ x: pos.x, y: pos.y, food: 0, meals: 0, maxFood: 200 } as FoodStockpile);
+    } else if (specType === 'ore') {
+      oreStockpiles.push({ x: pos.x, y: pos.y, ore: 0, maxOre: 200 } as OreStockpile);
+    } else {
+      woodStockpiles.push({ x: pos.x, y: pos.y, wood: 0, maxWood: 200 } as WoodStockpile);
     }
 
     addWorkFatigue(goblin);
     goblin.task = `established ${specType} storage!`;
-    onLog?.(`designated a new ${specType} storage room!`, 'info');
+    onLog?.(`established a new ${specType} stockpile!`, 'info');
   },
 };

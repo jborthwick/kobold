@@ -12,7 +12,7 @@
  *   4. execute highest-scoring action
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
 import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
@@ -254,6 +254,8 @@ export function tickAgentUtility(
   weatherType?: WeatherType,
   rooms?: Room[],
   mealStockpiles?: MealStockpile[],
+  plankStockpiles?: PlankStockpile[],
+  barStockpiles?: BarStockpile[],
 ): void {
   if (!goblin.alive) return;
 
@@ -341,6 +343,7 @@ export function tickAgentUtility(
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
     warmthField, dangerField, weatherType, rooms, mealStockpiles,
+    plankStockpiles, barStockpiles,
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────
@@ -404,6 +407,14 @@ export function tickAgentUtility(
     if (shouldLog(goblin, 'cooking_interrupted', currentTick, 100)) {
       onLog?.(`🔥 ${goblin.name} abandoned their cooking! The food is ruined!`, 'warn');
     }
+  }
+  const sawingIdle = currentTick - (goblin.sawingLastActiveTick ?? 0);
+  if (goblin.sawingProgress !== undefined && !goblin.task.includes('sawing') && sawingIdle > 40) {
+    goblin.sawingProgress = undefined;
+  }
+  const smithingIdle = currentTick - (goblin.smithingLastActiveTick ?? 0);
+  if (goblin.smithingProgress !== undefined && !goblin.task.includes('smithing') && smithingIdle > 40) {
+    goblin.smithingProgress = undefined;
   }
 }
 

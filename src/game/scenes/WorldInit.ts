@@ -39,6 +39,8 @@ export function initializeWorld(scene: WorldScene) {
     scene.goalStartTick = save.goalStartTick ?? 0;
     scene.foodStockpiles = save.foodStockpiles;
     scene.mealStockpiles = save.mealStockpiles ?? [];
+    scene.plankStockpiles = save.plankStockpiles ?? [];
+    scene.barStockpiles = save.barStockpiles ?? [];
     scene.oreStockpiles = save.oreStockpiles;
     scene.woodStockpiles = save.woodStockpiles ?? [];
     scene.adventurerKillCount = save.adventurerKillCount;
@@ -74,6 +76,8 @@ export function initializeWorld(scene: WorldScene) {
     const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
     scene.foodStockpiles = [];
     scene.mealStockpiles = [];
+    scene.plankStockpiles = [];
+    scene.barStockpiles = [];
     scene.oreStockpiles = [];
     scene.woodStockpiles = [];
     scene.rooms = [];
@@ -95,6 +99,10 @@ export function initializeWorld(scene: WorldScene) {
   scene.oreStockpileImgList = [];
   scene.woodStockpileGfxList = [];
   scene.woodStockpileImgList = [];
+  scene.plankStockpileGfxList = [];
+  scene.plankStockpileImgList = [];
+  scene.barStockpileGfxList = [];
+  scene.barStockpileImgList = [];
 
   scene.map = scene.make.tilemap({
     tileWidth: TILE_SIZE,
@@ -116,6 +124,8 @@ export function initializeWorld(scene: WorldScene) {
   for (const sp of scene.mealStockpiles) scene.addMealStockpileGraphics(sp);
   for (const sp of scene.oreStockpiles) scene.addOreStockpileGraphics(sp);
   for (const sp of scene.woodStockpiles) scene.addWoodStockpileGraphics(sp);
+  for (const sp of scene.plankStockpiles) scene.addPlankStockpileGraphics(sp);
+  for (const sp of scene.barStockpiles) scene.addBarStockpileGraphics(sp);
 
   scene.buildPreviewGfx = scene.add.graphics().setDepth(50);
   scene.offScreenGfx = scene.add.graphics().setScrollFactor(0).setDepth(100);

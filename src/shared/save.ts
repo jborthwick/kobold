@@ -1,4 +1,4 @@
-import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
+import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
 
 export interface SaveData {
@@ -31,6 +31,10 @@ export interface SaveData {
   rooms?: Room[];
   /** Meal stockpiles inside kitchens — optional for backward compat. */
   mealStockpiles?: MealStockpile[];
+  /** Plank stockpiles in lumber huts. */
+  plankStockpiles?: PlankStockpile[];
+  /** Bar stockpiles in blacksmiths. */
+  barStockpiles?: BarStockpile[];
   /** Cumulative meals cooked this colony — optional for backward compat. */
   mealsCooked?: number;
 }
@@ -91,6 +95,8 @@ export function loadGame(): SaveData | null {
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];
+    data.plankStockpiles ??= [];
+    data.barStockpiles ??= [];
     data.mealsCooked ??= 0;
     // Migrate: remove legacy meals field from food stockpiles
     for (const sp of data.foodStockpiles) {
