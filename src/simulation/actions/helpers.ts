@@ -1,3 +1,16 @@
+/**
+ * Shared helpers for actions: movement, fatigue, stockpile lookup, flavor text. These helpers
+ * mutate goblin state (position, fatigue, moveTarget, moveExpiry, lastLoggedTicks).
+ *
+ * Movement: use moveToward() (or getOrSetMoveTarget + moveTo) so the goblin commits to a target
+ * for a few ticks — otherwise re-scanning every tick makes them ping-pong between two equally
+ * good tiles. moveTo does one A* step and adds fatigue; leg wounds can skip (wounds.ts).
+ * Fatigue: fatigueRate() is trait-modified. moveTo adds 0.2× rate per step; addWorkFatigue() adds
+ * 0.4× (call from harvest/mine/chop/build). Stockpiles: nearest*Stockpile(filter) returns
+ * Manhattan-nearest matching pile. Logging: traitText() for eat/rest/share; shouldLog() is
+ * cooldown-gated so logs don't spam.
+ */
+
 import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
 import { pathNextStep, traitMod } from '../agents';
 import { isLegWoundSkip } from '../wounds';
@@ -9,6 +22,7 @@ export function totalLoad(inv: { food: number; ore: number; wood: number }): num
 
 // ── Trait-flavored log text ──────────────────────────────────────────────────
 
+/** Per-trait override strings for eat / rest / share (used in action logs). */
 export const TRAIT_FLAVOR: Record<GoblinTrait, Record<string, string>> = {
   lazy:      { eat: 'scarfed down food messily',       rest: 'collapsed into a heap',          share: 'grudgingly tossed over some food' },
   helpful:   { eat: 'gobbled food quickly',            rest: 'rested briefly',                 share: 'excitedly shared' },
@@ -24,18 +38,19 @@ export function traitText(goblin: Goblin, action: string): string {
   return TRAIT_FLAVOR[goblin.trait]?.[action] ?? action;
 }
 
-/** Cooldown-gated log: returns true (and records the tick) at most once per `cooldown` ticks. */
+/** Cooldown-gated log: true at most once per cooldown ticks; updates goblin.lastLoggedTicks[key]. */
 export function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number): boolean {
   if (tick - (goblin.lastLoggedTicks[key] ?? -Infinity) < cooldown) return false;
   goblin.lastLoggedTicks[key] = tick;
   return true;
 }
 
+/** Trait-modified fatigue rate (e.g. lazy = higher). */
 export function fatigueRate(goblin: Goblin): number {
   return traitMod(goblin, 'fatigueRate', 1.0);
 }
 
-/** Returns a committed movement target, or scanned target if expired/arrived. */
+/** Current committed target, or set and return new target if expired/arrived. */
 export function getOrSetMoveTarget(
   goblin: Goblin,
   newTarget: { x: number; y: number },
@@ -53,6 +68,7 @@ export function getOrSetMoveTarget(
   return newTarget;
 }
 
+/** One step toward target. Leg wound may skip movement (wounds.ts). */
 export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: Tile[][]): void {
   // Leg wound: 40% chance to skip this tick's movement (limp)
   if (isLegWoundSkip(goblin)) return;
@@ -62,8 +78,7 @@ export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: T
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
 }
 
-/** Move toward a target with committed path memory to prevent oscillations.
- * Combines getOrSetMoveTarget + moveTo into a single call. */
+/** Move toward target with path commitment (getOrSetMoveTarget + moveTo). */
 export function moveToward(
   goblin: Goblin,
   newTarget: { x: number; y: number },
@@ -75,6 +90,7 @@ export function moveToward(
   moveTo(goblin, dest, grid);
 }
 
+/** Add work fatigue (0.4 × fatigueRate). Call from harvest/mine/chop/build. */
 export function addWorkFatigue(goblin: Goblin): void {
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate(goblin));
 }

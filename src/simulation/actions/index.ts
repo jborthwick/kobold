@@ -1,3 +1,8 @@
+/**
+ * Registers all actions in ALL_ACTIONS. Order in the array does not set priority — scoring
+ * does; comments on each entry document intent (e.g. seekSafety before rest). New actions:
+ * add to this array and to ACTION_DISPLAY_NAMES in utilityAI.ts.
+ */
 export type { ActionContext, Action } from './types';
 
 import { commandMove, eat, rest } from './survival';

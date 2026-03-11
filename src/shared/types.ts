@@ -1,3 +1,11 @@
+/**
+ * Single source of truth for game and simulation state: tiles, goblins, stockpiles, rooms, UI.
+ * Don't duplicate these shapes elsewhere.
+ *
+ * Adding new persisted fields: add to the interface, then add migration in save.ts loadGame()
+ * (e.g. if (d.newField === undefined) d.newField = default). See existing migrations as template.
+ */
+
 export enum TileType {
   Dirt = 'dirt',
   Grass = 'grass',

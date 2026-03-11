@@ -1,15 +1,10 @@
 /**
- * Utility AI — replaces the fixed-priority behavior tree with scored action selection.
+ * Scored action selection (replaces a fixed-priority behaviour tree). Every tick each
+ * eligible action scores 0–1; the highest wins. Scoring lets personality (traits) tip
+ * close calls without hardcoded branches; traits shift sigmoid midpoints, not thresholds.
  *
- * Every tick each eligible action scores 0–1. The highest-scoring action wins.
- * Traits shift sigmoid midpoints (not thresholds), creating organic personality-driven
- * divergence.
- *
- * Flow:
- *   1. updateNeeds()           — hunger, morale, fatigue, social
- *   2. starvation damage       — unconditional, not an action
- *   3. score all eligible actions
- *   4. execute highest-scoring action
+ * Flow: (1) updateNeeds() — hunger, morale, fatigue, social. (2) Starvation damage
+ * (unconditional). (3) Score all eligible actions. (4) Execute highest-scoring action.
  */
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
@@ -23,17 +18,8 @@ import { applyTraitBias } from './traitActionBias';
 import { tickWoundHealing } from './wounds';
 import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 
-// ── Response curves ────────────────────────────────────────────────────────────
-//
-// These three functions are the scoring vocabulary for the entire utility AI.
-// Every action score is built from combinations of these curves applied to need values.
-//
-// sigmoid:        low→0, high→1  (urgency rises as need worsens)
-// inverseSigmoid: low→1, high→0  (urgency falls as need worsens, e.g. "forage less when full")
-// ramp:           dead-simple linear 0→1 between two breakpoints
-//
-// Traits shift the *midpoint* argument, not the output — a lazy goblin hits the
-// rest midpoint sooner, producing organically higher rest scores without special-casing.
+// Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
+// Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
 
 /** S-curve: 0 at low values, 1 at high values. Steepness controls transition sharpness. */
 export function sigmoid(value: number, midpoint: number, steepness = 0.15): number {

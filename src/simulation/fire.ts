@@ -1,13 +1,7 @@
 /**
- * Fire system — ignition, spread, burnout, and goblin damage.
- *
- * Fires spread in slow waves: high probability but long intervals between attempts.
- * Rain extinguishes active fires tile-by-tile each tick.
- * Burnout converts fire tiles to Dirt.
- *
- * Spread model: each fire tile attempts to spread every SPREAD_INTERVAL ticks,
- * staggered by its own fireTick so cascades don't all fire simultaneously.
- * During rain, spreading is blocked and each tile has a chance to be extinguished.
+ * Ignition (from hearths), spread (staggered by fireTick per tile), burnout → Dirt, goblin
+ * damage. Fire is both environmental threat and warmth source (diffusion); rain extinguishes,
+ * drought raises risk. Spread: high probability per attempt, long interval between attempts.
  */
 
 import { TileType, type Tile, type Goblin, type WeatherType } from '../shared/types';

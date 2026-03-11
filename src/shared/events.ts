@@ -1,3 +1,11 @@
+/**
+ * Event bus (mitt) — decouples game/simulation from UI. Game loop and sim emit; React HUD and
+ * Phaser subscribe. See the Events type below for payloads.
+ *
+ * Adding a new event: add name and payload to Events, emit with bus.emit('eventName', payload),
+ * subscribe with bus.on('eventName', handler). Keep payloads plain data (no class instances).
+ */
+
 import mitt from 'mitt';
 import type { GameState, LogEntry, TileInfo, MiniMapData, Adventurer, OverlayMode, Chapter, RoomType } from './types';
 

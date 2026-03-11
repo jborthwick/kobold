@@ -1,13 +1,8 @@
 /**
- * Weather system — a global state that modifies growback rates and goblin metabolism.
- *
- * Weather creates cascading scarcity/abundance without touching any agent logic
- * directly.  Drought → growback drops → food dries up → hunger crisis → morale
- * spiral.  Rain → abundance → surplus → sharing → morale recovery.
- *
- * Seasons cycle every SEASON_LENGTH ticks.  Each season has a weighted distribution
- * of weather types.  Weather transitions happen at season boundaries and randomly
- * mid-season (WEATHER_SHIFT_CHANCE per tick).
+ * Global state that modifies growback and goblin metabolism. Cascading scarcity/abundance
+ * without touching agent logic: drought → growback drops → hunger → morale spiral; rain →
+ * abundance → surplus → morale recovery. Seasons cycle every SEASON_LENGTH ticks;
+ * transitions at boundaries and randomly mid-season (WEATHER_SHIFT_CHANCE).
  */
 
 import type { WeatherType, Season } from '../shared/types';

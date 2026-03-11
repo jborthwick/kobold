@@ -1,3 +1,19 @@
+/**
+ * One simulation step per call (WorldScene Phaser timer, TICK_RATE_MS). Order matters: AI runs
+ * before world physics so goblins react to the previous frame's state; then we apply damage,
+ * growback, fire, etc.
+ *
+ * 1. Weather — tickWeather; log season/weather.
+ * 2. Diffusion — warmth, danger, traffic; cache smoothed warmth on goblins.
+ * 3. Utility AI — each alive goblin: needs, score actions, execute highest.
+ * 4. World physics — growback; burning goblins; pooling; fire; lightning.
+ * 5. Raids — maybeSpawnRaid; tickAdventurers (move, attack); damage/wounds; remove dead.
+ * 6. World events — blight, bounty, mushroom, ore; tickMushroomSprout.
+ * 7. Succession — queue spawn for dead goblins; spawn at SUCCESSION_DELAY.
+ * 8. Sync — stockpile gfx; room expansion (expandStockpilesInRooms, lumber/blacksmith);
+ *    WorldGoals.updateGoalProgress; emitMiniMap; emitGameState; auto-save every 100 ticks.
+ */
+
 import { GRID_SIZE } from '../../shared/constants';
 import { bus } from '../../shared/events';
 import { getActiveFaction } from '../../shared/factions';

@@ -1,3 +1,8 @@
+/**
+ * Serialises scene state for save and HUD. buildSaveData(scene) → SaveData for localStorage;
+ * emitGameState(scene) pushes state to the React HUD via the event bus. WorldTick calls both
+ * (auto-save, every-tick emit) and the save/load flow uses buildSaveData.
+ */
 import { bus } from '../../shared/events';
 import { getNextEventTick } from '../../simulation/events';
 import { TILE_SIZE } from '../../shared/constants';

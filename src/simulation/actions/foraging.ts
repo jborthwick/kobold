@@ -1,3 +1,7 @@
+/**
+ * Forage (scan for food, pathfind, harvest), depositFood, withdrawFood. Hunger-driven; uses
+ * knownFoodSites when no patch in range. Foragers get 2 food/tile, others 1.
+ */
 import { TileType } from '../../shared/types';
 import type { ResourceSite } from '../../shared/types';
 import { GRID_SIZE, MAX_INVENTORY_CAPACITY } from '../../shared/constants';

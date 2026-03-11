@@ -1,16 +1,7 @@
 /**
- * Rain pooling system — water collects in lowlands during rain and slowly evaporates.
- *
- * "Lowlands" are approximated by proximity to permanent Water tiles (lakeshore /
- * riverbank tiles are always at low elevation in the biome system).  No elevation
- * data needs to be stored on tiles.
- *
- * During rain:
- *   Dirt / Grass / Farmland tiles adjacent to Water or Pool convert to Pool.
- *
- * After rain (or in drought):
- *   Pool tiles older than POOL_MIN_AGE evaporate back to their priorType.
- *   Drought accelerates evaporation significantly.
+ * Rain pooling: lowlands (tiles adjacent to Water) become Pool during rain; evaporate back
+ * to priorType when dry (drought speeds evaporation). Pools block movement and extinguish
+ * burning goblins; they also feed firefighting (fetch water). No elevation stored on tiles.
  */
 
 import { TileType, type Tile, type WeatherType } from '../shared/types';

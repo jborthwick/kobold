@@ -1,12 +1,7 @@
 /**
- * World generation — dual-noise biome classification (Red Blob Games pattern).
- *
- * Two independent Simplex noise fields (elevation + moisture) are sampled at
- * every tile.  A biome lookup table maps (elevation, moisture) → TileType.
- * Resource values (food, material) are derived from the continuous noise
- * fields, not random.  An explicit sinusoidal river (perturbed by elevation
- * noise) provides the gameplay barrier.  Everything is fully seeded —
- * same seed = identical world.
+ * World generation — dual Simplex noise (elevation + moisture) → biome lookup → TileType.
+ * Resource values come from the noise fields; a sinusoidal river (perturbed by elevation)
+ * is the main barrier. Fully seeded: same seed gives identical world for debugging and replay.
  */
 
 import { createNoise2D } from 'simplex-noise';

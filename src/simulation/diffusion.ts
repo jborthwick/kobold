@@ -1,12 +1,8 @@
 /**
- * Diffusion fields — spatial awareness layers recomputed every tick.
- *
- * Three fields indexed as y * GRID_SIZE + x:
- *   warmthField  — heat from hearths + stockpiles, amplified by wall shelter
- *   dangerField  — threat pressure from adventurers + map edges, walls block
- *   trafficScore — goblin foot-traffic (stored on tile.trafficScore, persists between ticks)
- *
- * All fields are transient and never saved to disk.
+ * Spatial awareness layers recomputed every tick (index: y * GRID_SIZE + x). Warmth from
+ * hearths and stockpiles (walls add shelter); danger from adventurers and map edges (walls
+ * block). Goblins seek warmth and flee danger — these fields drive seekWarmth, seekSafety,
+ * and rest scoring. Transient (not saved).
  */
 
 import { GRID_SIZE } from '../shared/constants';

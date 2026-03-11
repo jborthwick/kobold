@@ -1,3 +1,8 @@
+/**
+ * smith. Requires a blacksmith room; consumes ore from stockpile to produce bars into the
+ * blacksmith's bar stockpile. Work at the anvil (room center); bars used for building
+ * or future crafting.
+ */
 import type { BarStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveToward, addWorkFatigue, nearestOreStockpile } from './helpers';

@@ -1,5 +1,18 @@
+/**
+ * RimWorld-style mood: Thoughts and Memories drive morale. targetMorale (0–100) is computed each
+ * tick in utilityAI.updateNeeds() from thoughts, memories, and needs; goblin.morale lerps toward it.
+ *
+ * Thoughts = one-off events (ate a meal, rested by hearth). One delta, fixed duration; re-adding
+ * refreshes duration. Memories = sustained misery (starving, lonely, freezing) — staged deltas that
+ * decay if not refreshed, so mood degrades over time until the problem is fixed.
+ *
+ * Adding: add to THOUGHT_DEFS or MEMORY_DEFS, then call addThought()/addMemory() from the action
+ * that triggers it. targetMorale and expiry/decay are in utilityAI.updateNeeds().
+ */
+
 import type { Goblin } from '../shared/types';
 
+/** One-off mood modifier with a fixed duration. */
 export interface ThoughtDef {
   id: string;
   label: string;
@@ -7,6 +20,7 @@ export interface ThoughtDef {
   duration: number; // Ticks until expiry
 }
 
+/** Staged mood modifier; drops a stage after decayDuration ticks without refresh. */
 export interface MemoryDef {
   id: string;
   label: string | ((stage: number) => string);
@@ -14,7 +28,7 @@ export interface MemoryDef {
   decayDuration: number; // Ticks before dropping a stage
 }
 
-// Map of standard thoughts
+/** Standard thoughts (ate, rested, singed, etc.). */
 export const THOUGHT_DEFS: Record<string, ThoughtDef> = {
   'ate_raw_food': { id: 'ate_raw_food', label: 'Ate raw food', delta: -5, duration: 250 },
   'ate_tasty_meal': { id: 'ate_tasty_meal', label: 'Ate tasty meal', delta: 8, duration: 400 },
@@ -28,7 +42,7 @@ export const THOUGHT_DEFS: Record<string, ThoughtDef> = {
   'mined_ore': { id: 'mined_ore', label: 'Mined shiny ore', delta: 2, duration: 150 },
 };
 
-// Map of standard memories
+/** Standard memories (starving, lonely, exhausted, freezing, under attack). */
 export const MEMORY_DEFS: Record<string, MemoryDef> = {
   'chatted_with_ally': {
     id: 'chatted_with_ally',
@@ -68,6 +82,7 @@ export const MEMORY_DEFS: Record<string, MemoryDef> = {
   }
 };
 
+/** Add or refresh a thought; extends expiry if already present. No-op if thoughtId not in THOUGHT_DEFS. */
 export function addThought(goblin: Goblin, thoughtId: string, currentTick: number) {
   const def = THOUGHT_DEFS[thoughtId];
   if (!def) return;
@@ -79,6 +94,7 @@ export function addThought(goblin: Goblin, thoughtId: string, currentTick: numbe
   }
 }
 
+/** Add or advance a memory (stage capped at max, decay timer reset). No-op if memoryId not in MEMORY_DEFS. */
 export function addMemory(goblin: Goblin, memoryId: string, currentTick: number) {
   const def = MEMORY_DEFS[memoryId];
   if (!def) return;

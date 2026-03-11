@@ -1,3 +1,7 @@
+/**
+ * cook. Requires a kitchen room; consumes food + wood to produce meals into the kitchen's
+ * meal stockpile. Meals improve morale (ate_tasty_meal thought) and feed withdrawFood.
+ */
 import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';

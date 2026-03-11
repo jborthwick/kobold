@@ -1,3 +1,8 @@
+/**
+ * fight, seekSafety. seekSafety flees when danger (diffusion) is high; fight lets fighters
+ * hunt adventurers in range. Danger-driven so goblins prioritize survival over work when
+ * raids happen.
+ */
 import type { Adventurer } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { getActiveFaction } from '../../shared/factions';

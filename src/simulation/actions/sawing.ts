@@ -1,3 +1,8 @@
+/**
+ * saw. Requires a lumber_hut room; consumes wood from stockpile to produce planks into the
+ * hut's plank stockpile. Work happens at the saw tile (room center); planks used for
+ * building or future crafting.
+ */
 import type { PlankStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveToward, addWorkFatigue, nearestWoodStockpile } from './helpers';

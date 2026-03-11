@@ -1,10 +1,8 @@
 /**
- * Adventurer raid simulation.
- *
- * Raids spawn from map edges every 500–900 ticks in groups of 2–4 adventurers.
- * Each adventurer moves one tile per tick toward the nearest alive goblin.
- * When an adventurer reaches a goblin's tile it attacks; the goblin fights back.
- * Dead adventurers are reported in AdventurerTickResult.adventurerDeaths and removed by WorldScene.
+ * Raid simulation: adventurers spawn from map edges every 500–900 ticks (2–4 per raid),
+ * path toward nearest goblin, attack on contact (goblin fights back). External pressure so
+ * the colony can't ignore combat and safety actions. Dead adventurers in
+ * AdventurerTickResult.adventurerDeaths; WorldScene removes them.
  */
 
 import type { Adventurer, Goblin, Tile } from '../shared/types';

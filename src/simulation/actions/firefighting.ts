@@ -1,13 +1,7 @@
 /**
- * Firefighting action — goblins fetch water from a lake and douse nearby fire tiles.
- *
- * Two-phase loop using goblin.carryingWater:
- *   Phase 1 (not carrying): navigate to nearest Water tile; collect on arrival.
- *   Phase 2 (carrying):     navigate to nearest Fire tile; douse on arrival.
- *                           80% chance to extinguish; 20% chance to catch fire (bruise).
- *
- * Score scales with proximity to fire, so goblins respond urgently to nearby flames
- * but won't abandon critical survival needs for a distant blaze.
+ * fightFire: fetch water from Water/Pool, then douse nearby fire (two-phase via
+ * goblin.carryingWater). Score scales with proximity so goblins respond to nearby flames
+ * without abandoning survival for a distant blaze. Small chance to get singed when dousing.
  */
 
 import { TileType, type Tile } from '../../shared/types';

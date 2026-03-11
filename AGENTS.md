@@ -204,6 +204,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 ## Key constraints
 
+- **Comments are for both agents and humans.** Prefer brief purpose and "why"; avoid repetitive "Used by / Mutates" on every export.
 - **Never block the game loop.** LLM calls are detached Promises — never awaited in `gameTick()`.
 - **Never crash on bad LLM output.** Every JSON parse is wrapped in try/catch; every field has a fallback.
 - **Keep prompts under 500 tokens.** Memory is capped at 5 entries; compress aggressively.

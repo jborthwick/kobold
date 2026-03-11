@@ -1,3 +1,15 @@
+/**
+ * Player-placed rooms and stockpile expansion. Rooms let you define zones in Build mode; goblins
+ * then expand stockpiles inside those bounds (see actions/stockpiling.ts, actions/building.ts).
+ *
+ * Placement: canPlaceRoom() validates a rectangle (no Water/Wall/Stone/Ore/Pool, no overlap).
+ * Slots: findRoomStockpileSlot / findRoomStockpileSlotPreferClustering return a free walkable
+ * tile in the room; clustering prefers tiles next to same-type piles so piles grow in blocks.
+ * Expansion: when a pile in a room is full, another is added (clustered). Storage rooms have a
+ * per-room cap; lumber hut and blacksmith have fixed caps (e.g. 3 wood / 3 ore). WorldTick
+ * calls the expand functions each tick.
+ */
+
 import { GRID_SIZE } from '../shared/constants';
 import type { Room, Tile, FoodStockpile, OreStockpile, WoodStockpile } from '../shared/types';
 import { TileType } from '../shared/types';
@@ -19,6 +31,7 @@ export function countStockpilesInRoom(
   return foodIn + oreIn + woodIn;
 }
 
+/** True if the rectangle (rx,ry,w,h) is in bounds, avoids Water/Wall/Stone/Ore/Pool, and does not overlap any existing room. */
 export function canPlaceRoom(grid: Tile[][], rooms: Room[], rx: number, ry: number, w: number, h: number): boolean {
     for (let dy = 0; dy < h; dy++) {
         for (let dx = 0; dx < w; dx++) {
@@ -97,6 +110,7 @@ function stockpilesInRoom<T extends { x: number; y: number }>(
     s.x >= room.x && s.x < room.x + room.w && s.y >= room.y && s.y < room.y + room.h);
 }
 
+/** For each storage room: if the last pile of a type in the room is full, add a new one (clustered). */
 export function expandStockpilesInRooms(
     grid: Tile[][],
     rooms: Room[],
@@ -167,6 +181,7 @@ export function expandStockpilesInRooms(
 const MAX_WOOD_IN_LUMBER_HUT = 3;
 const MAX_ORE_IN_BLACKSMITH = 3;
 
+/** For each lumber_hut: if wood pile count < cap and last pile full, add one. */
 export function expandLumberHutWoodStockpiles(
   grid: Tile[][],
   rooms: Room[],
@@ -197,6 +212,7 @@ export function expandLumberHutWoodStockpiles(
   }
 }
 
+/** For each blacksmith: if ore pile count < cap and last pile full, add one. */
 export function expandBlacksmithOreStockpiles(
   grid: Tile[][],
   rooms: Room[],

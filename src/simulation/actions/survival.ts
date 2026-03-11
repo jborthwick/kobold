@@ -1,3 +1,7 @@
+/**
+ * commandMove (player override), eat, rest. Survival actions run when needs are critical;
+ * eat/rest use sigmoid curves so urgency rises as hunger/fatigue worsen.
+ */
 import { sigmoid } from '../utilityAI';
 import { getWarmth } from '../diffusion';
 import { traitMod, FORAGEABLE_TILES } from '../agents';

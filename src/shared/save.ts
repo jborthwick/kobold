@@ -1,3 +1,13 @@
+/**
+ * Persist full game state to localStorage (key: kobold_save_v2). SaveData mirrors live state;
+ * optional fields allow backward compat. WorldTick auto-saves; StartMenu/WorldInit load via loadGame().
+ *
+ * Adding new persisted fields: add to SaveData (optional if compat needed). In loadGame(), add
+ * migration — top-level: data.newField ??= default; per-goblin: loop data.goblins and set
+ * if (d.newField === undefined) d.newField = default. Ensure buildSaveData() and load path include it.
+ * See existing migrations (thoughts, memories, skills, rooms, mealStockpiles, etc.) as template.
+ */
+
 import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
 
@@ -41,10 +51,12 @@ export interface SaveData {
 
 const KEY = 'kobold_save_v2';
 
+/** Write full game state to localStorage. */
 export function saveGame(data: SaveData): void {
   localStorage.setItem(KEY, JSON.stringify(data));
 }
 
+/** Parse and migrate from localStorage; returns null if missing/invalid. Mutates parsed data in place for migrations. */
 export function loadGame(): SaveData | null {
   const s = localStorage.getItem(KEY);
   if (!s) return null;
@@ -109,10 +121,12 @@ export function loadGame(): SaveData | null {
   }
 }
 
+/** Remove the save (e.g. new colony). */
 export function deleteSave(): void {
   localStorage.removeItem(KEY);
 }
 
+/** True if a save exists (start menu Continue button). */
 export function hasSave(): boolean {
   return !!localStorage.getItem(KEY);
 }

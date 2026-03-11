@@ -1,3 +1,7 @@
+/**
+ * seekWarmth, wander. seekWarmth moves toward high warmth (diffusion) when cold; wander is
+ * the low-score fallback when nothing urgent — keeps goblins moving and discovering tiles.
+ */
 import { TileType } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { isWalkable } from '../world';

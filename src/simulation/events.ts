@@ -1,12 +1,8 @@
 /**
- * World events — blight, bounty, ore_discovery.
- *
- * Layout-agnostic: all event types scan the live grid to find eligible tiles
- * rather than relying on hardcoded coordinate zones.  Works regardless of
- * world-gen changes.
- *
- * Fires once every EVENT_MIN_INTERVAL–EVENT_MAX_INTERVAL ticks (random window
- * scheduled after each event so they don't cluster).
+ * World events: blight, bounty, ore discovery, mushroom spread. Injects scarcity or bounty
+ * so the world isn't static. Layout-agnostic — scans the live grid for eligible tiles so it
+ * works with any world gen. Fires every EVENT_MIN_INTERVAL–EVENT_MAX_INTERVAL ticks (random
+ * window after each event to avoid clustering).
  */
 
 import { TileType, type Tile, type Goblin, type Adventurer } from '../shared/types';

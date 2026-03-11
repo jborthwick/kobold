@@ -1,3 +1,8 @@
+/**
+ * buildWall, buildHearth. Walls are built on room perimeters (roomWallSlots); hearths go in
+ * kitchen centers. Ore from stockpile or inventory. Room-aware so goblins fortify where the
+ * player placed zones.
+ */
 import { TileType } from '../../shared/types';
 import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';

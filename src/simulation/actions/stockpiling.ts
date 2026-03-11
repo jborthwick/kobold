@@ -1,3 +1,8 @@
+/**
+ * establishStockpile. Goblin picks food/ore/wood by which type the colony is shortest on
+ * (fill ratio); places a new pile in a storage room slot. Lets storage rooms grow with
+ * demand instead of fixed layouts.
+ */
 import type { Room, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
 import { inverseSigmoid } from '../utilityAI';
 import { moveTo, addWorkFatigue } from './helpers';

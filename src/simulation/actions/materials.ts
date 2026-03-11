@@ -1,3 +1,7 @@
+/**
+ * mine, chop, depositOre, depositWood. Colony need (stockpile fill) scales score; miners and
+ * lumberjacks target ore/forest tiles via pathfinding. Uses known sites when in range.
+ */
 import { TileType } from '../../shared/types';
 import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';

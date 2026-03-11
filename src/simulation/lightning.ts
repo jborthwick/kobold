@@ -1,10 +1,6 @@
 /**
- * Lightning system — strikes random tiles during thunderstorms.
- *
- * Each tick during a storm there is a BASE_LIGHTNING_CHANCE of a strike.
- * If the struck tile is flammable it ignites immediately, bypassing the
- * normal hearth-ignition mechanic.  Water and Pool tiles absorb the bolt
- * harmlessly.  All other tiles are scorched to Dirt.
+ * Lightning strikes random tiles during storms (BASE_LIGHTNING_CHANCE per tick). Flammable →
+ * ignite; Water/Pool absorb; else scorch to Dirt. Adds risk so storm weather isn't purely beneficial.
  */
 
 import { TileType, type Tile, type WeatherType } from '../shared/types';

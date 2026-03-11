@@ -1,3 +1,8 @@
+/**
+ * share, socialize, avoidRival. Share gifts food to hungry nearby allies (trait-modulated
+ * threshold and range). Socialize and avoidRival feed the social need and morale so the
+ * colony doesn't spiral from isolation.
+ */
 import type { Goblin } from '../../shared/types';
 import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { isWalkable } from '../world';
