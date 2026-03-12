@@ -203,6 +203,11 @@ export class WorldScene extends Phaser.Scene {
 
       // Auto-create an empty MealStockpile so eating from kitchen works immediately
       this.mealStockpiles.push({ x: x + 1, y: y + 1, meals: 0, maxMeals: 50 });
+
+      // Auto-create a FoodStockpile so depositFood targets the kitchen immediately
+      const foodPile: FoodStockpile = { x: x + 3, y: y + 1, food: 0, maxFood: 200 };
+      this.foodStockpiles.push(foodPile);
+      this.addFoodStockpileGraphics(foodPile);
     }
 
     const roomName = this.buildMode === 'storage' ? 'Storage zone'

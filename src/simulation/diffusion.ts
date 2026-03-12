@@ -6,7 +6,7 @@
  */
 
 import { GRID_SIZE } from '../shared/constants';
-import { TileType, isWallType, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType } from '../shared/types';
+import { TileType, isWallType, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType, type Room } from '../shared/types';
 
 const N = GRID_SIZE * GRID_SIZE;
 
@@ -42,7 +42,7 @@ export function findHearths(grid: Tile[][]): { x: number; y: number }[] {
 
 /**
  * Multi-source BFS warmth field.
- * Sources: Hearth tiles (strength 100), food stockpiles (strength 60).
+ * Sources: Hearth tiles (strength 100), food stockpiles (strength 60), placed rooms (strength 40).
  * Walls block propagation; adjacent walls add shelter bonus.
  * Cold weather multiplies all values by 0.7.
  */
@@ -52,6 +52,7 @@ export function computeWarmth(
   foodStockpiles: FoodStockpile[],
   weatherType: WeatherType,
   out: Float32Array,
+  rooms?: Room[],
 ): void {
   out.fill(0);
 
@@ -59,6 +60,12 @@ export function computeWarmth(
   const queue: [number, number, number][] = [];
   for (const h of hearths)       queue.push([h.x, h.y, 100]);
   for (const s of foodStockpiles) queue.push([s.x, s.y, 60]);
+  // Placed rooms emit modest warmth at their centers — enough to attract goblins when cold
+  for (const r of rooms ?? []) {
+    const cx = r.x + Math.floor(r.w / 2);
+    const cy = r.y + Math.floor(r.h / 2);
+    queue.push([cx, cy, 40]);
+  }
   // Fire tiles radiate heat — visible in warmth overlay, shorter range than hearths
   for (let fy = 0; fy < GRID_SIZE; fy++) {
     for (let fx = 0; fx < GRID_SIZE; fx++) {

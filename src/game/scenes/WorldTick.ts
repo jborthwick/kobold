@@ -54,7 +54,7 @@ export function gameTick(scene: WorldScene) {
 
     // ── Diffusion fields ─────────────────────────────────────────────────
     const hearths = findHearths(scene.grid);
-    computeWarmth(scene.grid, hearths, scene.foodStockpiles, scene.weather.type, scene.warmthField);
+    computeWarmth(scene.grid, hearths, scene.foodStockpiles, scene.weather.type, scene.warmthField, scene.rooms);
     computeDanger(scene.grid, scene.adventurers, scene.dangerFieldPrev, scene.dangerField);
     scene.dangerFieldPrev.set(scene.dangerField);
     updateTraffic(scene.grid, scene.goblins);
