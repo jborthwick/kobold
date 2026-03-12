@@ -224,7 +224,7 @@ export function TilePicker() {
     for (const entry of entries) {
       if (entry.section === 'terrain') {
         tileConfig[entry.key] = entry.frames;
-        if (!existingTypes.has(entry.key)) newTypes.push(entry.key);
+        if (!(existingTypes as Set<string>).has(entry.key)) newTypes.push(entry.key);
       } else {
         spriteConfig[entry.key] = entry.frames[0] ?? 0;
       }
