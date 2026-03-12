@@ -5,7 +5,7 @@
  */
 import type { Adventurer } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 import { isWalkable } from '../world';
 import { sigmoid, inverseSigmoid } from '../utilityAI';
 import { traitMod, pathNextStep } from '../agents';
@@ -57,7 +57,7 @@ export const fight: Action = {
     }
     goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate(goblin));
     const distAfter = Math.abs(nearest.g.x - goblin.x) + Math.abs(nearest.g.y - goblin.y);
-    const enemySing = getActiveFaction().enemyNounPlural.replace(/s$/, '');
+    const enemySing = getGoblinConfig().enemyNounPlural.replace(/s$/, '');
     goblin.task = distAfter === 0 ? `fighting ${enemySing}!` : `→ ${enemySing} (${distAfter} tiles)`;
     // Combat XP — grant on engaging in combat
     if (distAfter === 0) grantXp(goblin, 'combat', currentTick, onLog);

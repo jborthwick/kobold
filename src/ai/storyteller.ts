@@ -7,16 +7,16 @@
 
 import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
-import { getActiveFaction } from '../shared/factions';
+import { getGoblinConfig } from '../shared/goblinConfig';
 
 // ── Personas ──────────────────────────────────────────────────────────────────
-// Optional narrator tone override per persona; fallback is faction narratorTone.
+// Optional narrator tone override per persona; fallback is goblin config narratorTone.
 // Enables future UI to switch e.g. balanced vs chaotic storyteller.
 
 export interface StorytellerPersona {
   id: string;
   name: string;
-  /** Override for "You are the narrator... — {tone}". Omit to use faction narratorTone. */
+  /** Override for "You are the narrator... — {tone}". Omit to use goblin config narratorTone. */
   narratorToneOverride?: string;
 }
 
@@ -60,7 +60,7 @@ const PROVIDERS = {
   },
   groq: {
     url: '/api/groq-proxy',
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     extractText: (data: { choices?: Array<{ message?: { content?: string } }> }) => 
       data.choices?.[0]?.message?.content,
     extractUsage: (data: { usage?: { prompt_tokens?: number; completion_tokens?: number } }) => ({
@@ -89,7 +89,7 @@ export function filterSignificantEvents(
   for (const e of recent) {
     if (e.level === 'error') { significant.push(e); continue; }
     if (SIG_NAMES.has(e.goblinName)) { significant.push(e); continue; }
-    if (e.message.includes(getActiveFaction().killVerb)) { significant.push(e); continue; }
+    if (e.message.includes(getGoblinConfig().killVerb)) { significant.push(e); continue; }
     if (e.level === 'warn' && e.goblinId !== 'verify' && warnCount < 3) {
       significant.push(e);
       warnCount++;
@@ -134,17 +134,17 @@ export async function callStorytellerLLM(
     ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
     : '\nA quiet chapter with no major events.';
 
-  const faction = getActiveFaction();
+  const cfg = getGoblinConfig();
   const persona = getStorytellerPersona();
-  const narratorTone = persona.narratorToneOverride ?? faction.narratorTone;
+  const narratorTone = persona.narratorToneOverride ?? cfg.narratorTone;
   const chapterNum = completedGoal.generation + 1;
   const prompt =
-    `You are the narrator of a ${faction.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
+    `You are the narrator of a ${cfg.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
     `The colony just completed: ${completedGoal.description}\n` +
-    `Colony: ${alive.length} ${faction.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
+    `Colony: ${alive.length} ${cfg.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
     `Tone: ${tone} (tension ${tension.toFixed(0)}/100)\n` +
     `${eventBlock}\n\n` +
-    `Write in past tense, third person. Be specific — name ${faction.unitNounPlural}, reference actual events. No dialogue.`;
+    `Write in past tense, third person. Be specific — name ${cfg.unitNounPlural}, reference actual events. No dialogue.`;
 
   try {
     lastCallTick = currentTick ?? lastCallTick;
@@ -197,10 +197,10 @@ export function buildFallbackChapter(
   const raidCount = events.filter(e => e.includes('storm') || e.includes('RAID')).length;
   const names = alive.slice(0, 3).map(d => d.name).join(', ');
 
-  const faction = getActiveFaction();
+  const cfg = getGoblinConfig();
   let text = `The colony completed "${goal.description}" after ${goal.generation + 1} cycle${goal.generation > 0 ? 's' : ''}.`;
-  if (deathCount > 0) text += ` ${deathCount} ${faction.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
-  if (raidCount > 0) text += ` The colony endured ${raidCount} ${faction.enemyNounPlural.slice(0, 1).toUpperCase() + faction.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
+  if (deathCount > 0) text += ` ${deathCount} ${cfg.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
+  if (raidCount > 0) text += ` The colony endured ${raidCount} ${cfg.enemyNounPlural.slice(0, 1).toUpperCase() + cfg.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
   if (names) text += ` ${names} and the others press on.`;
   return text;
 }

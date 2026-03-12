@@ -4,7 +4,7 @@
 
 import type { Goblin, Tile, MemoryEntry } from '../../shared/types';
 import { INITIAL_GOBLINS } from '../../shared/constants';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 import { isWalkable } from '../world';
 import {
   TRAIT_MODS,
@@ -43,8 +43,8 @@ export function spawnGoblins(
     const healthBonus = TRAIT_MODS[trait]?.healthBonus ?? 0;
     const maxHealth = Math.max(10, 100 + healthBonus);
 
-    const factionNames = getActiveFaction().names;
-    const baseName = factionNames[i % factionNames.length];
+    const names = getGoblinConfig().names;
+    const baseName = names[i % names.length];
     goblins.push({
       id:            `goblin-${i}`,
       name:          baseName,
@@ -93,7 +93,7 @@ export function spawnSuccessor(
   dead:       Goblin,
   grid:       Tile[][],
   spawnZone:  { x: number; y: number; w: number; h: number },
-  allDwarves: Goblin[],
+  allGoblins: Goblin[],
   tick:       number,
 ): Goblin {
   const baseName = dead.baseName;
@@ -128,14 +128,14 @@ export function spawnSuccessor(
   const topAlly = sortedRels.find(([, s]) => s > 60);
   const topRival = [...sortedRels].reverse().find(([, s]) => s < 40);
   if (topAlly) {
-    const allyDwarf = allDwarves.find(d => d.id === topAlly[0]);
-    if (allyDwarf) inheritedMemory.push({ tick, crisis: 'inheritance',
-      action: `${dead.name}'s closest companion was ${allyDwarf.name}` });
+    const allyGoblin = allGoblins.find(d => d.id === topAlly[0]);
+    if (allyGoblin) inheritedMemory.push({ tick, crisis: 'inheritance',
+      action: `${dead.name}'s closest companion was ${allyGoblin.name}` });
   }
   if (topRival) {
-    const rivalDwarf = allDwarves.find(d => d.id === topRival[0]);
-    if (rivalDwarf) inheritedMemory.push({ tick, crisis: 'inheritance',
-      action: `${dead.name}'s greatest rival was ${rivalDwarf.name}` });
+    const rivalGoblin = allGoblins.find(d => d.id === topRival[0]);
+    if (rivalGoblin) inheritedMemory.push({ tick, crisis: 'inheritance',
+      action: `${dead.name}'s greatest rival was ${rivalGoblin.name}` });
   }
 
   const relations: Record<string, number> = {};

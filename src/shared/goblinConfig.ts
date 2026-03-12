@@ -1,13 +1,10 @@
 /**
- * Faction config — goblin colony display settings.
- *
- * FactionConfig holds all the display-layer content:
- * names, bios, goals, trait/role display labels, LLM prompt tone, and UI text.
+ * Goblin colony display config — names, bios, goals, trait/role labels, LLM prompt tone, and UI text.
  */
 
 import type { GoblinTrait } from './types';
 
-export interface FactionConfig {
+export interface GoblinConfig {
   /** Singular noun shown in UI. */
   unitNoun: string;
   /** Plural noun shown in UI. */
@@ -56,9 +53,7 @@ export interface FactionConfig {
   };
 }
 
-// ── Goblin faction (the one and only) ────────────────────────────────────────
-
-export const GOBLIN_FACTION: FactionConfig = {
+export const GOBLIN_CONFIG: GoblinConfig = {
   unitNoun: 'goblin',
   unitNounPlural: 'goblins',
   title: 'KOBOLD',
@@ -123,9 +118,7 @@ export const GOBLIN_FACTION: FactionConfig = {
   },
 };
 
-// ── Public API ───────────────────────────────────────────────────────────────
-
-/** Returns the goblin faction config. */
-export function getActiveFaction(): FactionConfig {
-  return GOBLIN_FACTION;
+/** Returns the goblin colony config. */
+export function getGoblinConfig(): GoblinConfig {
+  return GOBLIN_CONFIG;
 }

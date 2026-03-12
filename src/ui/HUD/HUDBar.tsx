@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 import { getStorytellerPersona, setStorytellerPersona, STORYTELLER_PERSONAS } from '../../ai/storyteller';
 
 type LLMProvider = 'anthropic' | 'groq';
@@ -151,7 +151,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   return (
     <div style={topBarStyle}>
-      <Stat label={isPhone ? 'g' : getActiveFaction().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
+      <Stat label={isPhone ? 'g' : getGoblinConfig().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
       <Stat label={isPhone ? 'f' : 'food'} value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'm' : 'meals'} value={(state.totalMeals ?? 0).toFixed(isPhone ? 0 : 1)} />
       <Stat label={isPhone ? 'o' : 'ore'} value={state.totalOre.toFixed(isPhone ? 0 : 1)} />

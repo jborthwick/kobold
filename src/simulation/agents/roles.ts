@@ -5,7 +5,7 @@
  */
 
 import type { Goblin, GoblinTrait } from '../../shared/types';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 
 export interface TraitMods {
   shareThreshold?: number;
@@ -48,10 +48,10 @@ export function traitMod<K extends keyof TraitMods>(goblin: Goblin, key: K, fall
 }
 
 export function getTraitDisplay(): Record<GoblinTrait, string> {
-  return getActiveFaction().traitDisplay;
+  return getGoblinConfig().traitDisplay;
 }
 export const GOBLIN_TRAIT_DISPLAY = new Proxy({} as Record<GoblinTrait, string>, {
-  get: (_target, prop: string) => getActiveFaction().traitDisplay[prop as GoblinTrait],
+  get: (_target, prop: string) => getGoblinConfig().traitDisplay[prop as GoblinTrait],
 });
 
 
@@ -60,9 +60,9 @@ export const GOBLIN_TRAITS: GoblinTrait[] = [
 ];
 
 export function getGoblinBios(): string[] {
-  return getActiveFaction().bios;
+  return getGoblinConfig().bios;
 }
 export function getGoblinGoals(): string[] {
-  return getActiveFaction().goals;
+  return getGoblinConfig().goals;
 }
 

@@ -16,7 +16,7 @@
 
 import { GRID_SIZE } from '../../shared/constants';
 import { bus } from '../../shared/events';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 
 import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
 import { findHearths, computeWarmth, computeDanger, updateTraffic } from '../../simulation/diffusion';
@@ -111,7 +111,7 @@ export function gameTick(scene: WorldScene) {
             tick: scene.tick,
             goblinId: 'adventurer',
             goblinName: 'RAID',
-            message: `⚔ ${raid.count} ${getActiveFaction().enemyNounPlural} storm from the ${raid.edge} !${getActiveFaction().raidSuffix} `,
+            message: `⚔ ${raid.count} ${getGoblinConfig().enemyNounPlural} storm from the ${raid.edge} !${getGoblinConfig().raidSuffix} `,
             level: 'error',
         });
     }
@@ -125,7 +125,7 @@ export function gameTick(scene: WorldScene) {
             if (d && d.alive) {
                 d.health = Math.max(0, d.health - damage);
                 addMemory(d, 'attacked_by_enemy', scene.tick);
-                const enemyNoun = getActiveFaction().enemyNounPlural;
+                const enemyNoun = getGoblinConfig().enemyNounPlural;
                 if (d.health <= 0) {
                     d.alive = false;
                     d.task = 'dead';
@@ -204,9 +204,9 @@ export function gameTick(scene: WorldScene) {
                 const killer = scene.goblins.find(dw => dw.id === goblinId && dw.alive);
                 if (killer) {
                     killer.adventurerKills += 1;
-                    const factionCfg = getActiveFaction();
-                    const killVerb = factionCfg.killVerb;
-                    const enemySing = factionCfg.enemyNounPlural.replace(/s$/, '');
+                    const goblinCfg = getGoblinConfig();
+                    const killVerb = goblinCfg.killVerb;
+                    const enemySing = goblinCfg.enemyNounPlural.replace(/s$/, '');
                     const article = /^[aeiou]/i.test(enemySing) ? 'an' : 'a';
                     killer.memory.push({ tick: scene.tick, crisis: 'combat', action: `${killVerb} ${article} ${enemySing} in battle` });
                     const hitsTaken = scene.combatHits.get(killer.id) ?? 0;

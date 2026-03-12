@@ -121,7 +121,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 - `src/simulation/` — game logic (agents, actions, utilityAI, world, weather, events, etc.)
 - `src/ai/` — LLM integration: storyteller chapters
 - `src/ui/` — React overlay: HUD, EventLog, MiniMap, StartMenu, TilePicker
-- `src/shared/` — types, constants, events bus, factions, save/load
+- `src/shared/` — types, constants, events bus, goblinConfig, save/load
 
 ---
 

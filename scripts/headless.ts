@@ -28,7 +28,7 @@ import { createWeather, tickWeather, growbackModifier, metabolismModifier } from
 import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../src/simulation/rooms';
 import { rollWound } from '../src/simulation/wounds';
-import { getActiveFaction } from '../src/shared/factions';
+import { getGoblinConfig } from '../src/shared/goblinConfig';
 import { GRID_SIZE } from '../src/shared/constants';
 import type { Goblin, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
@@ -126,7 +126,7 @@ const GOAL_CYCLE: GoalType[] = ['cook_meals', 'survive_ticks', 'defeat_adventure
 /** Build a colony goal with scaled target; scale increases per generation so later goals are harder. */
 function makeGoal(type: GoalType, generation: number): ColonyGoal {
   const scale = 1 + generation * 0.6;
-  const desc = getActiveFaction().goalDescriptions;
+  const desc = getGoblinConfig().goalDescriptions;
   switch (type) {
     case 'cook_meals': return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
     case 'survive_ticks': return { type, description: desc.survive_ticks(Math.round(400 * scale)), progress: 0, target: Math.round(400 * scale), generation };

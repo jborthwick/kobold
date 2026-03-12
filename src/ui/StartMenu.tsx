@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { peekSave, deleteSave } from '../shared/save';
-import { GOBLIN_FACTION } from '../shared/factions';
+import { GOBLIN_CONFIG } from '../shared/goblinConfig';
 
 interface Props {
   onStart: (mode: 'new' | 'load') => void;
@@ -25,7 +25,7 @@ export function StartMenu({ onStart }: Props) {
     onStart('new');
   };
 
-  const cfg = GOBLIN_FACTION;
+  const cfg = GOBLIN_CONFIG;
 
   return (
     <div style={styles.backdrop}>

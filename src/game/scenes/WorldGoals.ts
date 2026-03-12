@@ -1,12 +1,12 @@
 import { bus } from '../../shared/events';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import type { ColonyGoal, Chapter, Goblin } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
 
 export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGoal {
     const scale = 1 + generation * 0.6;
-    const desc = getActiveFaction().goalDescriptions;
+    const desc = getGoblinConfig().goalDescriptions;
     switch (type) {
         case 'build_rooms':
             return { type, description: desc.build_rooms(), progress: 0, target: 2, generation };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import { getActiveFaction } from '../../shared/factions';
+import { getGoblinConfig } from '../../shared/goblinConfig';
 import type { GameState, FoodStockpile, OreStockpile, WoodStockpile, MealStockpile } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -102,7 +102,7 @@ export function StockpilePanel() {
         <div style={{ fontSize: 9, color: '#999', marginTop: 2 }}>{amount.toFixed(0)} / {max}</div>
       </div>
       <div style={{ fontSize: 9, color: '#888' }}>
-        {getActiveFaction().unitNounPlural} carrying {resource}: <span style={{ color }}>{carriers}</span>
+        {getGoblinConfig().unitNounPlural} carrying {resource}: <span style={{ color }}>{carriers}</span>
       </div>
     </div>
   );
