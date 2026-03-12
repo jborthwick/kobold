@@ -5,6 +5,7 @@
 import { TileType } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { isWalkable } from '../world';
+import { getWarmth } from '../diffusion';
 import { inverseSigmoid } from '../utilityAI';
 import { traitMod, recordSite } from '../agents';
 import { grantXp } from '../skills';
@@ -85,11 +86,12 @@ export const wander: Action = {
   },
 };
 
-// --- seekWarmth: comfort preference — pathfinds to nearest hearth, stops once warm ---
+// --- seekWarmth: comfort preference — pathfinds to nearest hearth or warm zone, stops once warm ---
 const SEEK_WARMTH_RADIUS              = 15;
-const SEEK_WARMTH_COOLDOWN            = 150;
-const SEEK_WARMTH_SCORE_COLD          = 0.28;
-const SEEK_WARMTH_SCORE_DEFAULT       = 0.08;
+const SEEK_WARMTH_WARMTH_THRESHOLD    = 35;    // min warmth to target as warm zone
+const SEEK_WARMTH_COOLDOWN            = 80;
+const SEEK_WARMTH_SCORE_COLD          = 0.45;
+const SEEK_WARMTH_SCORE_DEFAULT       = 0.18;
 export const seekWarmth: Action = {
   name: 'seekWarmth',
   tags: ['comfort'],
@@ -97,18 +99,20 @@ export const seekWarmth: Action = {
     if (!warmthField) return false;
     // Use smoothed goblin.warmth to avoid single-step threshold crossings.
     // Hysteresis: if already en route (task from last tick), stay committed until comfortably warm (50);
-    // otherwise only start when actually cold (< 25).
+    // otherwise only start when actually cold (< 35).
     const warmth = goblin.warmth ?? 100;
-    const exitThreshold = goblin.task === 'seeking warmth' ? 50 : 25;
+    const exitThreshold = goblin.task === 'seeking warmth' ? 50 : 35;
     if (warmth >= exitThreshold) return false;
     // Cooldown: prevents re-triggering immediately after being warm
     if (currentTick - (goblin.lastLoggedTicks['seekWarmthDone'] ?? 0) < SEEK_WARMTH_COOLDOWN) return false;
-    // Eligible if a hearth is visible in range OR remembered from a previous visit
+    // Eligible if a hearth is visible in range OR a warm zone (warmth field >= threshold) OR remembered hearth
     for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
       for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
         const nx = goblin.x + dx, ny = goblin.y + dy;
-        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE
-            && grid[ny][nx].type === TileType.Hearth) return true;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+          if (grid[ny][nx].type === TileType.Hearth) return true;
+          if (getWarmth(warmthField, nx, ny) >= SEEK_WARMTH_WARMTH_THRESHOLD) return true;
+        }
       }
     }
     return (goblin.knownHearthSites ?? []).length > 0;
@@ -116,27 +120,29 @@ export const seekWarmth: Action = {
   score: ({ goblin, grid, warmthField, weatherType }) => {
     if (!warmthField) return 0;
 
-    // Check if a hearth is visible or known BEFORE scoring
-    let hearthExists = (goblin.knownHearthSites ?? []).length > 0;
-    if (!hearthExists) {
+    // Check if a hearth is visible or known, or a warm zone exists BEFORE scoring
+    let hasWarmthTarget = (goblin.knownHearthSites ?? []).length > 0;
+    if (!hasWarmthTarget) {
       for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
         for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
           const nx = goblin.x + dx, ny = goblin.y + dy;
-          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[ny][nx].type === TileType.Hearth) {
-            hearthExists = true;
-            break;
+          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+            if (grid[ny][nx].type === TileType.Hearth || getWarmth(warmthField, nx, ny) >= SEEK_WARMTH_WARMTH_THRESHOLD) {
+              hasWarmthTarget = true;
+              break;
+            }
           }
         }
-        if (hearthExists) break;
+        if (hasWarmthTarget) break;
       }
     }
-    if (!hearthExists) return 0; // No hearth visible or known, do not score
+    if (!hasWarmthTarget) return 0; // No warmth target visible or known, do not score
 
     const warmth = goblin.warmth ?? 100;
     const maxScore = weatherType === 'cold' ? SEEK_WARMTH_SCORE_COLD : SEEK_WARMTH_SCORE_DEFAULT;
     return inverseSigmoid(warmth, 20, 0.12) * maxScore;
   },
-  execute: ({ goblin, grid, currentTick }) => {
+  execute: ({ goblin, grid, warmthField, currentTick }) => {
     // Scan visible range: record any spotted hearths, find nearest
     let nearestHearth: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
@@ -148,6 +154,23 @@ export const seekWarmth: Action = {
         recordSite(goblin.knownHearthSites ?? (goblin.knownHearthSites = []), nx, ny, 1, currentTick);
         const dist = Math.abs(dx) + Math.abs(dy);
         if (dist < nearestDist) { nearestDist = dist; nearestHearth = { x: nx, y: ny }; }
+      }
+    }
+
+    // If no hearth in range, scan warmth field for highest-warmth tile as fallback
+    if (!nearestHearth && warmthField) {
+      let bestWarmth = SEEK_WARMTH_WARMTH_THRESHOLD;
+      for (let dy = -SEEK_WARMTH_RADIUS; dy <= SEEK_WARMTH_RADIUS; dy++) {
+        for (let dx = -SEEK_WARMTH_RADIUS; dx <= SEEK_WARMTH_RADIUS; dx++) {
+          const nx = goblin.x + dx, ny = goblin.y + dy;
+          if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+          const w = getWarmth(warmthField, nx, ny);
+          if (w > bestWarmth) {
+            bestWarmth = w;
+            nearestDist = Math.abs(dx) + Math.abs(dy);
+            nearestHearth = { x: nx, y: ny };
+          }
+        }
       }
     }
 
@@ -170,9 +193,9 @@ export const seekWarmth: Action = {
       }
     }
 
-    if (!nearestHearth) return;  // no hearth known — skip silently
+    if (!nearestHearth) return;  // no warmth target known — skip silently
 
-    // Satisfied: close to hearth or smoothed warmth has risen enough — start cooldown
+    // Satisfied: close to target or smoothed warmth has risen enough — start cooldown
     const warmth = goblin.warmth ?? 0;
     if (nearestDist <= traitMod(goblin, 'coziness', 2) || warmth >= 40) {
       goblin.lastLoggedTicks['seekWarmthDone'] = currentTick;
@@ -180,7 +203,7 @@ export const seekWarmth: Action = {
       return;
     }
 
-    // Pathfind directly to the hearth (handles doorways and walls correctly)
+    // Pathfind directly to the target warm tile (handles doorways and walls correctly)
     moveTo(goblin, nearestHearth, grid);
     goblin.task = 'seeking warmth';
   },
