@@ -278,9 +278,9 @@ export function setupInput(scene: WorldScene) {
 
         // Left tap: select goblin — prefer alive, fall back to dead ghost
         const aliveGoblins = scene.goblins.filter(d => d.alive);
-        const deadDwarves = scene.goblins.filter(d => !d.alive);
+        const deadGoblins = scene.goblins.filter(d => !d.alive);
         const hitAlive = findNearest(aliveGoblins);
-        const hitDead = !hitAlive ? findNearest(deadDwarves) : undefined;
+        const hitDead = !hitAlive ? findNearest(deadGoblins) : undefined;
         scene.selectedGoblinId = (hitAlive ?? hitDead)?.id ?? null;
         bus.emit('stockpileSelect', null);
         bus.emit('adventurerSelect', null);
