@@ -22,7 +22,7 @@ Open http://localhost:5173 — use arrow keys to pan, mouse to select goblins.
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-LLM is off by default. Toggle with 🤖 button in-game. The LLM acts as a crisis decision-maker, not a chatbot.
+LLM is off by default. Toggle with 🤖 button in-game. The LLM is used for narrative (chapter summaries when goals complete), not as a chatbot.
 
 ## Commands
 
@@ -77,7 +77,7 @@ Output includes survivors, deaths, goals completed, stockpiles, and average need
 - **React 19** — HUD overlay
 - **rot.js** — A* pathfinding
 - **Utility AI** — deterministic action scoring
-- **LLM (claude-haiku)** — crisis decisions only
+- **LLM (claude-haiku)** — storyteller (chapter summaries) only
 
 ## Tech Stack
 

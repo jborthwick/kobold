@@ -1,6 +1,6 @@
 # Goblin Colony Sim — Agent Instructions
 
-A browser-based colony survival game inspired by RimWorld and Dwarf Fortress. Small colony of LLM-driven goblin agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is a crisis decision-maker, not a chatbot. The tone is darkly humorous — goblins take themselves seriously despite constant chaos.
+A browser-based colony survival game inspired by RimWorld and Dwarf Fortress. Small colony of goblin agents operating in a tile-based world with emergent behavior arising from resource scarcity. The LLM is used for narrative (storyteller chapter summaries when goals complete); optional future use for crisis/decision prompts. The tone is darkly humorous — goblins take themselves seriously despite constant chaos.
 
 ---
 
@@ -77,7 +77,7 @@ Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare 
 ## Core design principles
 
 1. **Sugarscape resource mechanics** — scan visible cells, move to richest tile, harvest. Scarcity drives emergent competition/migration.
-2. **PIANO cognitive architecture** — last 5 decisions + goblin state compress into LLM prompt for crisis decisions (see crisis/storyteller code for prompt size and timeouts).
+2. **PIANO cognitive architecture** — memory holds recent decisions/events for display and optional future LLM use. Currently only the storyteller LLM runs (see `storyteller.ts` for prompt size and timeouts).
 3. **Always playable without LLM** — timeout or disabled → silent fallback to deterministic AI.
 4. **Emergent over hardcoded:** – when adding actions, systems, agents, etc always favor building emergent behavior with overlapping simple systems.
 
@@ -93,7 +93,7 @@ Actions defined in `actions/`; see files for scoring formulas.
 
 ## LLM integration
 
-**Storyteller LLM** (`storyteller.ts`): fires once per goal completion. Returns 2-4 sentence chapter. Falls back to deterministic text on failure. See storyteller/crisis code for prompt size and timeouts.
+**Storyteller LLM** (`storyteller.ts`): fires once per goal completion. Returns 2-4 sentence chapter. Falls back to deterministic text on failure. See `storyteller.ts` for prompt size and timeouts.
 
 ---
 
@@ -119,7 +119,7 @@ Use `python3 scripts/inspect-tiles.py` to find frames by color.
 
 - `src/game/` — Phaser scenes and game loop, tileConfig
 - `src/simulation/` — game logic (agents, actions, utilityAI, world, weather, events, etc.)
-- `src/ai/` — LLM integration: crisis detection, storyteller chapters
+- `src/ai/` — LLM integration: storyteller chapters
 - `src/ui/` — React overlay: HUD, EventLog, MiniMap, StartMenu, TilePicker
 - `src/shared/` — types, constants, events bus, factions, save/load
 

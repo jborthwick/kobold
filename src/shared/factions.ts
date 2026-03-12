@@ -36,7 +36,7 @@ export interface FactionConfig {
   llmSpecies: string;
   /** Storyteller narrator tone instruction. */
   narratorTone: string;
-  /** Succession LLM prompt template (placeholders: {name}, {deadName}, {memSnippet}). */
+  /** Reserved for future succession LLM. Template placeholders: {name}, {deadName}, {memSnippet}. Not yet wired. */
   successionPrompt: string;
 
   // ── Event message flavor ────────────────────────────────────────────────────

@@ -86,13 +86,13 @@ export interface ActiveMemory {
   lastRefreshTick: number;
 }
 
-// PIANO step 7 — one entry per LLM decision; last 5 injected into next prompt
+// One entry per significant event or decision; shown in HUD history and copied on succession
 export interface MemoryEntry {
   tick: number;
-  crisis: string;   // CrisisSituation.type
-  action: string;   // decision.action text
-  reasoning?: string;   // LLM internal monologue (only present for LLM-originated entries)
-  outcome?: string;   // backfilled by VERIFY step (~40 ticks later)
+  crisis: string;   // e.g. 'combat', 'arrival', 'inheritance'
+  action: string;   // short description of what happened
+  reasoning?: string;   // optional (e.g. successor arrival thought)
+  outcome?: string;   // optional; copied on inheritance or for future use
 }
 
 // ─ Skills system (replacing roles) ─────────────────────────────────────────
@@ -127,7 +127,7 @@ export interface Goblin {
   alive: boolean;
   task: string;
   commandTarget: { x: number; y: number } | null;  // player-issued move order
-  memory: MemoryEntry[];    // rolling decisions (uncapped); last 5 used in LLM prompts
+  memory: MemoryEntry[];    // rolling history of events/decisions (uncapped)
   thoughts: ActiveThought[]; // rimworld-style timed buffs
   memories: ActiveMemory[];  // rimworld-style staged accumulation
   wanderTarget: { x: number; y: number } | null;  // persistent explore waypoint
