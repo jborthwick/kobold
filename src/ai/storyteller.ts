@@ -134,17 +134,17 @@ export async function callStorytellerLLM(
     ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
     : '\nA quiet chapter with no major events.';
 
-  const cfg = getGoblinConfig();
+  const goblinCfg = getGoblinConfig();
   const persona = getStorytellerPersona();
-  const narratorTone = persona.narratorToneOverride ?? cfg.narratorTone;
+  const narratorTone = persona.narratorToneOverride ?? goblinCfg.narratorTone;
   const chapterNum = completedGoal.generation + 1;
   const prompt =
-    `You are the narrator of a ${cfg.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
+    `You are the narrator of a ${goblinCfg.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
     `The colony just completed: ${completedGoal.description}\n` +
-    `Colony: ${alive.length} ${cfg.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
+    `Colony: ${alive.length} ${goblinCfg.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
     `Tone: ${tone} (tension ${tension.toFixed(0)}/100)\n` +
     `${eventBlock}\n\n` +
-    `Write in past tense, third person. Be specific — name ${cfg.unitNounPlural}, reference actual events. No dialogue.`;
+    `Write in past tense, third person. Be specific — name ${goblinCfg.unitNounPlural}, reference actual events. No dialogue.`;
 
   try {
     lastCallTick = currentTick ?? lastCallTick;
