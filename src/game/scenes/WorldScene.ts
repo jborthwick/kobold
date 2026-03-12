@@ -208,6 +208,10 @@ export class WorldScene extends Phaser.Scene {
       const foodPile: FoodStockpile = { x: x + 3, y: y + 1, food: 0, maxFood: 200 };
       this.foodStockpiles.push(foodPile);
       this.addFoodStockpileGraphics(foodPile);
+    } else if (this.buildMode === 'storage') {
+      const foodPile: FoodStockpile = { x: x + 1, y: y + 1, food: 0, maxFood: 200 };
+      this.foodStockpiles.push(foodPile);
+      this.addFoodStockpileGraphics(foodPile);
     }
 
     const roomName = this.buildMode === 'storage' ? 'Storage zone'
