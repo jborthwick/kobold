@@ -5,13 +5,13 @@ import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpi
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, TileType } from '../../shared/types';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
 import * as WorldGoals from './WorldGoals';
 import { bus } from '../../shared/events';
 import { type Weather } from '../../simulation/weather';
-import { SPRITE_CONFIG } from '../tileConfig';
+import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -190,6 +190,19 @@ export class WorldScene extends Phaser.Scene {
       const ox = x + 1, oy = y + 1;
       this.oreStockpiles.push({ x: ox, y: oy, ore: 0, maxOre: 200 });
       this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpiles.length - 1]);
+    } else if (this.buildMode === 'kitchen') {
+      // Auto-place Hearth at kitchen center so cooking is immediately eligible
+      const cx = x + Math.floor(5 / 2);
+      const cy = y + Math.floor(5 / 2);
+      const t = this.grid[cy][cx];
+      this.grid[cy][cx] = { ...t, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0 };
+      // Update tilemap visual for the hearth tile
+      const hearthFrames = TILE_CONFIG[TileType.Hearth];
+      const hearthFrame = hearthFrames ? hearthFrames[0] : 504;
+      this.floorLayer?.putTileAt(hearthFrame, cx, cy);
+
+      // Auto-create an empty MealStockpile so eating from kitchen works immediately
+      this.mealStockpiles.push({ x: x + 1, y: y + 1, meals: 0, maxMeals: 50 });
     }
 
     const roomName = this.buildMode === 'storage' ? 'Storage zone'
