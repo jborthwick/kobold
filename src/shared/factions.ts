@@ -116,7 +116,7 @@ export const GOBLIN_FACTION: FactionConfig = {
   enemyNounPlural: 'adventurers',
 
   goalDescriptions: {
-    build_rooms: () => "Build 3 storage rooms and a kitchen",
+    build_rooms: () => "Build a storage room and a kitchen",
     cook_meals: (t: number) => `Cook ${t} meals`,
     survive_ticks: (t: number) => `Don't all die for ${t} ticks`,
     defeat_adventurers: (t: number) => `Clobber ${t} adventurers`,

@@ -29,6 +29,10 @@ type Events = {
   chronicleChapter: Chapter;
   /** Restore all chapters from save data (on load). */
   restoreChronicle: Chapter[];
+  /** Show chronicle modal (pause world until dismissed). */
+  chronicleModal: { open: boolean; chapter: Chapter; allChapters: Chapter[] };
+  /** Player dismissed the chronicle modal; resume simulation. */
+  chronicleModalClosed: undefined;
   /** Player enters/exits build mode for room placement. */
   buildMode: { roomType: RoomType } | null;
   /** A batch of meals was cooked. */

@@ -10,7 +10,7 @@ import { bus } from '../../shared/events';
 import { setNextEventTick } from '../../simulation/events';
 import * as WorldGoals from './WorldGoals';
 import { GRID_SIZE, TILE_SIZE } from '../../shared/constants';
-import { type OverlayMode, type LogEntry, type RoomType } from '../../shared/types';
+import { type Chapter, type OverlayMode, type LogEntry, type RoomType } from '../../shared/types';
 import { SPRITE_CONFIG } from '../tileConfig';
 import { drawFlag } from './WorldOverlays';
 import { drawOverlay } from './WorldRender';
@@ -181,6 +181,12 @@ export function initializeWorld(scene: WorldScene) {
       scene.buildPreviewGfx.clear();
     }
   };
+  const chronicleModalHandler = (payload: { open: boolean; chapter: Chapter; allChapters: Chapter[] }) => {
+    if (payload.open) scene.paused = true;
+  };
+  const chronicleModalClosedHandler = () => {
+    scene.paused = false;
+  };
   bus.on('controlChange', controlHandler);
   bus.on('settingsChange', settingsHandler);
   bus.on('logEntry', logCaptureHandler);
@@ -188,6 +194,8 @@ export function initializeWorld(scene: WorldScene) {
   bus.on('cycleSelected', cycleHandler);
   bus.on('buildMode', buildModeHandler);
   bus.on('mealsCooked', (n: number) => { scene.mealsCooked += n; });
+  bus.on('chronicleModal', chronicleModalHandler);
+  bus.on('chronicleModalClosed', chronicleModalClosedHandler);
 
   // Remove bus listeners when this scene is destroyed (new-colony flow)
   scene.events.once('destroy', () => {
@@ -198,6 +206,8 @@ export function initializeWorld(scene: WorldScene) {
     bus.off('cycleSelected', cycleHandler);
     bus.off('buildMode', buildModeHandler);
     bus.off('mealsCooked', () => {});
+    bus.off('chronicleModal', chronicleModalHandler);
+    bus.off('chronicleModalClosed', chronicleModalClosedHandler);
   });
 
   setupCamera(scene);

@@ -116,7 +116,7 @@ export function ColonyGoalPanel() {
       {isBuildRooms ? (
         <div style={{ ...styles.goalDepot, marginTop: 4 }}>
           <div style={styles.chunkBar}>
-            {[0, 1, 2, 3].map((i) => (
+            {Array.from({ length: goal.target }, (_, i) => (
               <div key={i} style={styles.chunk}>
                 <div style={{
                   ...styles.chunkFilled,
@@ -137,7 +137,7 @@ export function ColonyGoalPanel() {
       )}
       <div style={styles.goalProgress}>
         {isBuildRooms
-          ? `${goal.progress.toFixed(0)}/4 Rooms Built${pct >= 1 ? ' · ✓ COMPLETE' : ''}`
+          ? `${goal.progress.toFixed(0)}/${goal.target} Rooms Built${pct >= 1 ? ' · ✓ COMPLETE' : ''}`
           : <>{goal.progress.toFixed(0)} / {goal.target}{pct >= 1 && <span style={{ color: '#56d973', marginLeft: 6 }}>✓ COMPLETE</span>}</>
         }
       </div>

@@ -9,7 +9,7 @@ export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGo
     const desc = getActiveFaction().goalDescriptions;
     switch (type) {
         case 'build_rooms':
-            return { type, description: desc.build_rooms(), progress: 0, target: 4, generation };
+            return { type, description: desc.build_rooms(), progress: 0, target: 2, generation };
         case 'cook_meals':
             return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
         case 'survive_ticks':
@@ -17,7 +17,7 @@ export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGo
         case 'defeat_adventurers':
             return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
     }
-    return { type: 'build_rooms', description: desc.build_rooms(), progress: 0, target: 4, generation };
+    return { type: 'build_rooms', description: desc.build_rooms(), progress: 0, target: 2, generation };
 }
 
 export function updateGoalProgress(scene: WorldScene) {
@@ -26,7 +26,7 @@ export function updateGoalProgress(scene: WorldScene) {
         case 'build_rooms': {
             const storageCount = scene.rooms.filter(r => r.type === 'storage').length;
             const kitchenCount = scene.rooms.filter(r => r.type === 'kitchen').length;
-            scene.colonyGoal.progress = Math.min(3, storageCount) + (kitchenCount >= 1 ? 1 : 0);
+            scene.colonyGoal.progress = Math.min(1, storageCount) + (kitchenCount >= 1 ? 1 : 0);
             break;
         }
         case 'cook_meals':
@@ -85,5 +85,6 @@ export function completeGoal(scene: WorldScene, alive: Goblin[]) {
             scene.chapters.push(chapter);
             scene.lastChapterTick = snapshotTick;
             bus.emit('chronicleChapter', chapter);
+            bus.emit('chronicleModal', { open: true, chapter, allChapters: scene.chapters });
         });
 }

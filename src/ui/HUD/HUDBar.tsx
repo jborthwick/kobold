@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
 import { getActiveFaction } from '../../shared/factions';
+import { getStorytellerPersona, setStorytellerPersona, STORYTELLER_PERSONAS } from '../../ai/storyteller';
 
 type LLMProvider = 'anthropic' | 'groq';
 import type { GameState, OverlayMode, WeatherType, Season, RoomType } from '../../shared/types';
@@ -90,8 +91,9 @@ function OverlayIndicator({ mode }: { mode: OverlayMode }) {
 
 export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode }) {
   const [state, setState] = useState<GameState | null>(null);
-  const [llmEnabled, setLlmEnabled] = useState(false);
+  const [llmEnabled, setLlmEnabled] = useState(true);
   const [provider, setProvider] = useState<LLMProvider>('groq');
+  const [personaId, setPersonaId] = useState(() => getStorytellerPersona().id);
   const [confirmNew, setConfirmNew] = useState(false);
   const [activeBuildType, setActiveBuildType] = useState<RoomType | null>(null);
 
@@ -119,6 +121,13 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     const next: LLMProvider = provider === 'anthropic' ? 'groq' : 'anthropic';
     setProvider(next);
     bus.emit('settingsChange', { llmProvider: next });
+  };
+
+  const cyclePersona = () => {
+    const idx = STORYTELLER_PERSONAS.findIndex(p => p.id === personaId);
+    const next = STORYTELLER_PERSONAS[(idx + 1) % STORYTELLER_PERSONAS.length];
+    setPersonaId(next.id);
+    setStorytellerPersona(next.id);
   };
 
 
@@ -172,8 +181,19 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
         <button
           onClick={cycleProvider}
           style={{ ...styles.llmToggle, ...styles.providerToggle }}
+          title="LLM provider"
         >
           {provider === 'anthropic' ? '⚡ Claude' : '⚡ Groq'}
+        </button>
+      )}
+      {/* Storyteller persona: only visible when LLM is enabled */}
+      {isDesktop && llmEnabled && (
+        <button
+          onClick={cyclePersona}
+          style={{ ...styles.llmToggle, ...styles.personaToggle }}
+          title="Narrator style: Balanced or Chaotic"
+        >
+          📜 {STORYTELLER_PERSONAS.find(p => p.id === personaId)?.name ?? 'Storyteller'}
         </button>
       )}
       {/* New colony: desktop only */}
@@ -257,6 +277,10 @@ const styles: Record<string, React.CSSProperties> = {
   providerToggle: {
     background: 'rgba(100,140,220,0.2)',
     color: '#7ec8e3',
+  },
+  personaToggle: {
+    background: 'rgba(180,140,100,0.2)',
+    color: '#d4c4a0',
   },
   pauseSpeedGroup: {
     display: 'flex',

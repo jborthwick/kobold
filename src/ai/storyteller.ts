@@ -9,10 +9,39 @@ import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
 import { getActiveFaction } from '../shared/factions';
 
+// ── Personas ──────────────────────────────────────────────────────────────────
+// Optional narrator tone override per persona; fallback is faction narratorTone.
+// Enables future UI to switch e.g. balanced vs chaotic storyteller.
+
+export interface StorytellerPersona {
+  id: string;
+  name: string;
+  /** Override for "You are the narrator... — {tone}". Omit to use faction narratorTone. */
+  narratorToneOverride?: string;
+}
+
+export const STORYTELLER_PERSONAS: StorytellerPersona[] = [
+  { id: 'balanced', name: 'Balanced', narratorToneOverride: undefined },
+  {
+    id: 'chaotic',
+    name: 'Chaotic',
+    narratorToneOverride: 'swing chaotically between benevolence and malice; surprise the reader with sudden shifts in tone',
+  },
+];
+
+let currentPersonaId: string = 'balanced';
+
+export function setStorytellerPersona(id: string) {
+  if (STORYTELLER_PERSONAS.some(p => p.id === id)) currentPersonaId = id;
+}
+export function getStorytellerPersona(): StorytellerPersona {
+  return STORYTELLER_PERSONAS.find(p => p.id === currentPersonaId) ?? STORYTELLER_PERSONAS[0];
+}
+
 // ── LLM Config ────────────────────────────────────────────────────────────────
 
-let enabled = false;
-let provider: 'anthropic' | 'groq' = 'anthropic';
+let enabled = true;
+let provider: 'anthropic' | 'groq' = 'groq';
 let sessionInputTokens = 0;
 let sessionOutputTokens = 0;
 let sessionCallCount = 0;
@@ -106,9 +135,11 @@ export async function callStorytellerLLM(
     : '\nA quiet chapter with no major events.';
 
   const faction = getActiveFaction();
+  const persona = getStorytellerPersona();
+  const narratorTone = persona.narratorToneOverride ?? faction.narratorTone;
   const chapterNum = completedGoal.generation + 1;
   const prompt =
-    `You are the narrator of a ${faction.unitNoun} colony survival story — ${faction.narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
+    `You are the narrator of a ${faction.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
     `The colony just completed: ${completedGoal.description}\n` +
     `Colony: ${alive.length} ${faction.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
     `Tone: ${tone} (tension ${tension.toFixed(0)}/100)\n` +
