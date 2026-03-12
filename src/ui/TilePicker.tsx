@@ -47,16 +47,15 @@ interface TypeEntry {
   frames:  number[];
 }
 
-/** Build initial entry list from the imported config. */
+/** Build initial entry list from the imported config. Use enum keys (e.g. WoodWall, TreeStump) so Save writes valid TileType.*/
 function buildEntries(): TypeEntry[] {
-  const terrain: TypeEntry[] = Object.values(TileType).map(v => {
-    const key = v.charAt(0).toUpperCase() + v.slice(1); // 'dirt' → 'Dirt'
-    return {
-      key,
+  const terrain: TypeEntry[] = (Object.entries(TileType) as [keyof typeof TileType, TileType][])
+    .filter(([, val]) => typeof val === 'string')
+    .map(([k, v]) => ({
+      key:     k,
       section: 'terrain',
-      frames:  TILE_CONFIG[v as TileType] ?? [],
-    };
-  });
+      frames:  TILE_CONFIG[v] ?? [],
+    }));
   const sprites: TypeEntry[] = Object.entries(SPRITE_CONFIG).map(([k, f]) => ({
     key:     k,
     section: 'sprite',
@@ -217,9 +216,9 @@ export function TilePicker() {
     // Split entries back into tileConfig / spriteConfig
     const tileConfig:   Record<string, number[]> = {};
     const spriteConfig: Record<string, number>   = {};
-    const existingTypes = new Set(Object.values(TileType).map(v =>
-      v.charAt(0).toUpperCase() + v.slice(1)
-    ));
+    const existingTypes = new Set(
+      (Object.keys(TileType) as (keyof typeof TileType)[]).filter(k => typeof TileType[k] === 'string')
+    );
     const newTypes: string[] = [];
 
     for (const entry of entries) {

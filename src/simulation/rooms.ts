@@ -12,7 +12,7 @@
 
 import { GRID_SIZE } from '../shared/constants';
 import type { Room, Tile, FoodStockpile, OreStockpile, WoodStockpile } from '../shared/types';
-import { TileType } from '../shared/types';
+import { TileType, isWallType } from '../shared/types';
 
 const MAX_STOCKPILES_PER_STORAGE_ROOM = 20;
 
@@ -38,7 +38,7 @@ export function canPlaceRoom(grid: Tile[][], rooms: Room[], rx: number, ry: numb
             const tx = rx + dx, ty = ry + dy;
             if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return false;
             const t = grid[ty][tx];
-            if (t.type === TileType.Water || t.type === TileType.Wall
+            if (t.type === TileType.Water || isWallType(t.type)
                 || t.type === TileType.Stone || t.type === TileType.Ore
                 || t.type === TileType.Pool) return false;
         }
@@ -53,7 +53,7 @@ export function canPlaceRoom(grid: Tile[][], rooms: Room[], rx: number, ry: numb
 function isWalkableInRoom(grid: Tile[][], tx: number, ty: number): boolean {
     if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return false;
     const t = grid[ty][tx];
-    return t.type !== TileType.Water && t.type !== TileType.Wall;
+    return t.type !== TileType.Water && !isWallType(t.type);
 }
 
 export function findRoomStockpileSlot(

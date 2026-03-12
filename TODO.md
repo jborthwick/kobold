@@ -18,10 +18,24 @@
 - [X] Up to 3 wood stockpiles can be built in the lumber hut.
 [X] Update headless to mockup new room placement and remove multiple storage rooms at gen
 [X] Hide Fire Events from headless
-[ ] Add placeholder sprites for saw and anvil. I'll set them the tile configurator
+[X] Add placeholder sprites for saw and anvil. I'll set them the tile configurator
+[X] Make plank and iron bar stockpiles clickable for info like other stockpiles. 
+[X] Add plaank and iron bar sprites to the tile configurator.
+[ ] Tune fire spread from hearths to happen a bit more frequently
+
+## StorytellerAI
+[ ] Rename UtilityAI to StorytellerAI
+[ ] Add the ability to toggle between different storytellerAi personas (configs) dynamically. One perosona may try to create just enough tension to be exciting, while another may swing choatically between benevolance and malice, and yet another may just seed chaos.
+
+## Walls take resources
+[ ] Walls will now cost material. Which means no more automatic fort wall building at the very beginning.
+[ ] Add the ability for goblins to make wood walls from milled X planks
+[ ] Add the ability for goblins to make stone walls from X forged ore
+
 
 
 ## Bugs:
+[ ] bug: build menu items highlight white after they've been selected and deselected the first time. They should remain gray when unselected.
 [ ] bug: goblins sometimes build single walls away from rooms
 [ ] bug: goblins get stuck not moving with "rembered patch" and "room wall". add headless logging for goblins sitting still for long stretches.
 [ ] bug: if a kitchen is built before a storage room, goblins will delay placing a hearth in the kitchen and start cooking.

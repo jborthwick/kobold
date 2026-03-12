@@ -7,7 +7,7 @@
 import { TileType, type Tile, type Goblin, type WeatherType } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 
-const FLAMMABLE = new Set([TileType.Grass, TileType.Forest, TileType.Mushroom, TileType.Farmland, TileType.TreeStump]);
+const FLAMMABLE = new Set([TileType.Grass, TileType.Forest, TileType.Mushroom, TileType.Farmland, TileType.TreeStump, TileType.WoodWall]);
 
 const FIRE_DURATION       = 90;    // ticks before natural burnout → Dirt
 const SPREAD_INTERVAL     = 25;    // ticks between spread attempts per fire tile

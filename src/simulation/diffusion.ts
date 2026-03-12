@@ -6,7 +6,7 @@
  */
 
 import { GRID_SIZE } from '../shared/constants';
-import { TileType, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType } from '../shared/types';
+import { TileType, isWallType, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType } from '../shared/types';
 
 const N = GRID_SIZE * GRID_SIZE;
 
@@ -79,7 +79,7 @@ export function computeWarmth(
 
     const t = grid[y][x];
     // Walls block propagation for non-source waves
-    if (t.type === TileType.Wall && strength < 99) continue;
+    if (isWallType(t.type) && strength < 99) continue;
 
     const next = strength - STEP;
     if (next <= 0) continue;
@@ -100,7 +100,7 @@ export function computeWarmth(
       let walls = 0;
       for (const [dx, dy] of DIRS8) {
         const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[ny][nx].type === TileType.Wall) walls++;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && isWallType(grid[ny][nx].type)) walls++;
       }
       if (walls > 0) {
         const mult = Math.min(SHELTER_MAX_MULT, 1 + walls * SHELTER_PER_WALL);
@@ -168,7 +168,7 @@ export function computeDanger(
     const step = strength > 40 ? STEP_ADV : STEP_EDGE;
     let next = strength - step;
     // Walls halve propagated danger
-    if (t.type === TileType.Wall) next *= 0.5;
+    if (isWallType(t.type)) next *= 0.5;
     if (next <= 0) continue;
 
     for (const [dx, dy] of DIRS) {

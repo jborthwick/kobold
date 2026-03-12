@@ -10,7 +10,7 @@ const BASE_LIGHTNING_CHANCE = 0.02;   // per tick during storm (~1 strike per 50
 
 const FLAMMABLE = new Set([
   TileType.Grass, TileType.Forest, TileType.Mushroom,
-  TileType.Farmland, TileType.TreeStump,
+  TileType.Farmland, TileType.TreeStump, TileType.WoodWall,
 ]);
 
 const ABSORB = new Set([TileType.Water, TileType.Pool, TileType.Fire]);

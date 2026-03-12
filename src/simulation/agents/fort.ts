@@ -5,7 +5,7 @@
  * Legacy fortWallSlots/fortEnclosureSlots replaced by roomWallSlots.
  */
 
-import { TileType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
+import { TileType, isWallType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 
 /**
@@ -34,7 +34,7 @@ export function roomWallSlots(
     const key = `${x},${y}`;
     if (added.has(key)) return;
     const t = grid[y][x];
-    if (t.type === TileType.Wall || t.type === TileType.Water || t.type === TileType.Ore || t.type === TileType.Stone || t.type === TileType.Pool) return;
+    if (isWallType(t.type) || t.type === TileType.Water || t.type === TileType.Ore || t.type === TileType.Stone || t.type === TileType.Pool) return;
     if (blocked(x, y)) return;
     added.add(key);
     slots.push({ x, y });

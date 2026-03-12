@@ -1,5 +1,5 @@
 import { TILE_SIZE, GRID_SIZE } from '../../shared/constants';
-import { TileType } from '../../shared/types';
+import { TileType, isWall } from '../../shared/types';
 import type { Season } from '../../shared/types';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import type { WorldScene } from './WorldScene';
@@ -88,7 +88,7 @@ export function drawBarStockpile(scene: WorldScene) {
 
 export function drawTerrain(scene: WorldScene) {
     const OBJECT_TILES = new Set([
-        TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.Hearth, TileType.Fire,
+        TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
     ]);
 
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -113,7 +113,7 @@ export function drawTerrain(scene: WorldScene) {
                 const ratio = tile.foodValue / tile.maxFood;
                 const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
                 baseTint = (brightness << 16) | (brightness << 8) | brightness;
-            } else if (tile.type === TileType.Wall) {
+            } else if (isWall(tile)) {
                 baseTint = 0x88aacc;
             } else if (tile.type === TileType.Hearth) {
                 baseTint = 0xff8844;

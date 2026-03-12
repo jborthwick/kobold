@@ -5,7 +5,7 @@
  */
 
 import { createNoise2D } from 'simplex-noise';
-import { TileType, type Tile } from '../shared/types';
+import { TileType, isWallType, type Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 import { FORAGEABLE_TILES } from './agents/sites';
 
@@ -221,7 +221,7 @@ function seedMushroomPatch(grid: Tile[][], cx: number, cy: number, rng: () => nu
       const x = cx + dx, y = cy + dy;
       if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
       const t = grid[y][x];
-      if (t.type === TileType.Water || t.type === TileType.Wall) continue;
+      if (t.type === TileType.Water || isWallType(t.type)) continue;
       if (rng() > 0.6) continue; // ~60% fill
       const fMax = lerp(WORLD_CONFIG.mushroomFoodMin, WORLD_CONFIG.mushroomFoodMax, rng());
       grid[y][x] = {
@@ -403,5 +403,5 @@ export function growback(grid: Tile[][], growbackMod: number = 1, tick: number =
 export function isWalkable(grid: Tile[][], x: number, y: number): boolean {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
   const t = grid[y][x].type;
-  return t !== TileType.Water && t !== TileType.Wall;
+  return t !== TileType.Water && !isWallType(t);
 }

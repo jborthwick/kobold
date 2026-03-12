@@ -11,7 +11,7 @@
  * cooldown-gated so logs don't spam.
  */
 
-import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile } from '../../shared/types';
+import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile } from '../../shared/types';
 import { pathNextStep, traitMod } from '../agents';
 import { isLegWoundSkip } from '../wounds';
 
@@ -126,6 +126,30 @@ export function nearestWoodStockpile(
   return stockpiles
     ?.filter(filter)
     .reduce<WoodStockpile | null>((best, s) => {
+      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
+      return dist < bestDist ? s : best;
+    }, null) ?? null;
+}
+
+export function nearestPlankStockpile(
+  goblin: Goblin, stockpiles: PlankStockpile[] | undefined, filter: (s: PlankStockpile) => boolean,
+): PlankStockpile | null {
+  return stockpiles
+    ?.filter(filter)
+    .reduce<PlankStockpile | null>((best, s) => {
+      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
+      return dist < bestDist ? s : best;
+    }, null) ?? null;
+}
+
+export function nearestBarStockpile(
+  goblin: Goblin, stockpiles: BarStockpile[] | undefined, filter: (s: BarStockpile) => boolean,
+): BarStockpile | null {
+  return stockpiles
+    ?.filter(filter)
+    .reduce<BarStockpile | null>((best, s) => {
       const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
       const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? s : best;

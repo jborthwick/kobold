@@ -15,7 +15,9 @@ export enum TileType {
   Farmland = 'farmland',
   Ore = 'ore',
   Mushroom = 'mushroom',
-  Wall = 'wall',     // player-built fortification; blocks movement
+  Wall = 'wall',       // legacy; new builds use WoodWall/StoneWall
+  WoodWall = 'woodwall',  // built from planks
+  StoneWall = 'stonewall', // built from bars
   Hearth = 'hearth',  // goblin-built warmth source; walkable
   TreeStump = 'treestump',
   Fire = 'fire',
@@ -33,6 +35,15 @@ export interface Tile {
   poolTick?: number;      // tick when rain pool formed; undefined means not pooled
   priorType?: TileType;   // tile type before pooling (restored on evaporation)
   trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
+}
+
+/** True for any wall tile (Wall legacy, WoodWall, StoneWall). Use for blocking, diffusion, rendering. */
+export function isWallType(type: TileType): boolean {
+  return type === TileType.Wall || type === TileType.WoodWall || type === TileType.StoneWall;
+}
+
+export function isWall(tile: Tile): boolean {
+  return isWallType(tile.type);
 }
 
 export interface Inventory {

@@ -1,83 +1,137 @@
 /**
- * buildWall, buildHearth. Walls are built on room perimeters (roomWallSlots); hearths go in
- * kitchen centers. Ore from stockpile or inventory. Room-aware so goblins fortify where the
+ * buildWoodWall, buildStoneWall, buildHearth. Walls are built on room perimeters (roomWallSlots)
+ * from planks or bars; hearths go in kitchen centers. Room-aware so goblins fortify where the
  * player placed zones.
  */
-import { TileType } from '../../shared/types';
+import { TileType, isWallType } from '../../shared/types';
 import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
-import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile, getOrSetMoveTarget } from './helpers';
+import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile, nearestPlankStockpile, nearestBarStockpile, getOrSetMoveTarget } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
-// --- buildWall: any goblin can build walls around rooms ---
-export const buildWall: Action = {
-  name: 'buildWall',
-  tags: ['work'],
-  eligible: ({ rooms, oreStockpiles, goblin }) => {
-    if (!rooms || rooms.length === 0) return false;
-    // Need ore to build — either in stockpile or inventory
-    const stockpileOre = oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0;
-    return (stockpileOre >= 3) || (goblin.inventory.ore >= 3);
-  },
-  score: ({ goblin, oreStockpiles, rooms, grid, goblins, adventurers }) => {
-    const totalOre = (oreStockpiles?.reduce((s, o) => s + o.ore, 0) ?? 0) + goblin.inventory.ore;
-    if (totalOre < 3) return 0;
+const WOOD_WALL_PLANKS = 2;
+const STONE_WALL_BARS = 2;
 
+// --- buildWoodWall: build room perimeter from planks (lumber hut) ---
+export const buildWoodWall: Action = {
+  name: 'buildWoodWall',
+  tags: ['work'],
+  eligible: ({ rooms, plankStockpiles, grid, goblins, goblin, adventurers }) => {
+    if (!rooms || rooms.length === 0) return false;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const hasEmptySlot = wallSlots.some(s => !isWallType(grid[s.y][s.x].type));
+    if (!hasEmptySlot) return false;
+    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
+    return totalPlanks >= WOOD_WALL_PLANKS;
+  },
+  score: ({ goblin, plankStockpiles, rooms, grid, goblins, adventurers }) => {
+    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
+    if (totalPlanks < WOOD_WALL_PLANKS) return 0;
     if (!rooms || rooms.length === 0) return 0;
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
-
-    const base = ramp(totalOre, 3, 30) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    const base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
     return Math.min(1.0, base);
   },
-  execute: ({ goblin, grid, rooms, oreStockpiles, goblins, adventurers, currentTick }) => {
+  execute: ({ goblin, grid, rooms, plankStockpiles, goblins, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return;
-
-    // Prefer stockpile ore, fall back to inventory
-    const buildStockpile = oreStockpiles?.find(s => s.ore >= 3);
-    const useInventory = !buildStockpile && goblin.inventory.ore >= 3;
-    if (!buildStockpile && !useInventory) return;
+    const buildStockpile = nearestPlankStockpile(goblin, plankStockpiles ?? [], s => s.planks >= WOOD_WALL_PLANKS);
+    if (!buildStockpile) return;
 
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
     for (const s of wallSlots) {
+      if (isWallType(grid[s.y][s.x].type)) continue;
       const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
+      if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }
 
     if (nearestSlot) {
       const committedSlot = getOrSetMoveTarget(goblin, nearestSlot, currentTick, 15);
-
-      // Validate: another goblin may have already built this slot
-      if (grid[committedSlot.y][committedSlot.x].type === TileType.Wall) {
-        goblin.moveTarget = null;  // invalidate — re-scan next tick
+      if (isWallType(grid[committedSlot.y][committedSlot.x].type)) {
+        goblin.moveTarget = null;
         return;
       }
-
       const next = pathNextStep({ x: goblin.x, y: goblin.y }, committedSlot, grid);
       if (next.x === committedSlot.x && next.y === committedSlot.y) {
         const t = grid[committedSlot.y][committedSlot.x];
         grid[committedSlot.y][committedSlot.x] = {
-          ...t, type: TileType.Wall,
+          ...t, type: TileType.WoodWall,
           foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
         };
-        if (buildStockpile) {
-          buildStockpile.ore -= 3;
-        } else {
-          goblin.inventory.ore -= 3;
-        }
+        buildStockpile.planks -= WOOD_WALL_PLANKS;
         addWorkFatigue(goblin);
         addThought(goblin, 'built_wall', currentTick);
-        goblin.task = 'built room wall!';
+        goblin.task = 'built wood wall!';
       } else {
         goblin.x = next.x; goblin.y = next.y;
         goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
-        goblin.task = '→ room wall';
+        goblin.task = '→ wood wall';
+      }
+    }
+  },
+};
+
+// --- buildStoneWall: build room perimeter from bars (blacksmith) ---
+export const buildStoneWall: Action = {
+  name: 'buildStoneWall',
+  tags: ['work'],
+  eligible: ({ rooms, barStockpiles, grid, goblins, goblin, adventurers }) => {
+    if (!rooms || rooms.length === 0) return false;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const hasEmptySlot = wallSlots.some(s => !isWallType(grid[s.y][s.x].type));
+    if (!hasEmptySlot) return false;
+    const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
+    return totalBars >= STONE_WALL_BARS;
+  },
+  score: ({ goblin, barStockpiles, rooms, grid, goblins, adventurers }) => {
+    const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
+    if (totalBars < STONE_WALL_BARS) return 0;
+    if (!rooms || rooms.length === 0) return 0;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    if (wallSlots.length === 0) return 0;
+    const base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    return Math.min(1.0, base);
+  },
+  execute: ({ goblin, grid, rooms, barStockpiles, goblins, adventurers, currentTick }) => {
+    if (!rooms || rooms.length === 0) return;
+    const buildStockpile = nearestBarStockpile(goblin, barStockpiles ?? [], s => s.bars >= STONE_WALL_BARS);
+    if (!buildStockpile) return;
+
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    let nearestSlot: { x: number; y: number } | null = null;
+    let nearestDist = Infinity;
+    for (const s of wallSlots) {
+      if (isWallType(grid[s.y][s.x].type)) continue;
+      const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
+      if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
+    }
+
+    if (nearestSlot) {
+      const committedSlot = getOrSetMoveTarget(goblin, nearestSlot, currentTick, 15);
+      if (isWallType(grid[committedSlot.y][committedSlot.x].type)) {
+        goblin.moveTarget = null;
+        return;
+      }
+      const next = pathNextStep({ x: goblin.x, y: goblin.y }, committedSlot, grid);
+      if (next.x === committedSlot.x && next.y === committedSlot.y) {
+        const t = grid[committedSlot.y][committedSlot.x];
+        grid[committedSlot.y][committedSlot.x] = {
+          ...t, type: TileType.StoneWall,
+          foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
+        };
+        buildStockpile.bars -= STONE_WALL_BARS;
+        addWorkFatigue(goblin);
+        addThought(goblin, 'built_wall', currentTick);
+        goblin.task = 'built stone wall!';
+      } else {
+        goblin.x = next.x; goblin.y = next.y;
+        goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
+        goblin.task = '→ stone wall';
       }
     }
   },

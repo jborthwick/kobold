@@ -19,10 +19,12 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Ore]: [522],
   [TileType.Mushroom]: [554],
   [TileType.Wall]: [637, 843, 844, 845, 892, 893],
+  [TileType.WoodWall]: [148, 149],
+  [TileType.StoneWall]: [637, 843, 844, 845, 892, 893],
   [TileType.Hearth]: [504],
-  [TileType.Treestump]: [],
+  [TileType.TreeStump]: [104],
   [TileType.Fire]: [505],
-  [TileType.Pool]: [208, 253],
+  [TileType.Pool]: [253],
 };
 
 /** Single-frame sprite assignments for non-terrain game objects. */
