@@ -14,6 +14,7 @@ import { isWalkable } from './world';
 import { traitMod, pathNextStep } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
+import { CARDINAL_DIRECTIONS } from './actions/helpers';
 import { applyTraitBias } from './traitActionBias';
 import { GOAL_CONFIG } from './goalConfig';
 import { tickWoundHealing } from './wounds';
@@ -286,8 +287,7 @@ export function tickAgentUtility(
   // Safety: if a world event (wall built, tile changed) trapped the goblin on an
   // unwalkable tile, nudge them to an adjacent walkable tile before doing anything else.
   if (!isWalkable(grid, goblin.x, goblin.y)) {
-    const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
-    for (const d of dirs) {
+    for (const d of CARDINAL_DIRECTIONS) {
       if (isWalkable(grid, goblin.x + d.x, goblin.y + d.y)) {
         goblin.x += d.x; goblin.y += d.y; break;
       }
@@ -363,11 +363,16 @@ export function tickAgentUtility(
   // ── Step 4: Build action context ─────────────────────────────────────────────
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
+  // Compute resource balance once per tick and cache it to avoid redundant array reduces.
+  const resourceBalance = computeResourceBalanceModifier(
+    foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
+  );
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
     warmthField, dangerField, weatherType, rooms, mealStockpiles,
     plankStockpiles, barStockpiles,
+    resourceBalance,
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────

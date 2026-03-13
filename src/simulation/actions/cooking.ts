@@ -5,7 +5,7 @@
 import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
-import { inverseSigmoid, ramp, computeResourceBalanceModifier } from '../utilityAI';
+import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -74,7 +74,7 @@ export const cook: Action = {
         return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
     },
 
-    score: ({ goblin, foodStockpiles, mealStockpiles, woodStockpiles, oreStockpiles, barStockpiles, plankStockpiles }) => {
+    score: ({ goblin, foodStockpiles, mealStockpiles, woodStockpiles, resourceBalance }) => {
         // If already cooking, strong momentum to finish
         if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
             return 0.95;
@@ -98,7 +98,7 @@ export const cook: Action = {
         const base = foodAbundance * mealScarcity * woodAbundance * 1.1 * inverseSigmoid(goblin.hunger, 35);
 
         // Apply resource balance modifier (boost when materials outweigh consumables)
-        const { foodPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+        const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
 
         // Centralized momentum applied in utilityAI — no per-action bonus needed
         return Math.min(1.0, base * (1 + foodPriority * 0.6));

@@ -4,7 +4,7 @@
  * or future crafting.
  */
 import type { BarStockpile } from '../../shared/types';
-import { inverseSigmoid, ramp, computeResourceBalanceModifier } from '../utilityAI';
+import { inverseSigmoid, ramp } from '../utilityAI';
 import { moveToward, addWorkFatigue, nearestOreStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -45,7 +45,7 @@ export const smith: Action = {
     return (hasOre ?? false) || (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0);
   },
   score: (ctx) => {
-    const { goblin, oreStockpiles, barStockpiles, foodStockpiles, woodStockpiles, mealStockpiles, plankStockpiles } = ctx;
+    const { goblin, oreStockpiles, barStockpiles, resourceBalance } = ctx;
     if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.75;
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
@@ -55,7 +55,7 @@ export const smith: Action = {
     const base = oreAbundance * barScarcity * 0.40 * inverseSigmoid(goblin.hunger, 50); // reduced from 0.45 to 0.40
 
     // Apply resource balance modifier (nerf when food is scarce vs materials abundant)
-    const { materialPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+    const { materialPriority } = resourceBalance ?? { materialPriority: 0 };
     return Math.min(1.0, base * (1 - materialPriority * 0.4));
   },
   execute: (ctx) => {
