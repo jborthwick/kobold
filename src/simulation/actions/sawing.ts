@@ -45,18 +45,14 @@ export const saw: Action = {
     return (hasWood ?? false) || (goblin.sawingProgress !== undefined && goblin.sawingProgress > 0);
   },
   score: (ctx) => {
-    const { goblin, woodStockpiles, plankStockpiles, resourceBalance } = ctx;
+    const { goblin, woodStockpiles, resourceBalance } = ctx;
     if (goblin.sawingProgress !== undefined && goblin.sawingProgress > 0) return 0.95;
     const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
-    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
     if (totalWood < 5) return 0;
-    const woodAbundance = ramp(totalWood, 10, 40);
-    const plankScarcity = inverseSigmoid(totalPlanks, 30);
-    const base = woodAbundance * plankScarcity * 0.40 * inverseSigmoid(goblin.hunger, 50); // reduced from 0.45 to 0.40
-
-    // Apply resource balance modifier (nerf when food is scarce vs materials abundant)
-    const { materialPriority } = resourceBalance ?? { materialPriority: 0 };
-    return Math.min(1.0, base * (1 - materialPriority * 0.4));
+    const woodInputFactor = ramp(totalWood, 5, 25);
+    const { upgradesPressure = 0.35, materialPriority = 1 } = resourceBalance ?? {};
+    const base = upgradesPressure * woodInputFactor * inverseSigmoid(goblin.hunger, 50) * (0.6 + 0.4 * materialPriority);
+    return Math.min(1.0, base);
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, woodStockpiles, onLog, currentTick } = ctx;

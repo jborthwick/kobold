@@ -74,34 +74,24 @@ export const cook: Action = {
         return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
     },
 
-    score: ({ goblin, foodStockpiles, mealStockpiles, woodStockpiles, resourceBalance }) => {
+    score: ({ goblin, foodStockpiles, woodStockpiles, resourceBalance }) => {
         // If already cooking, strong momentum to finish
         if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
             return 0.95;
         }
 
-        // Score based on raw food surplus and lack of meals
         const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
-        const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
         const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
-
-        // Lower threshold: allow cooking with minimal resources so it can bootstrap food production
         if (totalFood < 1) return 0;
         if (totalWood < 1) return 0;
 
-        // Base score peaks when there's lots of food and no meals
-        const foodAbundance = ramp(totalFood, 3, 40);
-        const mealScarcity = inverseSigmoid(totalMeals, 20);
-        const woodAbundance = ramp(totalWood, 2, 15); // Factor in wood availability
-
-        // Increased multiplier from 0.80 → 1.1, lowered hunger midpoint from 50 → 35
-        const base = foodAbundance * mealScarcity * woodAbundance * 1.1 * inverseSigmoid(goblin.hunger, 35);
-
-        // Apply resource balance modifier (boost when materials outweigh consumables)
-        const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
-
-        // Centralized momentum applied in utilityAI — no per-action bonus needed
-        return Math.min(1.0, base * (1 + foodPriority * 0.6));
+        // Input gates only; scarcity from central consumablesPressure
+        const foodInput = Math.min(1, ramp(totalFood, 3, 40));
+        const woodInput = Math.min(1, ramp(totalWood, 2, 15));
+        const hungerFactor = inverseSigmoid(goblin.hunger, 50);
+        const { consumablesPressure = 0.5, foodPriority = 0 } = resourceBalance ?? {};
+        const base = foodInput * woodInput * hungerFactor * 1.1 * consumablesPressure * (1 + foodPriority * 0.6);
+        return Math.min(1.0, base);
     },
 
     execute: (ctx) => {

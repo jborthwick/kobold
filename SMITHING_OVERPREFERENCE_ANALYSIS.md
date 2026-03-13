@@ -1,5 +1,7 @@
 # Smithing Overpreference Analysis
 
+**Note:** Scarcity is now centralized in `computeResourceBalanceModifier()` (tier pressures: consumables > materials > upgrades). Smith/saw use `upgradesPressure`; cook/forage/withdraw use `consumablesPressure`. This doc remains as historical context.
+
 ## Problem
 Goblins spend **33% of their ticks smithing** while other actions (cooking, sawing) get ~6%. They cluster around the blacksmith and ignore other production.
 

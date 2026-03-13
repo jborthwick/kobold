@@ -31,7 +31,14 @@ export interface ActionContext {
   dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile
   weatherType?:    WeatherType;
   rooms?:          Room[];
-  resourceBalance?: { foodPriority: number; materialPriority: number };  // cached per tick
+  /** Cached per tick: balance (food/material priority) + tier pressures (consumables > materials > upgrades). */
+  resourceBalance?: {
+    foodPriority: number;
+    materialPriority: number;
+    consumablesPressure: number;
+    materialsPressure: number;
+    upgradesPressure: number;
+  };
 }
 
 /** Tags for trait-based score biasing (traitActionBias.ts). */

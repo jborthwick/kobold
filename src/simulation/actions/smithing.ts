@@ -45,18 +45,23 @@ export const smith: Action = {
     return (hasOre ?? false) || (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0);
   },
   score: (ctx) => {
-    const { goblin, oreStockpiles, barStockpiles, resourceBalance } = ctx;
-    if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.75;
+    const { goblin, oreStockpiles, resourceBalance, rooms, goblins } = ctx;
+    if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.58;
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
-    const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     if (totalOre < 5) return 0;
-    const oreAbundance = ramp(totalOre, 10, 50);
-    const barScarcity = inverseSigmoid(totalBars, 20); // lowered from 30 to satisfy sooner
-    const base = oreAbundance * barScarcity * 0.40 * inverseSigmoid(goblin.hunger, 50); // reduced from 0.45 to 0.40
+    const oreInputFactor = ramp(totalOre, 5, 25);
+    const { upgradesPressure = 0.35, materialPriority = 1 } = resourceBalance ?? {};
+    let base = upgradesPressure * oreInputFactor * inverseSigmoid(goblin.hunger, 50) * (0.6 + 0.4 * materialPriority);
 
-    // Apply resource balance modifier (nerf when food is scarce vs materials abundant)
-    const { materialPriority } = resourceBalance ?? { materialPriority: 0 };
-    return Math.min(1.0, base * (1 - materialPriority * 0.4));
+    const smithRoom = rooms?.find(r => r.type === 'blacksmith');
+    if (smithRoom && goblins) {
+      const anvil = getAnvilTile(smithRoom);
+      const othersAtAnvilOrSmithing = goblins.filter(
+        g => g.alive && g.id !== goblin.id && (g.smithingProgress !== undefined || (g.x === anvil.x && g.y === anvil.y))
+      );
+      if (othersAtAnvilOrSmithing.length >= 1) base *= 0.5;
+    }
+    return Math.min(1.0, base);
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, oreStockpiles, onLog, currentTick } = ctx;

@@ -23,20 +23,19 @@ export const mine: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, resourceBalance }) => {
-    // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
-    const { materialPriority } = resourceBalance ?? { materialPriority: 0 };
+    const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
+    const balanceFactor = 0.5 + 0.5 * materialPriority;
 
     if (!target) {
-      // No ore in view: only score if we have remembered sites, and keep score modest so other actions get share
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * (1 - materialPriority * 0.5);
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * materialsPressure;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
-    return Math.min(1.0, base * (1 - materialPriority * 0.5));
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    return Math.min(1.0, base);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -115,19 +114,19 @@ export const chop: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, resourceBalance }) => {
-    // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
-    const { materialPriority } = resourceBalance ?? { materialPriority: 0 };
+    const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
+    const balanceFactor = 0.5 + 0.5 * materialPriority;
 
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * (1 - materialPriority * 0.5);
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * materialsPressure;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
-    return Math.min(1.0, base * (1 - materialPriority * 0.5));
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    return Math.min(1.0, base);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;

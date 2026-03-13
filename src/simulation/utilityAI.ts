@@ -29,12 +29,14 @@ export function sigmoid(value: number, midpoint: number, steepness = 0.15): numb
 }
 
 /**
- * Compute resource balance modifier: when materials heavily outweigh consumables,
- * boost food-focused actions and nerf material-focused actions.
- * Returns factors 0–1: higher = more imbalance toward materials.
+ * Central scarcity and resource balance: computed once per tick, passed to all actions.
  *
- * Sigmoid centered at low imbalance (20) so pressure kicks in early. Steeper curve
- * means dramatic swing: at materials=20 consumables, already 50% boost to food actions.
+ * 1) Tier pressures (consumables > raw materials > upgrades): inverseSigmoid on stockpile
+ *    totals with tier-specific midpoints, then scaled by tier weight so food/meals urgency
+ *    dominates bars/planks. Actions use one pressure; no per-action scarcity curves.
+ *
+ * 2) Balance (foodPriority / materialPriority): when materials >> consumables, boost food
+ *    actions and nerf material actions (0.6+0.4*materialPriority in smith/saw/mine/chop).
  */
 export function computeResourceBalanceModifier(
   foodStockpiles: FoodStockpile[] | undefined,
@@ -43,7 +45,13 @@ export function computeResourceBalanceModifier(
   mealStockpiles: MealStockpile[] | undefined,
   barStockpiles: BarStockpile[] | undefined,
   plankStockpiles: PlankStockpile[] | undefined,
-): { foodPriority: number; materialPriority: number } {
+): {
+  foodPriority: number;
+  materialPriority: number;
+  consumablesPressure: number;
+  materialsPressure: number;
+  upgradesPressure: number;
+} {
   const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
   const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
   const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
@@ -51,16 +59,27 @@ export function computeResourceBalanceModifier(
   const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
   const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
 
-  const consumables = totalFood + totalMeals;
-  const materials = totalOre + totalWood + totalBars + totalPlanks;
+  const consumablesTotal = totalFood + totalMeals;
+  const materialsTotal = totalOre + totalWood;
+  const upgradesTotal = totalBars + totalPlanks;
+  const materialsForBalance = totalOre + totalWood + totalBars + totalPlanks;
 
-  // Sigmoid centered at modest imbalance (40) with default steepness.
-  // Pressure starts when materials noticeably exceed consumables (e.g. 100 ore vs 60 food).
-  const imbalance = sigmoid(materials - consumables, 40);
+  // Balance: boost food actions when materials outweigh consumables; nerf material actions
+  const imbalance = sigmoid(materialsForBalance - consumablesTotal, 40);
+  const foodPriority = imbalance;
+  const materialPriority = 1 - imbalance;
+
+  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > materials > upgrades
+  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 25) * 1.0);
+  const materialsPressure = Math.min(1, inverseSigmoid(materialsTotal, 40) * 0.65);
+  const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, 50) * 0.35);
 
   return {
-    foodPriority: imbalance,        // 0–1: boost food actions when imbalanced toward materials
-    materialPriority: 1 - imbalance, // 0–1: nerf material actions when imbalanced toward materials
+    foodPriority,
+    materialPriority,
+    consumablesPressure,
+    materialsPressure,
+    upgradesPressure,
   };
 }
 

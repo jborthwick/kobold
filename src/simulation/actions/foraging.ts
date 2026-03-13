@@ -22,27 +22,23 @@ export const forage: Action = {
   score: ({ goblin, grid, resourceBalance }) => {
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
-    // Search at full range when meaningfully hungry — the distance penalty in bestFoodTile
-    // already filters out patches that aren't worth traveling to.
     const radius = goblin.hunger > 20
       ? maxSearch
       : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const target = bestFoodTile(goblin, grid, radius);
-    const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
+    const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
+    const colonyFoodBlend = 0.5 + 0.5 * consumablesPressure;
+    const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
+    const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
 
     if (!target) {
-      // Check remembered food sites
-      if (goblin.knownFoodSites.length > 0) return sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8);
+      if (goblin.knownFoodSites.length > 0) return Math.min(1.0, sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
       return 0;
     }
-    // Forage base higher than mine/chop since food patches are rarer & geographically distant
     const base = sigmoid(goblin.hunger, 40) * 1.0;
     const score = Math.min(1.0, base);
-
-    // Starvation penalty: if desperately hungry, stop looking for new patches
-    // and let survival/eat/withdraw take over.
     const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
-    return finalScore * (1 + foodPriority * 0.8);
+    return Math.min(1.0, finalScore * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
@@ -215,8 +211,12 @@ export const withdrawFood: Action = {
     const onFoodStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const onMealStockpile = mealStockpiles?.some(m => m.x === goblin.x && m.y === goblin.y) ?? false;
     const onStockpile = onFoodStockpile || onMealStockpile;
-    const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
-    return sigmoid(goblin.hunger, 45) * 0.75 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
+    const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
+    const colonyFoodBlend = 0.5 + 0.5 * consumablesPressure;
+    let score = sigmoid(goblin.hunger, 35) * 0.9 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4) * colonyFoodBlend;
+    const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
+    if (noFood && goblin.hunger > 65) score = Math.min(1.0, score * 1.3);
+    return score;
   },
   execute: ({ goblin, grid, foodStockpiles, mealStockpiles }) => {
     // Prefer meals from kitchen meal stockpiles over raw food

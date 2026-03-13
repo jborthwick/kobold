@@ -85,10 +85,14 @@ Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare 
 
 ## Utility AI (`tickAgentUtility` in `utilityAI.ts`, actions in `actions/`)
 
-Every tick: (1) needs are updated (hunger, morale, fatigue, social), (2) all eligible actions are scored (0–1 via sigmoid/ramp curves), (3) resource balance modifier scales scores (boosts food actions, nerfs material actions when materials >> consumables), (4) trait bias adjusts scores per personality, (5) highest-scoring action runs.
+Every tick: (1) needs are updated (hunger, morale, fatigue, social), (2) all eligible actions are scored (0–1 via sigmoid/ramp curves), (3) central scarcity and resource balance modifiers scale scores, (4) trait bias adjusts scores per personality, (5) highest-scoring action runs.
 
 Scoring curves: `sigmoid()` (0→1 as value rises), `inverseSigmoid()` (1→0 as value rises), `ramp()` (linear 0→1 between min/max).
-Resource balance: `computeResourceBalanceModifier()` detects imbalance between (ore+wood+bars+planks) vs (food+meals); when imbalanced toward materials, food actions boost (forage, cook, withdraw) and material actions nerf (mine, chop, smith, saw).
+
+**Central scarcity** (`computeResourceBalanceModifier()` in `utilityAI.ts`): one place computes tier pressures from stockpile totals. Tiers are consumables (food+meals) > raw materials (ore+wood) > upgrades (bars+planks). Each tier uses `inverseSigmoid(total, midpoint)` with tier-specific midpoints and weights so food/meals urgency dominates; actions use one of `consumablesPressure`, `materialsPressure`, or `upgradesPressure` instead of per-action scarcity curves. Cook, forage, withdraw use consumables; mine, chop use materials; smith, saw use upgrades.
+
+**Resource balance**: when (ore+wood+bars+planks) >> (food+meals), `foodPriority` boosts food actions and `materialPriority` nerfs material actions (smith, saw, mine, chop use `0.6 + 0.4 * materialPriority`).
+
 Traits shift sigmoid midpoints and apply score multipliers (see `traitActionBias.ts`).
 Actions defined in `actions/`; see files for scoring formulas.
 
