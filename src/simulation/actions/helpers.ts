@@ -12,8 +12,10 @@
  */
 
 import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile } from '../../shared/types';
+import { GRID_SIZE } from '../../shared/constants';
 import { pathNextStep, traitMod } from '../agents';
 import { isLegWoundSkip } from '../wounds';
+import { isWalkable } from '../world';
 
 /** Total items a goblin is carrying across all slots. */
 export function totalLoad(inv: { food: number; ore: number; wood: number }): number {
@@ -154,4 +156,21 @@ export function nearestBarStockpile(
       const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? s : best;
     }, null) ?? null;
+}
+
+// ── Grid navigation helpers ──────────────────────────────────────────────────
+
+/** Cardinal directions (N, S, E, W) for neighbor enumeration. */
+export const CARDINAL_DIRECTIONS = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+] as const;
+
+/** Get walkable adjacent tiles in cardinal directions. */
+export function getWalkableAdjacent(grid: Tile[][], x: number, y: number): { x: number; y: number }[] {
+  return CARDINAL_DIRECTIONS
+    .map(d => ({ x: x + d.x, y: y + d.y }))
+    .filter(p => isWalkable(grid, p.x, p.y));
 }
