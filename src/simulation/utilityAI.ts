@@ -15,6 +15,7 @@ import { traitMod, pathNextStep } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
 import { applyTraitBias } from './traitActionBias';
+import { GOAL_CONFIG } from './goalConfig';
 import { tickWoundHealing } from './wounds';
 import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 
@@ -338,6 +339,7 @@ export function tickAgentUtility(
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
   const MOMENTUM_BONUS = 0.25;  // single tune point for action stickiness
+  const goalBonuses = colonyGoal ? GOAL_CONFIG[colonyGoal.type].actionBonuses : {};
   let bestAction: Action | null = null;
   let bestScore = -1;
   let secondName = '';
@@ -347,6 +349,8 @@ export function tickAgentUtility(
     if (!action.eligible(ctx)) continue;
     let score = action.score(ctx);
     score = applyTraitBias(goblin, action, score);
+    // Goal-directed bonus: active colony goal nudges relevant actions higher
+    score *= goalBonuses[action.name] ?? 1.0;
     // Centralized momentum: sticky bonus for the action that won last tick
     if (action.name === goblin.lastActionName) {
       score = Math.min(1.0, score + MOMENTUM_BONUS);

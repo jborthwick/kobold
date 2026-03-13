@@ -3,21 +3,22 @@ import { getGoblinConfig } from '../../shared/goblinConfig';
 import { filterSignificantEvents, callStorytellerLLM, buildFallbackChapter } from '../../ai/storyteller';
 import type { ColonyGoal, Chapter, Goblin } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
+import { GOAL_CONFIG, GOAL_ORDER } from '../../simulation/goalConfig';
 
 export function makeGoal(type: ColonyGoal['type'], generation: number): ColonyGoal {
-    const scale = 1 + generation * 0.6;
+    const cfg = GOAL_CONFIG[type];
+    const target = Math.round(cfg.baseTarget * (1 + generation * cfg.scaleFactor));
     const desc = getGoblinConfig().goalDescriptions;
     switch (type) {
         case 'build_rooms':
-            return { type, description: desc.build_rooms(), progress: 0, target: 2, generation };
+            return { type, description: desc.build_rooms(), progress: 0, target, generation };
         case 'cook_meals':
-            return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
+            return { type, description: desc.cook_meals(target), progress: 0, target, generation };
         case 'survive_ticks':
-            return { type, description: desc.survive_ticks(Math.round(400 * scale)), progress: 0, target: Math.round(400 * scale), generation };
+            return { type, description: desc.survive_ticks(target), progress: 0, target, generation };
         case 'defeat_adventurers':
-            return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
+            return { type, description: desc.defeat_adventurers(target), progress: 0, target, generation };
     }
-    return { type: 'build_rooms', description: desc.build_rooms(), progress: 0, target: 2, generation };
 }
 
 export function updateGoalProgress(scene: WorldScene) {
@@ -58,9 +59,8 @@ export function completeGoal(scene: WorldScene, alive: Goblin[]) {
         message: `✓ Goal complete: ${scene.colonyGoal.description}! Morale boost for all!`,
         level: 'info',
     });
-    const GOAL_TYPES: ColonyGoal['type'][] = ['build_rooms', 'cook_meals', 'survive_ticks', 'defeat_adventurers'];
-    const curr = GOAL_TYPES.indexOf(scene.colonyGoal.type);
-    const next = GOAL_TYPES[(curr + 1) % GOAL_TYPES.length];
+    const curr = GOAL_ORDER.indexOf(scene.colonyGoal.type);
+    const next = GOAL_ORDER[(curr + 1) % GOAL_ORDER.length];
 
     // Reset relevant counters so the new goal tracks from zero
     // Note: food stockpile and ore stockpile totals are intentionally NOT cleared on goal completion
