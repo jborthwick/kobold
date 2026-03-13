@@ -35,6 +35,7 @@ export const commandMove: Action = {
 };
 
 // --- eat: consume food from inventory, or graze from tile underfoot ---
+// Score rises with hunger; when carrying food and meaningfully hungry, floor ensures eat can beat work+momentum so goblins don’t wait too long.
 export const eat: Action = {
   name: 'eat',
   tags: ['eat'],
@@ -45,10 +46,13 @@ export const eat: Action = {
     return !!tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
   },
   score: ({ goblin }) => {
-    const mid = traitMod(goblin, 'eatThreshold', 50); // was 70
-    const score = sigmoid(goblin.hunger, mid);
-    // Survival priority boost: if starving, jump to the front of the queue
-    return goblin.hunger > 80 ? Math.min(1.0, score * 1.5) : score;
+    const mid = traitMod(goblin, 'eatThreshold', 28);
+    let score = sigmoid(goblin.hunger, mid);
+    if (goblin.hunger > 80) score = Math.min(1.0, score * 1.5);
+    // Carrying food + hungry: floor so eat beats work momentum
+    const hasFood = goblin.inventory.food > 0 || goblin.inventory.meals > 0;
+    if (hasFood && goblin.hunger > 35 && score < 0.65) score = 0.65;
+    return score;
   },
   execute: ({ goblin, grid, currentTick, onLog }) => {
     const wasDesperatelyHungry = goblin.hunger > 80;
