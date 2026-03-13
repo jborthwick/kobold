@@ -88,8 +88,9 @@ export const establishStockpile: Action = {
     if (totalFood < 5) return false;
     return true;
   },
+  // Score when not hungry so establishing stockpiles can compete with other work
   score: ({ goblin }) => {
-    return 0.4 * inverseSigmoid(goblin.hunger, 50);
+    return 0.5 * inverseSigmoid(goblin.hunger, 50);
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, foodStockpiles, oreStockpiles, woodStockpiles, onLog } = ctx;
