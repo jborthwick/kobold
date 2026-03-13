@@ -12,7 +12,7 @@ import {
 } from '../agents';
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile, getWalkableAdjacent } from './helpers';
 import type { Action } from './types';
 
 // --- forage: scan for food, pathfind, harvest ---
@@ -88,10 +88,7 @@ export const forage: Action = {
           if (relation >= 20 && newRel < 20 && shouldLog(goblin, `rival_${rival.id}`, currentTick, 300)) {
             onLog?.(`💢 growing rivalry with ${rival.name}`, 'warn');
           }
-          const escapeDirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
-          const escapeOpen = escapeDirs
-            .map(d => ({ x: goblin.x + d.dx, y: goblin.y + d.dy }))
-            .filter(p => isWalkable(grid, p.x, p.y));
+          const escapeOpen = getWalkableAdjacent(grid, goblin.x, goblin.y);
           if (escapeOpen.length > 0) {
             const step = escapeOpen[Math.floor(Math.random() * escapeOpen.length)];
             goblin.x = step.x; goblin.y = step.y;
