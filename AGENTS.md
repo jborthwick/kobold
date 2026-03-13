@@ -19,7 +19,7 @@ python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame inde
 
 Runs the full simulation (world gen, utility AI, weather, raids, diffusion, events) without
 Phaser or React, many times faster than real-time. No LLM calls (deterministic only).
-**Use this whenever tuning action scores, eligibility thresholds, or need curves.**
+**Use this whenever tuning action scores, eligibility thresholds, or resource balance modifiers.**
 
 ```bash
 npm run headless                      # 2000 ticks, random seed
@@ -85,7 +85,11 @@ Vite dev-server proxy handles `/api/llm-proxy` → Anthropic API (no Cloudflare 
 
 ## Utility AI (`tickAgentUtility` in `utilityAI.ts`, actions in `actions/`)
 
-Every tick: needs are updated, then all eligible actions are scored (0–1 via sigmoid/ramp curves and trait bias), and the highest-scoring action runs. Exact order and overrides live in `utilityAI.ts` (`tickAgentUtility`). Traits shift sigmoid midpoints and apply tag-based score multipliers (see `traitActionBias.ts`).
+Every tick: (1) needs are updated (hunger, morale, fatigue, social), (2) all eligible actions are scored (0–1 via sigmoid/ramp curves), (3) resource balance modifier scales scores (boosts food actions, nerfs material actions when materials >> consumables), (4) trait bias adjusts scores per personality, (5) highest-scoring action runs.
+
+Scoring curves: `sigmoid()` (0→1 as value rises), `inverseSigmoid()` (1→0 as value rises), `ramp()` (linear 0→1 between min/max).
+Resource balance: `computeResourceBalanceModifier()` detects imbalance between (ore+wood+bars+planks) vs (food+meals); when imbalanced toward materials, food actions boost (forage, cook, withdraw) and material actions nerf (mine, chop, smith, saw).
+Traits shift sigmoid midpoints and apply score multipliers (see `traitActionBias.ts`).
 Actions defined in `actions/`; see files for scoring formulas.
 
 
