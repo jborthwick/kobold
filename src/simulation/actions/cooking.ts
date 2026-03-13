@@ -83,13 +83,13 @@ export const cook: Action = {
         const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
         const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
 
-        if (totalFood < 10) return 0; // Don't cook if food is scarce
+        if (totalFood < 5) return 0; // Don't cook if food is scarce (matching smithing/sawing ore/wood threshold)
 
         // Base score peaks when there's lots of food and no meals
         const foodAbundance = ramp(totalFood, 10, 50);
         const mealScarcity = inverseSigmoid(totalMeals, 20);
 
-        const base = foodAbundance * mealScarcity * 0.5 * inverseSigmoid(goblin.hunger, 50);
+        const base = foodAbundance * mealScarcity * 1.0 * inverseSigmoid(goblin.hunger, 50);
 
         // Centralized momentum applied in utilityAI — no per-action bonus needed
         return Math.min(1.0, base);

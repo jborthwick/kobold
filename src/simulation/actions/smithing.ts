@@ -51,7 +51,7 @@ export const smith: Action = {
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     if (totalOre < 5) return 0;
     const oreAbundance = ramp(totalOre, 10, 50);
-    const barScarcity = inverseSigmoid(totalBars, 30);
+    const barScarcity = inverseSigmoid(totalBars, 20); // lowered from 30 to satisfy sooner
     return Math.min(1.0, oreAbundance * barScarcity * 0.45 * inverseSigmoid(goblin.hunger, 50));
   },
   execute: (ctx) => {

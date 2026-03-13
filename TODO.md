@@ -13,7 +13,8 @@
 
 
 ## Bugs:
-[ ] bugs: goblins dont seem to forage much for mushrooms when they're hungry anymore. Almost starving to death sometimes than going to find a mushroom patch (especially if there's no kitchen to cook in yet)
+[ ] bug: saw a goblin with -10 food in their hud display 
+[ ] bug: goblins dont seem to forage much for mushrooms when they're hungry anymore. Almost starving to death sometimes than going to find a mushroom patch (especially if there's no kitchen to cook in yet)
 [ ] bug: if a kitchen is built before other rooms (like storage room), then goblins heavily deprioritize cooking meals. Or never cook meals.
 [ ] bug: build menu items highlight white after they've been selected and deselected the first time. They should remain gray when unselected.
 [ ] bug: goblins sometimes build single walls away from the fort
