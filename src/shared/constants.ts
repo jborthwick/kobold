@@ -22,3 +22,20 @@ export const GOBLIN_NAMES = [
   'Pox', 'Moldy', 'Slimer', 'Gloom', 'Blight',
   'Nox', 'Spros', 'Krul', 'Zib', 'Gronk',
 ];
+
+/** Task strings for goblin activities. Use instead of hardcoding task names. */
+export const TASK_STRINGS = {
+  EXPLORING: 'exploring',
+  WANDERING: 'wandering',
+  SEEKING_WARMTH: 'seeking warmth',
+  WARMING_UP: 'warming up',
+  SOCIALIZING: 'socializing',
+  EATING: 'eating',
+  RESTING: 'resting',
+  FORAGING: 'foraging',
+  MINING: 'mining',
+  LOGGING: 'logging',
+  BUILDING: 'building',
+  BROODING: 'brooding',
+  FLEEING_TO_SAFETY: 'fleeing to safety',
+} as const;
