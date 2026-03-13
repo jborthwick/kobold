@@ -8,7 +8,7 @@ import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { isWalkable } from '../world';
 import { sigmoid, ramp, inverseSigmoid } from '../utilityAI';
 import { traitMod } from '../agents';
-import { moveTo, shouldLog, traitText, totalLoad } from './helpers';
+import { moveTo, shouldLog, traitText, totalLoad, getWalkableAdjacent } from './helpers';
 import { addMemory } from '../mood';
 import type { Action } from './types';
 
@@ -153,10 +153,7 @@ export const avoidRival: Action = {
       .filter(e => e.dist <= avoidRadius && (goblin.relations[e.r.id] ?? 50) < 30)
       .sort((a, b) => a.dist - b.dist)[0]?.r ?? null;
     if (!rival) return;
-    const avoidDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
-    const avoidOpen = avoidDirs
-      .map(d => ({ x: goblin.x + d.x, y: goblin.y + d.y }))
-      .filter(p => isWalkable(grid, p.x, p.y));
+    const avoidOpen = getWalkableAdjacent(grid, goblin.x, goblin.y);
     if (avoidOpen.length > 0) {
       const next = avoidOpen.reduce((best, p) =>
         (Math.abs(p.x - rival.x) + Math.abs(p.y - rival.y)) >
