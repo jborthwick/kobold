@@ -9,7 +9,7 @@ import { moveToward, addWorkFatigue, nearestOreStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 
-const ORE_COST = 3;
+const ORE_COST = 5; // increased from 3 to make smithing more resource-constrained
 const SMITHING_TICKS_REQUIRED = 50;
 const BARS_PER_BATCH = 5;
 const MAX_BARS_PER_PILE = 80;
@@ -52,7 +52,7 @@ export const smith: Action = {
     if (totalOre < 5) return 0;
     const oreAbundance = ramp(totalOre, 10, 50);
     const barScarcity = inverseSigmoid(totalBars, 20); // lowered from 30 to satisfy sooner
-    return Math.min(1.0, oreAbundance * barScarcity * 0.45 * inverseSigmoid(goblin.hunger, 50));
+    return Math.min(1.0, oreAbundance * barScarcity * 0.40 * inverseSigmoid(goblin.hunger, 50)); // reduced from 0.45 to 0.40
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, oreStockpiles, onLog, currentTick } = ctx;

@@ -2,7 +2,6 @@
 ## Features
 [x] ~~Audit why goblins aren't cooking 32 meals to reach goal 2~~ — Fixed by rebalancing cooking/smithing scores
 [ ] Fire should eventually burn out on its own and not spread over the entire map by default (if the goblins don't put it out, or it doesn't rain). Some kind of decay on the spread perhaps.
-[ ] What if who triggered a moveTo Command like clicking does whenever a player places a room? that wouldn't really scale i guess
 
 ## Audit Chapter Generation
 [ ] Question: wHat actions/logs/traits/emotions get sent.

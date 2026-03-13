@@ -52,7 +52,7 @@ export const saw: Action = {
     if (totalWood < 5) return 0;
     const woodAbundance = ramp(totalWood, 10, 40);
     const plankScarcity = inverseSigmoid(totalPlanks, 30);
-    return Math.min(1.0, woodAbundance * plankScarcity * 0.45 * inverseSigmoid(goblin.hunger, 50));
+    return Math.min(1.0, woodAbundance * plankScarcity * 0.40 * inverseSigmoid(goblin.hunger, 50)); // reduced from 0.45 to 0.40
   },
   execute: (ctx) => {
     const { goblin, grid, rooms, woodStockpiles, onLog, currentTick } = ctx;
