@@ -5,7 +5,6 @@
 import { TileType } from '../../shared/types';
 import type { ResourceSite } from '../../shared/types';
 import { GRID_SIZE, MAX_INVENTORY_CAPACITY } from '../../shared/constants';
-import { isWalkable } from '../world';
 import { sigmoid, inverseSigmoid, ramp } from '../utilityAI';
 import {
   bestFoodTile, recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS, traitMod,

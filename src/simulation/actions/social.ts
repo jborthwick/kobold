@@ -5,7 +5,6 @@
  */
 import type { Goblin } from '../../shared/types';
 import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
-import { isWalkable } from '../world';
 import { sigmoid, ramp, inverseSigmoid } from '../utilityAI';
 import { traitMod } from '../agents';
 import { moveTo, shouldLog, traitText, totalLoad, getWalkableAdjacent } from './helpers';

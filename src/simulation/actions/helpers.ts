@@ -12,7 +12,6 @@
  */
 
 import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile } from '../../shared/types';
-import { GRID_SIZE } from '../../shared/constants';
 import { pathNextStep, traitMod } from '../agents';
 import { isLegWoundSkip } from '../wounds';
 import { isWalkable } from '../world';
