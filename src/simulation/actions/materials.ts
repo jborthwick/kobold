@@ -209,6 +209,7 @@ export const chop: Action = {
 };
 
 // --- depositOre: miners carry ore to stockpile ---
+// Score grows with ore carried; tuned so deposit competes with mine when carrying a reasonable load.
 export const depositOre: Action = {
   name: 'depositOre',
   tags: ['work'],
@@ -218,7 +219,7 @@ export const depositOre: Action = {
   },
   score: ({ goblin, oreStockpiles }) => {
     const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.ore, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+    return ramp(goblin.inventory.ore, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, oreStockpiles }) => {
     const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
@@ -238,6 +239,7 @@ export const depositOre: Action = {
 };
 
 // --- depositWood: lumberjacks carry wood to stockpile ---
+// Score grows with wood carried; tuned so deposit competes with chop when carrying a reasonable load.
 export const depositWood: Action = {
   name: 'depositWood',
   tags: ['work'],
@@ -247,7 +249,7 @@ export const depositWood: Action = {
   },
   score: ({ goblin, woodStockpiles }) => {
     const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.wood, 6, 20) * 0.5 * (onStockpile ? 2.5 : 1.0);
+    return ramp(goblin.inventory.wood, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
   },
   execute: ({ goblin, grid, woodStockpiles }) => {
     const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
