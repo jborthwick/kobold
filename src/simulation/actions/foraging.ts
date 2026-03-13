@@ -1,6 +1,8 @@
 /**
- * Forage (scan for food, pathfind, harvest), depositFood, withdrawFood. Hunger-driven; uses
- * knownFoodSites when no patch in range. Foragers get 2 food/tile, others 1.
+ * Forage (scan for food, pathfind, harvest), depositFood, withdrawFood.
+ * Hunger-driven; uses knownFoodSites when no patch in range. When colony is short on food,
+ * forage gets a score floor so goblins "stock the larder" even when not hungry. depositFood
+ * scores with modest surplus (ramp + hunger gate) so stockpiles fill. Foragers get 2 food/tile, others 1.
  */
 import { TileType } from '../../shared/types';
 import type { ResourceSite } from '../../shared/types';
@@ -32,10 +34,15 @@ export const forage: Action = {
     const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
 
     if (!target) {
-      if (goblin.knownFoodSites.length > 0) return Math.min(1.0, sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
+      if (goblin.knownFoodSites.length > 0) {
+        let s = sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend;
+        if (consumablesPressure > 0.5) s = Math.max(s, 0.35); // stock the larder
+        return Math.min(1.0, s);
+      }
       return 0;
     }
-    const base = sigmoid(goblin.hunger, 40) * 1.0;
+    let base = sigmoid(goblin.hunger, 40) * 1.0;
+    if (consumablesPressure > 0.5) base = Math.max(base, 0.35); // stock the larder when colony short on food
     const score = Math.min(1.0, base);
     const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
     return Math.min(1.0, finalScore * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
@@ -166,6 +173,7 @@ export const forage: Action = {
 };
 
 // --- depositFood: carry surplus food to stockpile ---
+// Score grows with inventory surplus; suppressed when hungry so they eat first. Ramp and base tuned so deposit wins with modest surplus.
 const DEPOSIT_KEEP_FOOD = 6; // food kept after deposit (prevents depositing everything)
 export const depositFood: Action = {
   name: 'depositFood',
@@ -177,7 +185,7 @@ export const depositFood: Action = {
   score: ({ goblin, foodStockpiles, resourceBalance }) => {
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
-    return ramp(goblin.inventory.food, 6, 20) * inverseSigmoid(goblin.hunger, 50) * 0.6 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
+    return ramp(goblin.inventory.food, 4, 14) * inverseSigmoid(goblin.hunger, 50) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
