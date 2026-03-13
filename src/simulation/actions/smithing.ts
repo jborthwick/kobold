@@ -46,7 +46,7 @@ export const smith: Action = {
   },
   score: (ctx) => {
     const { goblin, oreStockpiles, barStockpiles } = ctx;
-    if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.95;
+    if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.75;
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     if (totalOre < 5) return 0;

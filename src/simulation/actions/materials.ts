@@ -21,10 +21,6 @@ export const mine: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, oreStockpiles }) => {
-    // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
-    const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
-    const maxOre = oreStockpiles?.reduce((s, p) => s + p.maxOre, 0) ?? 1;
-    const oreNeed = maxOre > 0 ? 0.2 + 0.8 * (1 - totalOre / maxOre) : 1.0;
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
@@ -32,10 +28,10 @@ export const mine: Action = {
     const target = bestMaterialTile(goblin, grid, radius);
     if (!target) {
       // No ore in view: only score if we have remembered sites, and keep score modest so other actions get share
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * oreNeed;
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * oreNeed;
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
     return Math.min(1.0, base);
   },
   execute: (ctx) => {
@@ -115,20 +111,16 @@ export const chop: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, woodStockpiles }) => {
-    // Colony need: score scales from 0.2 (full stockpile) to 1.0 (empty)
-    const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
-    const maxWood = woodStockpiles?.reduce((s, p) => s + p.maxWood, 0) ?? 1;
-    const woodNeed = maxWood > 0 ? 0.2 + 0.8 * (1 - totalWood / maxWood) : 1.0;
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * woodNeed;
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35;
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * woodNeed;
+    const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
     return Math.min(1.0, base);
   },
   execute: (ctx) => {

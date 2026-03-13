@@ -352,7 +352,8 @@ export function tickAgentUtility(
     // Goal-directed bonus: active colony goal nudges relevant actions higher
     score *= goalBonuses[action.name] ?? 1.0;
     // Centralized momentum: sticky bonus for the action that won last tick
-    if (action.name === goblin.lastActionName) {
+    // (but exclude wander — it's a fallback, not a strategy to stick with)
+    if (action.name === goblin.lastActionName && action.name !== 'wander') {
       score = Math.min(1.0, score + MOMENTUM_BONUS);
     }
     if (score > bestScore) {
