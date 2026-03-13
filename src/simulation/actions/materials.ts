@@ -1,6 +1,8 @@
 /**
- * mine, chop, depositOre, depositWood. Colony need (stockpile fill) scales score; miners and
- * lumberjacks target ore/forest tiles via pathfinding. Uses known sites when in range.
+ * mine, chop, depositOre, depositWood. Resource balance modifier scales scores:
+ * when materials (ore, wood, bars, planks) outweigh consumables (food, meals),
+ * material actions are nerfed and food actions boosted. Miners and lumberjacks
+ * target ore/forest tiles via pathfinding, using known sites when in range.
  */
 import { TileType } from '../../shared/types';
 import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
