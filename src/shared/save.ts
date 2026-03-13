@@ -51,9 +51,25 @@ export interface SaveData {
 
 const KEY = 'kobold_save_v2';
 
-/** Write full game state to localStorage. */
+/** Write full game state to localStorage. On quota exceeded, tries to delete the old save and retry. */
 export function saveGame(data: SaveData): void {
-  localStorage.setItem(KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(data));
+  } catch (e) {
+    // If quota exceeded, clear old save and retry once
+    if ((e as Error).name === 'QuotaExceededError') {
+      console.warn('localStorage quota exceeded; clearing old save and retrying...');
+      localStorage.removeItem(KEY);
+      try {
+        localStorage.setItem(KEY, JSON.stringify(data));
+      } catch (retryErr) {
+        console.error('Failed to save game even after clearing old save:', retryErr);
+        throw retryErr;
+      }
+    } else {
+      throw e;
+    }
+  }
 }
 
 /** Parse and migrate from localStorage; returns null if missing/invalid. Mutates parsed data in place for migrations. */

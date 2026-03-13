@@ -10,13 +10,26 @@ import type { SaveData } from '../../shared/save';
 import type { MiniMapData } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
 
-/** Serialise the full simulation state into a plain object suitable for JSON. */
+/** Serialise the full simulation state into a plain object suitable for JSON.
+ * Trims unbounded arrays (memory, logHistory) before serializing to keep save size bounded.
+ */
 export function buildSaveData(scene: WorldScene): SaveData {
+    // Trim unbounded goblin state to prevent localStorage quota issues
+    const MAX_MEMORY_PER_GOBLIN = 50;
+    const MAX_THOUGHTS_PER_GOBLIN = 20;
+    const MAX_MEMORIES_PER_GOBLIN = 20;
+    const MAX_LOG_HISTORY = 1000;
+
     return {
         version: 2,
         tick: scene.tick,
         grid: scene.grid,
-        goblins: scene.goblins.map(d => ({ ...d })),
+        goblins: scene.goblins.map(d => ({
+            ...d,
+            memory: d.memory.slice(-MAX_MEMORY_PER_GOBLIN),
+            thoughts: d.thoughts.slice(-MAX_THOUGHTS_PER_GOBLIN),
+            memories: d.memories.slice(-MAX_MEMORIES_PER_GOBLIN),
+        })),
         adventurers: scene.adventurers.map(g => ({ ...g })),
         colonyGoal: { ...scene.colonyGoal },
         foodStockpiles: scene.foodStockpiles.map(s => ({ ...s })),
@@ -32,7 +45,7 @@ export function buildSaveData(scene: WorldScene): SaveData {
         commandTile: scene.commandTile ? { ...scene.commandTile } : null,
         speed: scene.speedMultiplier,
         overlayMode: scene.overlayMode,
-        logHistory: [...scene.logHistory],
+        logHistory: scene.logHistory.slice(-MAX_LOG_HISTORY),
         nextWorldEventTick: getNextEventTick(),
         weather: { ...scene.weather },
         worldSeed: scene.worldSeed,
