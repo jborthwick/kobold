@@ -73,8 +73,8 @@ export const wander: Action = {
       return;
     }
 
-    moveTo(goblin, goblin.wanderTarget, grid);
-    goblin.task = 'exploring';
+    moveTo(goblin, goblin.wanderTarget!, grid);
+    goblin.task = TASK_STRINGS.EXPLORING;
   },
 };
 
@@ -93,7 +93,7 @@ export const seekWarmth: Action = {
     // Hysteresis: if already en route (task from last tick), stay committed until comfortably warm (50);
     // otherwise only start when actually cold (< 35).
     const warmth = goblin.warmth ?? 100;
-    const exitThreshold = goblin.task === 'seeking warmth' ? 50 : 35;
+    const exitThreshold = goblin.task === TASK_STRINGS.SEEKING_WARMTH ? 50 : 35;
     if (warmth >= exitThreshold) return false;
     // Cooldown: prevents re-triggering immediately after being warm
     if (currentTick - (goblin.lastLoggedTicks['seekWarmthDone'] ?? 0) < SEEK_WARMTH_COOLDOWN) return false;
