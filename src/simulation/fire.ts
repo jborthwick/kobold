@@ -6,12 +6,13 @@
 
 import { TileType, type Tile, type Goblin, type WeatherType } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
+import { ramp } from './utilityAI';
 
 const FLAMMABLE = new Set([TileType.Grass, TileType.Forest, TileType.Mushroom, TileType.Farmland, TileType.TreeStump, TileType.WoodWall]);
 
-const FIRE_DURATION       = 90;    // ticks before natural burnout → Dirt
+const FIRE_DURATION       = 60;    // ticks before natural burnout → Dirt (with decay, spreads become ineffective before burnout)
 const SPREAD_INTERVAL     = 25;    // ticks between spread attempts per fire tile
-const BASE_IGNITION       = 0.0003; // per hearth × per adjacent flammable tile/tick
+const BASE_IGNITION       = 0.0004; // per hearth × per adjacent flammable tile/tick (increased after fire decay tuning)
 const BASE_SPREAD         = 0.80;  // probability per neighbor per spread attempt
 const RAIN_EXTINGUISH     = 0.25;  // probability per fire tile per tick during rain
 const FIRE_DAMAGE_HP           = 5;     // hp lost per tick while standing on a fire tile
@@ -91,7 +92,9 @@ export function tickFire(
         } else if (mod.spread > 0 && age % SPREAD_INTERVAL === 0 && age > 0) {
           // High-probability slow wave: attempt spread every SPREAD_INTERVAL ticks,
           // staggered per-tile so all fires don't pulse at the same moment.
-          const p = Math.min(0.95, BASE_SPREAD * mod.spread);
+          // Decay spreads probability linearly from 1.0 to 0.0 over FIRE_DURATION.
+          const ageDecay = 1 - ramp(age, 0, FIRE_DURATION);
+          const p = Math.min(0.95, BASE_SPREAD * mod.spread * ageDecay);
           for (const [dx, dy] of DIRS) {
             const nx = x + dx, ny = y + dy;
             if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;

@@ -2,9 +2,12 @@
 ## Features
 [x] ~~Audit why goblins aren't cooking 32 meals to reach goal 2~~ — Fixed by rebalancing cooking/smithing scores
 [ ] Fire should eventually burn out on its own and not spread over the entire map by default (if the goblins don't put it out, or it doesn't rain). Some kind of decay on the spread perhaps.
+[ ] Once fire burns out on it's own quicker, we should increase the chance of fires
+[ ] add plant and tree regrowth after fires
+[ ] Goblin deaths should sour the mood of surviving goblins for a while
 
 ## Audit Chapter Generation
-[ ] Question: wHat actions/logs/traits/emotions get sent.
+[ ] Question: wHat actions/logs/traits/emotions get sent for chapter generation.
 [ ] Use logging to headless tos ee what gets sent for chapter generation.
 [ ] add chapter generation to headless mode.
 [ ] What info should we send to make the most impactful story
