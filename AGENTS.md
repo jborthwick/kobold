@@ -94,6 +94,9 @@ Scoring curves: `sigmoid()` (0→1 as value rises), `inverseSigmoid()` (1→0 as
 **Resource balance**: when (ore+wood+bars+planks) >> (food+meals), `foodPriority` boosts food actions and `materialPriority` nerfs material actions (smith, saw, mine, chop use `0.6 + 0.4 * materialPriority`).
 
 Traits shift sigmoid midpoints and apply score multipliers (see `traitActionBias.ts`).
+
+**Eat and stockpiles:** Eat score rises with hunger and has a floor when carrying food so goblins eat sooner and compete with work momentum. Forage gets a score floor when the colony is short on food (high consumablesPressure) so goblins "stock the larder" even when not hungry. Deposit actions score with modest surplus so stockpiling is chosen; establishStockpile scores when not hungry so new stockpiles get built.
+
 Actions defined in `actions/`; see files for scoring formulas.
 
 
