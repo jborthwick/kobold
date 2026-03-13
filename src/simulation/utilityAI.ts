@@ -27,6 +27,42 @@ export function sigmoid(value: number, midpoint: number, steepness = 0.15): numb
   return 1 / (1 + Math.exp(-steepness * (value - midpoint)));
 }
 
+/**
+ * Compute resource balance modifier: when materials heavily outweigh consumables,
+ * boost food-focused actions and nerf material-focused actions.
+ * Returns factors 0–1: higher = more imbalance toward materials.
+ *
+ * Sigmoid centered at low imbalance (20) so pressure kicks in early. Steeper curve
+ * means dramatic swing: at materials=20 consumables, already 50% boost to food actions.
+ */
+export function computeResourceBalanceModifier(
+  foodStockpiles: FoodStockpile[] | undefined,
+  oreStockpiles: OreStockpile[] | undefined,
+  woodStockpiles: WoodStockpile[] | undefined,
+  mealStockpiles: MealStockpile[] | undefined,
+  barStockpiles: BarStockpile[] | undefined,
+  plankStockpiles: PlankStockpile[] | undefined,
+): { foodPriority: number; materialPriority: number } {
+  const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
+  const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
+  const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
+  const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
+  const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
+  const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
+
+  const consumables = totalFood + totalMeals;
+  const materials = totalOre + totalWood + totalBars + totalPlanks;
+
+  // Sigmoid centered at modest imbalance (40) with default steepness.
+  // Pressure starts when materials noticeably exceed consumables (e.g. 100 ore vs 60 food).
+  const imbalance = sigmoid(materials - consumables, 40);
+
+  return {
+    foodPriority: imbalance,        // 0–1: boost food actions when imbalanced toward materials
+    materialPriority: 1 - imbalance, // 0–1: nerf material actions when imbalanced toward materials
+  };
+}
+
 /** 1 − sigmoid: 1 at low values, 0 at high values. */
 export function inverseSigmoid(value: number, midpoint: number, steepness = 0.15): number {
   return 1 - sigmoid(value, midpoint, steepness);

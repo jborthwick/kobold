@@ -1,0 +1,6258 @@
+{
+  "seed": "42",
+  "ticks": 200,
+  "snapshots": [
+    {
+      "tick": 10,
+      "alive": 5,
+      "totalFood": 9,
+      "totalOre": 145,
+      "totalWood": 0,
+      "avgHunger": 28.276920454926444,
+      "avgMorale": 80.5179207644671,
+      "avgFatigue": 3.687006267789264,
+      "raiders": 3
+    },
+    {
+      "tick": 20,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 140,
+      "totalWood": 0,
+      "avgHunger": 32.145461695145045,
+      "avgMorale": 78.1680633857908,
+      "avgFatigue": 7.047106801069861,
+      "raiders": 3
+    },
+    {
+      "tick": 30,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 125,
+      "totalWood": 0,
+      "avgHunger": 36.06542811568919,
+      "avgMorale": 75.70495986593781,
+      "avgFatigue": 9.31246656951134,
+      "raiders": 3
+    },
+    {
+      "tick": 40,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 125,
+      "totalWood": 0,
+      "avgHunger": 38.525428115689195,
+      "avgMorale": 74.2037983840384,
+      "avgFatigue": 8.512466569511338,
+      "raiders": 3
+    },
+    {
+      "tick": 50,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 125,
+      "totalWood": 0,
+      "avgHunger": 40.9854281156892,
+      "avgMorale": 72.77602849113885,
+      "avgFatigue": 7.712466569511338,
+      "raiders": 3
+    },
+    {
+      "tick": 60,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 43.44542811568921,
+      "avgMorale": 71.43786307953059,
+      "avgFatigue": 7.016466569511337,
+      "raiders": 3
+    },
+    {
+      "tick": 70,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 45.90542811568921,
+      "avgMorale": 70.18843129843593,
+      "avgFatigue": 6.3364665695113365,
+      "raiders": 3
+    },
+    {
+      "tick": 80,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 48.36542811568923,
+      "avgMorale": 69.13721820950585,
+      "avgFatigue": 8.896466569511336,
+      "raiders": 3
+    },
+    {
+      "tick": 90,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 50.825428115689235,
+      "avgMorale": 68.13786149033395,
+      "avgFatigue": 10.73646656951133,
+      "raiders": 3
+    },
+    {
+      "tick": 100,
+      "alive": 5,
+      "totalFood": 18,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 30.039248739236605,
+      "avgMorale": 67.18899293285835,
+      "avgFatigue": 12.256466569511323,
+      "raiders": 3
+    },
+    {
+      "tick": 110,
+      "alive": 5,
+      "totalFood": 29,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 22.324682795074203,
+      "avgMorale": 65.46727375966665,
+      "avgFatigue": 14.012466569511323,
+      "raiders": 3
+    },
+    {
+      "tick": 120,
+      "alive": 5,
+      "totalFood": 51,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 24.784682795074207,
+      "avgMorale": 63.864204565448084,
+      "avgFatigue": 16.54046656951133,
+      "raiders": 3
+    },
+    {
+      "tick": 130,
+      "alive": 5,
+      "totalFood": 51,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 6.2141559195124225,
+      "avgMorale": 62.34988577039953,
+      "avgFatigue": 19.028466569511338,
+      "raiders": 2
+    },
+    {
+      "tick": 140,
+      "alive": 5,
+      "totalFood": 51,
+      "totalOre": 120,
+      "totalWood": 0,
+      "avgHunger": 8.67415591951242,
+      "avgMorale": 61.952434800777475,
+      "avgFatigue": 21.068466569511347,
+      "raiders": 2
+    },
+    {
+      "tick": 150,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 115,
+      "totalWood": 0,
+      "avgHunger": 11.13415591951242,
+      "avgMorale": 61.56642048242547,
+      "avgFatigue": 22.976466569511356,
+      "raiders": 2
+    },
+    {
+      "tick": 160,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 100,
+      "totalWood": 0,
+      "avgHunger": 13.59415591951242,
+      "avgMorale": 61.39248641709029,
+      "avgFatigue": 23.75646656951136,
+      "raiders": 2
+    },
+    {
+      "tick": 170,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 95,
+      "totalWood": 0,
+      "avgHunger": 16.05415591951242,
+      "avgMorale": 61.22070270063335,
+      "avgFatigue": 23.83646656951137,
+      "raiders": 2
+    },
+    {
+      "tick": 180,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 95,
+      "totalWood": 0,
+      "avgHunger": 18.514155919512426,
+      "avgMorale": 61.01812215465666,
+      "avgFatigue": 23.636466569511377,
+      "raiders": 2
+    },
+    {
+      "tick": 190,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 95,
+      "totalWood": 0,
+      "avgHunger": 20.974155919512423,
+      "avgMorale": 60.77855587560871,
+      "avgFatigue": 23.436466569511385,
+      "raiders": 2
+    },
+    {
+      "tick": 200,
+      "alive": 5,
+      "totalFood": 62,
+      "totalOre": 90,
+      "totalWood": 0,
+      "avgHunger": 23.434155919512428,
+      "avgMorale": 60.523308808367595,
+      "avgFatigue": 22.976466569511395,
+      "raiders": 2
+    }
+  ],
+  "deathLog": [],
+  "raidLog": [],
+  "goalLog": [],
+  "actionCounts": {
+    "traveling to blacksmith": 137,
+    "traveling to home": 77,
+    "smithing": 521,
+    "deposited 9": 2,
+    "traveling to storage": 2,
+    "established wood storage!": 1,
+    "foraging": 49,
+    "harvesting": 50,
+    "yielding to Snot": 2,
+    "yielding to Grix": 2,
+    "traveling to remembered": 4,
+    "eating": 5,
+    "logging": 58,
+    "traveling to adventurer": 5,
+    "deposited 11": 4,
+    "traveling to stone": 26,
+    "built stone wall!": 12,
+    "fighting adventurer!": 25,
+    "looking for warmth": 2,
+    "a bit chilly": 4,
+    "fleeing to safety": 8,
+    "catching breath": 4
+  },
+  "actionCountsByTrait": {
+    "forgetful": {
+      "traveling to blacksmith": 35,
+      "smithing": 92,
+      "foraging": 14,
+      "harvesting": 11,
+      "eating": 1,
+      "traveling to home": 13,
+      "deposited 11": 1,
+      "traveling to stone": 9,
+      "built stone wall!": 3,
+      "looking for warmth": 1,
+      "a bit chilly": 3,
+      "logging": 17
+    },
+    "cheerful": {
+      "traveling to home": 24,
+      "deposited 9": 1,
+      "traveling to blacksmith": 37,
+      "smithing": 83,
+      "foraging": 12,
+      "harvesting": 14,
+      "eating": 1,
+      "deposited 11": 1,
+      "traveling to stone": 5,
+      "built stone wall!": 3,
+      "logging": 18,
+      "catching breath": 1
+    },
+    "lazy": {
+      "traveling to blacksmith": 15,
+      "smithing": 145,
+      "foraging": 5,
+      "harvesting": 6,
+      "traveling to remembered": 1,
+      "traveling to adventurer": 2,
+      "fighting adventurer!": 6,
+      "fleeing to safety": 4,
+      "eating": 1,
+      "traveling to home": 14,
+      "deposited 11": 1
+    },
+    "paranoid": {
+      "traveling to home": 26,
+      "deposited 9": 1,
+      "traveling to storage": 2,
+      "established wood storage!": 1,
+      "traveling to blacksmith": 18,
+      "smithing": 101,
+      "foraging": 1,
+      "harvesting": 14,
+      "eating": 1,
+      "deposited 11": 1,
+      "traveling to stone": 5,
+      "built stone wall!": 5,
+      "logging": 20,
+      "a bit chilly": 1,
+      "looking for warmth": 1,
+      "catching breath": 2
+    },
+    "helpful": {
+      "traveling to blacksmith": 32,
+      "smithing": 100,
+      "yielding to Snot": 2,
+      "yielding to Grix": 2,
+      "foraging": 17,
+      "harvesting": 5,
+      "traveling to remembered": 3,
+      "logging": 3,
+      "traveling to adventurer": 3,
+      "fighting adventurer!": 19,
+      "fleeing to safety": 4,
+      "eating": 1,
+      "traveling to stone": 7,
+      "built stone wall!": 1,
+      "catching breath": 1
+    }
+  },
+  "warnLog": [
+    {
+      "tick": 1,
+      "name": "Grix",
+      "message": "🥶 freezing in the open"
+    },
+    {
+      "tick": 1,
+      "name": "Snot",
+      "message": "🥶 freezing in the open"
+    },
+    {
+      "tick": 1,
+      "name": "Murg",
+      "message": "🥶 freezing in the open"
+    },
+    {
+      "tick": 1,
+      "name": "Blix",
+      "message": "🥶 freezing in the open"
+    },
+    {
+      "tick": 1,
+      "name": "Rak",
+      "message": "🥶 freezing in the open"
+    }
+  ],
+  "fireLog": [],
+  "fireTilesMax": 0,
+  "fireTilesTotal": 0,
+  "fireTilesRainedOut": 0,
+  "oscillationLog": [
+    {
+      "tick": 12,
+      "name": "Murg",
+      "task": "smithing (14%)",
+      "positions": [
+        "101,18",
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 13,
+      "name": "Murg",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 14,
+      "name": "Murg",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 15,
+      "name": "Murg",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 16,
+      "name": "Murg",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 17,
+      "name": "Murg",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 18,
+      "name": "Murg",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 19,
+      "name": "Murg",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 20,
+      "name": "Murg",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 21,
+      "name": "Murg",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 22,
+      "name": "Murg",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 23,
+      "name": "Murg",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 24,
+      "name": "Murg",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 25,
+      "name": "Murg",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 26,
+      "name": "Murg",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 26,
+      "name": "Blix",
+      "task": "smithing (14%)",
+      "positions": [
+        "100,19",
+        "101,19",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 27,
+      "name": "Murg",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 27,
+      "name": "Blix",
+      "task": "smithing (16%)",
+      "positions": [
+        "101,19",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 28,
+      "name": "Snot",
+      "task": "smithing (14%)",
+      "positions": [
+        "101,18",
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 28,
+      "name": "Murg",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 28,
+      "name": "Blix",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 28,
+      "name": "Rak",
+      "task": "smithing (14%)",
+      "positions": [
+        "102,21",
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 29,
+      "name": "Grix",
+      "task": "smithing (14%)",
+      "positions": [
+        "102,21",
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 29,
+      "name": "Snot",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 29,
+      "name": "Murg",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 29,
+      "name": "Blix",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 29,
+      "name": "Rak",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 30,
+      "name": "Grix",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 30,
+      "name": "Snot",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 30,
+      "name": "Murg",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 30,
+      "name": "Blix",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 30,
+      "name": "Rak",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 31,
+      "name": "Grix",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 31,
+      "name": "Snot",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 31,
+      "name": "Murg",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 31,
+      "name": "Blix",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 31,
+      "name": "Rak",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 32,
+      "name": "Grix",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 32,
+      "name": "Snot",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 32,
+      "name": "Murg",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 32,
+      "name": "Blix",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 32,
+      "name": "Rak",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 33,
+      "name": "Grix",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 33,
+      "name": "Snot",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 33,
+      "name": "Murg",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 33,
+      "name": "Blix",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 33,
+      "name": "Rak",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 34,
+      "name": "Grix",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 34,
+      "name": "Snot",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 34,
+      "name": "Murg",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 34,
+      "name": "Blix",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 34,
+      "name": "Rak",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 35,
+      "name": "Grix",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 35,
+      "name": "Snot",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 35,
+      "name": "Murg",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 35,
+      "name": "Blix",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 35,
+      "name": "Rak",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 36,
+      "name": "Grix",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 36,
+      "name": "Snot",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 36,
+      "name": "Murg",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 36,
+      "name": "Blix",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 36,
+      "name": "Rak",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 37,
+      "name": "Grix",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 37,
+      "name": "Snot",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 37,
+      "name": "Murg",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 37,
+      "name": "Blix",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 37,
+      "name": "Rak",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 38,
+      "name": "Grix",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 38,
+      "name": "Snot",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 38,
+      "name": "Murg",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 38,
+      "name": "Blix",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 38,
+      "name": "Rak",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 39,
+      "name": "Grix",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 39,
+      "name": "Snot",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 39,
+      "name": "Murg",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 39,
+      "name": "Blix",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 39,
+      "name": "Rak",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 40,
+      "name": "Grix",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 40,
+      "name": "Snot",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 40,
+      "name": "Murg",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 40,
+      "name": "Blix",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 40,
+      "name": "Rak",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 41,
+      "name": "Grix",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 41,
+      "name": "Snot",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 41,
+      "name": "Murg",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 41,
+      "name": "Blix",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 41,
+      "name": "Rak",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 42,
+      "name": "Grix",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 42,
+      "name": "Snot",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 42,
+      "name": "Murg",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 42,
+      "name": "Blix",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 42,
+      "name": "Rak",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 43,
+      "name": "Grix",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 43,
+      "name": "Snot",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 43,
+      "name": "Murg",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 43,
+      "name": "Blix",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 43,
+      "name": "Rak",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 44,
+      "name": "Grix",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 44,
+      "name": "Snot",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 44,
+      "name": "Murg",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 44,
+      "name": "Blix",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 44,
+      "name": "Rak",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 45,
+      "name": "Grix",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 45,
+      "name": "Snot",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 45,
+      "name": "Murg",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 45,
+      "name": "Blix",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 45,
+      "name": "Rak",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 46,
+      "name": "Grix",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 46,
+      "name": "Snot",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 46,
+      "name": "Murg",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 46,
+      "name": "Blix",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 46,
+      "name": "Rak",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 47,
+      "name": "Grix",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 47,
+      "name": "Snot",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 47,
+      "name": "Murg",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 47,
+      "name": "Blix",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 47,
+      "name": "Rak",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 48,
+      "name": "Grix",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 48,
+      "name": "Snot",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 48,
+      "name": "Murg",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 48,
+      "name": "Blix",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 48,
+      "name": "Rak",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 49,
+      "name": "Grix",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 49,
+      "name": "Snot",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 49,
+      "name": "Murg",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 49,
+      "name": "Blix",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 49,
+      "name": "Rak",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 50,
+      "name": "Grix",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 50,
+      "name": "Snot",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 50,
+      "name": "Murg",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 50,
+      "name": "Blix",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 50,
+      "name": "Rak",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 51,
+      "name": "Grix",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 51,
+      "name": "Snot",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 51,
+      "name": "Murg",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 51,
+      "name": "Blix",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 51,
+      "name": "Rak",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 52,
+      "name": "Grix",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 52,
+      "name": "Snot",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 52,
+      "name": "Murg",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 52,
+      "name": "Blix",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 52,
+      "name": "Rak",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 53,
+      "name": "Grix",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 53,
+      "name": "Snot",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 53,
+      "name": "Murg",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 53,
+      "name": "Blix",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 53,
+      "name": "Rak",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 54,
+      "name": "Grix",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 54,
+      "name": "Snot",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 54,
+      "name": "Murg",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 54,
+      "name": "Blix",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 54,
+      "name": "Rak",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 55,
+      "name": "Grix",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 55,
+      "name": "Snot",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 55,
+      "name": "Murg",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 55,
+      "name": "Blix",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 55,
+      "name": "Rak",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 56,
+      "name": "Grix",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 56,
+      "name": "Snot",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 56,
+      "name": "Murg",
+      "task": "smithing (starting...)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 56,
+      "name": "Blix",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 56,
+      "name": "Rak",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 57,
+      "name": "Grix",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 57,
+      "name": "Snot",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 57,
+      "name": "Murg",
+      "task": "smithing (4%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 57,
+      "name": "Blix",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 57,
+      "name": "Rak",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 58,
+      "name": "Grix",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 58,
+      "name": "Snot",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 58,
+      "name": "Murg",
+      "task": "smithing (6%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 58,
+      "name": "Blix",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 58,
+      "name": "Rak",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 59,
+      "name": "Grix",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 59,
+      "name": "Snot",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 59,
+      "name": "Murg",
+      "task": "smithing (8%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 59,
+      "name": "Blix",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 59,
+      "name": "Rak",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 60,
+      "name": "Grix",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 60,
+      "name": "Snot",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 60,
+      "name": "Murg",
+      "task": "smithing (10%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 60,
+      "name": "Blix",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 60,
+      "name": "Rak",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 61,
+      "name": "Grix",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 61,
+      "name": "Snot",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 61,
+      "name": "Murg",
+      "task": "smithing (12%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 61,
+      "name": "Blix",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 61,
+      "name": "Rak",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 62,
+      "name": "Grix",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 62,
+      "name": "Snot",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 62,
+      "name": "Murg",
+      "task": "smithing (14%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 62,
+      "name": "Blix",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 62,
+      "name": "Rak",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 63,
+      "name": "Grix",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 63,
+      "name": "Snot",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 63,
+      "name": "Murg",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 63,
+      "name": "Blix",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 63,
+      "name": "Rak",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 64,
+      "name": "Grix",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 64,
+      "name": "Snot",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 64,
+      "name": "Murg",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 64,
+      "name": "Blix",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 64,
+      "name": "Rak",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 65,
+      "name": "Grix",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 65,
+      "name": "Snot",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 65,
+      "name": "Murg",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 65,
+      "name": "Blix",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 65,
+      "name": "Rak",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 66,
+      "name": "Grix",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 66,
+      "name": "Snot",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 66,
+      "name": "Murg",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 66,
+      "name": "Blix",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 66,
+      "name": "Rak",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 67,
+      "name": "Grix",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 67,
+      "name": "Snot",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 67,
+      "name": "Murg",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 67,
+      "name": "Blix",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 67,
+      "name": "Rak",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 68,
+      "name": "Grix",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 68,
+      "name": "Snot",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 68,
+      "name": "Murg",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 68,
+      "name": "Blix",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 68,
+      "name": "Rak",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 69,
+      "name": "Grix",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 69,
+      "name": "Snot",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 69,
+      "name": "Murg",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 69,
+      "name": "Blix",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 69,
+      "name": "Rak",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 70,
+      "name": "Grix",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 70,
+      "name": "Snot",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 70,
+      "name": "Murg",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 70,
+      "name": "Blix",
+      "task": "foraging → (104,19)",
+      "positions": [
+        "102,19",
+        "103,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 70,
+      "name": "Rak",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 71,
+      "name": "Grix",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 71,
+      "name": "Snot",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 71,
+      "name": "Murg",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 71,
+      "name": "Blix",
+      "task": "harvesting (food: 7)",
+      "positions": [
+        "102,19",
+        "103,19",
+        "104,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging",
+        "harvesting"
+      ]
+    },
+    {
+      "tick": 71,
+      "name": "Rak",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 72,
+      "name": "Grix",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 72,
+      "name": "Snot",
+      "task": "foraging → (101,21)",
+      "positions": [
+        "102,19",
+        "101,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 72,
+      "name": "Murg",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 72,
+      "name": "Rak",
+      "task": "yielding to Snot",
+      "positions": [
+        "102,19",
+        "100,19"
+      ],
+      "tasks": [
+        "smithing",
+        "yielding to Snot"
+      ]
+    },
+    {
+      "tick": 73,
+      "name": "Grix",
+      "task": "foraging → (101,21)",
+      "positions": [
+        "102,19",
+        "101,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 73,
+      "name": "Snot",
+      "task": "foraging → (101,21)",
+      "positions": [
+        "102,19",
+        "101,19",
+        "101,20"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 73,
+      "name": "Murg",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 73,
+      "name": "Rak",
+      "task": "yielding to Grix",
+      "positions": [
+        "102,19",
+        "100,19"
+      ],
+      "tasks": [
+        "smithing",
+        "yielding to Snot",
+        "yielding to Grix"
+      ]
+    },
+    {
+      "tick": 74,
+      "name": "Grix",
+      "task": "foraging → (101,21)",
+      "positions": [
+        "102,19",
+        "101,19",
+        "101,20"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 74,
+      "name": "Murg",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 74,
+      "name": "Rak",
+      "task": "foraging → (100,21)",
+      "positions": [
+        "102,19",
+        "100,19",
+        "101,19"
+      ],
+      "tasks": [
+        "smithing",
+        "yielding to Snot",
+        "yielding to Grix",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 75,
+      "name": "Murg",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 76,
+      "name": "Murg",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 77,
+      "name": "Murg",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 78,
+      "name": "Murg",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 79,
+      "name": "Murg",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 80,
+      "name": "Murg",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 81,
+      "name": "Murg",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 82,
+      "name": "Murg",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 83,
+      "name": "Murg",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 84,
+      "name": "Murg",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 85,
+      "name": "Murg",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 86,
+      "name": "Murg",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 87,
+      "name": "Murg",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 88,
+      "name": "Murg",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 89,
+      "name": "Murg",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 90,
+      "name": "Murg",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 91,
+      "name": "Murg",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 92,
+      "name": "Murg",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 93,
+      "name": "Murg",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 94,
+      "name": "Murg",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 95,
+      "name": "Murg",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 96,
+      "name": "Murg",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 97,
+      "name": "Murg",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 98,
+      "name": "Murg",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 99,
+      "name": "Murg",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 100,
+      "name": "Murg",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 101,
+      "name": "Murg",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 102,
+      "name": "Murg",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 103,
+      "name": "Murg",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 104,
+      "name": "Murg",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 105,
+      "name": "Murg",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 106,
+      "name": "Murg",
+      "task": "foraging → (104,21)",
+      "positions": [
+        "102,19",
+        "103,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 107,
+      "name": "Murg",
+      "task": "foraging → (104,21)",
+      "positions": [
+        "102,19",
+        "103,19",
+        "104,19"
+      ],
+      "tasks": [
+        "smithing",
+        "foraging"
+      ]
+    },
+    {
+      "tick": 113,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,18",
+        "93,17",
+        "93,16"
+      ],
+      "tasks": [
+        "traveling to home",
+        "deposited 11",
+        "traveling to stone",
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 114,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,18",
+        "93,17",
+        "93,16"
+      ],
+      "tasks": [
+        "deposited 11",
+        "traveling to stone",
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 114,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,22",
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to adventurer",
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 115,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,17",
+        "93,16"
+      ],
+      "tasks": [
+        "traveling to stone",
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 115,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to adventurer",
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 116,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,17",
+        "93,16"
+      ],
+      "tasks": [
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 116,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 117,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 117,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 118,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 118,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 119,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 119,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 120,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 120,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 121,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16",
+        "95,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 121,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 122,
+      "name": "Blix",
+      "task": "logging → (95,17)",
+      "positions": [
+        "93,16",
+        "95,16",
+        "95,17"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 122,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 123,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "93,17",
+        "92,17",
+        "92,16"
+      ],
+      "tasks": [
+        "traveling to stone",
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 123,
+      "name": "Blix",
+      "task": "logging (wood: 6)",
+      "positions": [
+        "93,16",
+        "95,16",
+        "95,17"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 123,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 124,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,17",
+        "92,16"
+      ],
+      "tasks": [
+        "traveling to stone",
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 124,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 125,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,17",
+        "92,16"
+      ],
+      "tasks": [
+        "built stone wall!",
+        "logging"
+      ]
+    },
+    {
+      "tick": 125,
+      "name": "Rak",
+      "task": "fighting adventurer!",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "fighting adventurer!"
+      ]
+    },
+    {
+      "tick": 126,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 126,
+      "name": "Rak",
+      "task": "fleeing to safety",
+      "positions": [
+        "102,19",
+        "102,18"
+      ],
+      "tasks": [
+        "fighting adventurer!",
+        "fleeing to safety"
+      ]
+    },
+    {
+      "tick": 127,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 127,
+      "name": "Rak",
+      "task": "fleeing to safety",
+      "positions": [
+        "102,19",
+        "102,18",
+        "102,17"
+      ],
+      "tasks": [
+        "fighting adventurer!",
+        "fleeing to safety"
+      ]
+    },
+    {
+      "tick": 128,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,16"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 129,
+      "name": "Snot",
+      "task": "logging → (92,18)",
+      "positions": [
+        "92,16",
+        "92,18"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 130,
+      "name": "Snot",
+      "task": "logging (wood: 6)",
+      "positions": [
+        "92,16",
+        "92,18"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 131,
+      "name": "Snot",
+      "task": "logging → (92,19)",
+      "positions": [
+        "92,16",
+        "92,18",
+        "92,19"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 132,
+      "name": "Snot",
+      "task": "logging (wood: 7)",
+      "positions": [
+        "92,16",
+        "92,18",
+        "92,19"
+      ],
+      "tasks": [
+        "logging"
+      ]
+    },
+    {
+      "tick": 135,
+      "name": "Blix",
+      "task": "built stone wall!",
+      "positions": [
+        "97,17",
+        "98,17",
+        "98,16"
+      ],
+      "tasks": [
+        "logging",
+        "built stone wall!",
+        "a bit chilly",
+        "looking for warmth",
+        "traveling to stone",
+        "catching breath"
+      ]
+    },
+    {
+      "tick": 136,
+      "name": "Blix",
+      "task": "catching breath",
+      "positions": [
+        "97,17",
+        "98,17",
+        "98,16"
+      ],
+      "tasks": [
+        "logging",
+        "built stone wall!",
+        "a bit chilly",
+        "looking for warmth",
+        "traveling to stone",
+        "catching breath"
+      ]
+    },
+    {
+      "tick": 145,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "93,21",
+        "92,21",
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to stone",
+        "built stone wall!",
+        "catching breath",
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 146,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "93,21",
+        "92,21",
+        "92,22"
+      ],
+      "tasks": [
+        "built stone wall!",
+        "catching breath",
+        "traveling to stone",
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 147,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "93,21",
+        "92,21",
+        "92,22"
+      ],
+      "tasks": [
+        "catching breath",
+        "traveling to stone",
+        "built stone wall!",
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 148,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,21",
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to stone",
+        "built stone wall!",
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 149,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,21",
+        "92,22"
+      ],
+      "tasks": [
+        "built stone wall!",
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 150,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 151,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 152,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 153,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 154,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22",
+        "91,21"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 155,
+      "name": "Snot",
+      "task": "→ blacksmith",
+      "positions": [
+        "92,22",
+        "91,21",
+        "92,21"
+      ],
+      "tasks": [
+        "traveling to blacksmith"
+      ]
+    },
+    {
+      "tick": 156,
+      "name": "Blix",
+      "task": "smithing (14%)",
+      "positions": [
+        "101,18",
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 157,
+      "name": "Blix",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 157,
+      "name": "Rak",
+      "task": "smithing (14%)",
+      "positions": [
+        "101,18",
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 158,
+      "name": "Blix",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 158,
+      "name": "Rak",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 159,
+      "name": "Blix",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 159,
+      "name": "Rak",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 160,
+      "name": "Blix",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 160,
+      "name": "Rak",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 161,
+      "name": "Blix",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 161,
+      "name": "Rak",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 162,
+      "name": "Murg",
+      "task": "smithing (14%)",
+      "positions": [
+        "101,18",
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 162,
+      "name": "Blix",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 162,
+      "name": "Rak",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 163,
+      "name": "Murg",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,18",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 163,
+      "name": "Blix",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 163,
+      "name": "Rak",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 164,
+      "name": "Murg",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 164,
+      "name": "Blix",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 164,
+      "name": "Rak",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 165,
+      "name": "Grix",
+      "task": "smithing (14%)",
+      "positions": [
+        "102,21",
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 165,
+      "name": "Murg",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 165,
+      "name": "Blix",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 165,
+      "name": "Rak",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 166,
+      "name": "Grix",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 166,
+      "name": "Murg",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 166,
+      "name": "Blix",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 166,
+      "name": "Rak",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 167,
+      "name": "Grix",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 167,
+      "name": "Murg",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 167,
+      "name": "Blix",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 167,
+      "name": "Rak",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 168,
+      "name": "Grix",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 168,
+      "name": "Murg",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 168,
+      "name": "Blix",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 168,
+      "name": "Rak",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 169,
+      "name": "Grix",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 169,
+      "name": "Murg",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 169,
+      "name": "Blix",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 169,
+      "name": "Rak",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 170,
+      "name": "Grix",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 170,
+      "name": "Murg",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 170,
+      "name": "Blix",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 170,
+      "name": "Rak",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 171,
+      "name": "Grix",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 171,
+      "name": "Murg",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 171,
+      "name": "Blix",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 171,
+      "name": "Rak",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 172,
+      "name": "Grix",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 172,
+      "name": "Murg",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 172,
+      "name": "Blix",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 172,
+      "name": "Rak",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 173,
+      "name": "Grix",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 173,
+      "name": "Murg",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 173,
+      "name": "Blix",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 173,
+      "name": "Rak",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 174,
+      "name": "Grix",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 174,
+      "name": "Snot",
+      "task": "smithing (14%)",
+      "positions": [
+        "102,21",
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 174,
+      "name": "Murg",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 174,
+      "name": "Blix",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 174,
+      "name": "Rak",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 175,
+      "name": "Grix",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 175,
+      "name": "Snot",
+      "task": "smithing (16%)",
+      "positions": [
+        "102,20",
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 175,
+      "name": "Murg",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 175,
+      "name": "Blix",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 175,
+      "name": "Rak",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 176,
+      "name": "Grix",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 176,
+      "name": "Snot",
+      "task": "smithing (18%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "traveling to blacksmith",
+        "smithing"
+      ]
+    },
+    {
+      "tick": 176,
+      "name": "Murg",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 176,
+      "name": "Blix",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 176,
+      "name": "Rak",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 177,
+      "name": "Grix",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 177,
+      "name": "Snot",
+      "task": "smithing (20%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 177,
+      "name": "Murg",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 177,
+      "name": "Blix",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 177,
+      "name": "Rak",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 178,
+      "name": "Grix",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 178,
+      "name": "Snot",
+      "task": "smithing (22%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 178,
+      "name": "Murg",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 178,
+      "name": "Blix",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 178,
+      "name": "Rak",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 179,
+      "name": "Grix",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 179,
+      "name": "Snot",
+      "task": "smithing (24%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 179,
+      "name": "Murg",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 179,
+      "name": "Blix",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 179,
+      "name": "Rak",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 180,
+      "name": "Grix",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 180,
+      "name": "Snot",
+      "task": "smithing (26%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 180,
+      "name": "Murg",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 180,
+      "name": "Blix",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 180,
+      "name": "Rak",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 181,
+      "name": "Grix",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 181,
+      "name": "Snot",
+      "task": "smithing (28%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 181,
+      "name": "Murg",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 181,
+      "name": "Blix",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 181,
+      "name": "Rak",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 182,
+      "name": "Grix",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 182,
+      "name": "Snot",
+      "task": "smithing (30%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 182,
+      "name": "Murg",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 182,
+      "name": "Blix",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 182,
+      "name": "Rak",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 183,
+      "name": "Grix",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 183,
+      "name": "Snot",
+      "task": "smithing (32%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 183,
+      "name": "Murg",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 183,
+      "name": "Blix",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 183,
+      "name": "Rak",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 184,
+      "name": "Grix",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 184,
+      "name": "Snot",
+      "task": "smithing (34%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 184,
+      "name": "Murg",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 184,
+      "name": "Blix",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 184,
+      "name": "Rak",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 185,
+      "name": "Grix",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 185,
+      "name": "Snot",
+      "task": "smithing (36%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 185,
+      "name": "Murg",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 185,
+      "name": "Blix",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 185,
+      "name": "Rak",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 186,
+      "name": "Grix",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 186,
+      "name": "Snot",
+      "task": "smithing (38%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 186,
+      "name": "Murg",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 186,
+      "name": "Blix",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 186,
+      "name": "Rak",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 187,
+      "name": "Grix",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 187,
+      "name": "Snot",
+      "task": "smithing (40%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 187,
+      "name": "Murg",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 187,
+      "name": "Blix",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 187,
+      "name": "Rak",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 188,
+      "name": "Grix",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 188,
+      "name": "Snot",
+      "task": "smithing (42%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 188,
+      "name": "Murg",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 188,
+      "name": "Blix",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 188,
+      "name": "Rak",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 189,
+      "name": "Grix",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 189,
+      "name": "Snot",
+      "task": "smithing (44%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 189,
+      "name": "Murg",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 189,
+      "name": "Blix",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 189,
+      "name": "Rak",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 190,
+      "name": "Grix",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 190,
+      "name": "Snot",
+      "task": "smithing (46%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 190,
+      "name": "Murg",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 190,
+      "name": "Blix",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 190,
+      "name": "Rak",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 191,
+      "name": "Grix",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 191,
+      "name": "Snot",
+      "task": "smithing (48%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 191,
+      "name": "Murg",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 191,
+      "name": "Blix",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 191,
+      "name": "Rak",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 192,
+      "name": "Grix",
+      "task": "smithing (68%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 192,
+      "name": "Snot",
+      "task": "smithing (50%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 192,
+      "name": "Murg",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 192,
+      "name": "Blix",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 192,
+      "name": "Rak",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 193,
+      "name": "Grix",
+      "task": "smithing (70%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 193,
+      "name": "Snot",
+      "task": "smithing (52%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 193,
+      "name": "Murg",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 193,
+      "name": "Blix",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 193,
+      "name": "Rak",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 194,
+      "name": "Grix",
+      "task": "smithing (72%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 194,
+      "name": "Snot",
+      "task": "smithing (54%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 194,
+      "name": "Murg",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 194,
+      "name": "Blix",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 194,
+      "name": "Rak",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 195,
+      "name": "Grix",
+      "task": "smithing (74%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 195,
+      "name": "Snot",
+      "task": "smithing (56%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 195,
+      "name": "Murg",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 195,
+      "name": "Blix",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 195,
+      "name": "Rak",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 196,
+      "name": "Grix",
+      "task": "smithing (76%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 196,
+      "name": "Snot",
+      "task": "smithing (57%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 196,
+      "name": "Murg",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 196,
+      "name": "Blix",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 196,
+      "name": "Rak",
+      "task": "smithing (92%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 197,
+      "name": "Grix",
+      "task": "smithing (78%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 197,
+      "name": "Snot",
+      "task": "smithing (60%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 197,
+      "name": "Murg",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 197,
+      "name": "Blix",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 197,
+      "name": "Rak",
+      "task": "smithing (94%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 198,
+      "name": "Grix",
+      "task": "smithing (80%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 198,
+      "name": "Snot",
+      "task": "smithing (62%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 198,
+      "name": "Murg",
+      "task": "smithing (86%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 198,
+      "name": "Blix",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 198,
+      "name": "Rak",
+      "task": "smithing (96%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 199,
+      "name": "Grix",
+      "task": "smithing (82%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 199,
+      "name": "Snot",
+      "task": "smithing (64%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 199,
+      "name": "Murg",
+      "task": "smithing (88%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 199,
+      "name": "Blix",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 199,
+      "name": "Rak",
+      "task": "smithing (98%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 200,
+      "name": "Grix",
+      "task": "smithing (84%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 200,
+      "name": "Snot",
+      "task": "smithing (66%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 200,
+      "name": "Murg",
+      "task": "smithing (90%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 200,
+      "name": "Blix",
+      "task": "smithing (starting...)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    },
+    {
+      "tick": 200,
+      "name": "Rak",
+      "task": "smithing (100%)",
+      "positions": [
+        "102,19"
+      ],
+      "tasks": [
+        "smithing"
+      ]
+    }
+  ]
+}

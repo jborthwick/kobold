@@ -5,7 +5,7 @@
 import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
-import { inverseSigmoid, ramp } from '../utilityAI';
+import { inverseSigmoid, ramp, computeResourceBalanceModifier } from '../utilityAI';
 import { moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -70,10 +70,11 @@ export const cook: Action = {
 
         if (!kitchenHasHearth) return false;
 
+        // Can cook if we have both inputs, or if already cooking
         return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
     },
 
-    score: ({ goblin, foodStockpiles, mealStockpiles }) => {
+    score: ({ goblin, foodStockpiles, mealStockpiles, woodStockpiles, oreStockpiles, barStockpiles, plankStockpiles }) => {
         // If already cooking, strong momentum to finish
         if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
             return 0.95;
@@ -82,17 +83,25 @@ export const cook: Action = {
         // Score based on raw food surplus and lack of meals
         const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
         const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
+        const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
 
-        if (totalFood < 5) return 0; // Don't cook if food is scarce (matching smithing/sawing ore/wood threshold)
+        // Lower threshold: allow cooking with minimal resources so it can bootstrap food production
+        if (totalFood < 1) return 0;
+        if (totalWood < 1) return 0;
 
         // Base score peaks when there's lots of food and no meals
-        const foodAbundance = ramp(totalFood, 5, 40);
+        const foodAbundance = ramp(totalFood, 3, 40);
         const mealScarcity = inverseSigmoid(totalMeals, 20);
+        const woodAbundance = ramp(totalWood, 2, 15); // Factor in wood availability
 
-        const base = foodAbundance * mealScarcity * 0.80 * inverseSigmoid(goblin.hunger, 50);
+        // Increased multiplier from 0.80 → 1.1, lowered hunger midpoint from 50 → 35
+        const base = foodAbundance * mealScarcity * woodAbundance * 1.1 * inverseSigmoid(goblin.hunger, 35);
+
+        // Apply resource balance modifier (boost when materials outweigh consumables)
+        const { foodPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
 
         // Centralized momentum applied in utilityAI — no per-action bonus needed
-        return Math.min(1.0, base);
+        return Math.min(1.0, base * (1 + foodPriority * 0.6));
     },
 
     execute: (ctx) => {

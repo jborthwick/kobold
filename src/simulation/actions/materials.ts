@@ -4,7 +4,7 @@
  */
 import { TileType } from '../../shared/types';
 import { MAX_INVENTORY_CAPACITY } from '../../shared/constants';
-import { inverseSigmoid, ramp } from '../utilityAI';
+import { inverseSigmoid, ramp, computeResourceBalanceModifier } from '../utilityAI';
 import {
   bestMaterialTile, bestWoodTile, recordSite, SITE_RECORD_THRESHOLD,
   traitMod,
@@ -20,19 +20,21 @@ export const mine: Action = {
   name: 'mine',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, oreStockpiles }) => {
+  score: ({ goblin, grid, oreStockpiles, foodStockpiles, mealStockpiles, woodStockpiles, barStockpiles, plankStockpiles }) => {
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
+    const { materialPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+
     if (!target) {
       // No ore in view: only score if we have remembered sites, and keep score modest so other actions get share
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2;
+      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * (1 - materialPriority * 0.5);
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
-    return Math.min(1.0, base);
+    return Math.min(1.0, base * (1 - materialPriority * 0.5));
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -110,18 +112,20 @@ export const chop: Action = {
   name: 'chop',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, woodStockpiles }) => {
+  score: ({ goblin, grid, woodStockpiles, foodStockpiles, oreStockpiles, mealStockpiles, barStockpiles, plankStockpiles }) => {
     // Warmth safety: if freezing, prioritize survival over work
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
+    const { materialPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35;
+      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * (1 - materialPriority * 0.5);
       return 0;
     }
     const base = inverseSigmoid(goblin.hunger, 60) * 0.6;
-    return Math.min(1.0, base);
+    return Math.min(1.0, base * (1 - materialPriority * 0.5));
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;

@@ -6,7 +6,7 @@ import { TileType } from '../../shared/types';
 import type { ResourceSite } from '../../shared/types';
 import { GRID_SIZE, MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { isWalkable } from '../world';
-import { sigmoid, inverseSigmoid, ramp } from '../utilityAI';
+import { sigmoid, inverseSigmoid, ramp, computeResourceBalanceModifier } from '../utilityAI';
 import {
   bestFoodTile, recordSite, FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS, traitMod,
 } from '../agents';
@@ -20,7 +20,7 @@ export const forage: Action = {
   name: 'forage',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid }) => {
+  score: ({ goblin, grid, foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles }) => {
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
     // Search at full range when meaningfully hungry — the distance penalty in bestFoodTile
@@ -29,17 +29,21 @@ export const forage: Action = {
       ? maxSearch
       : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
     const target = bestFoodTile(goblin, grid, radius);
+    const { foodPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+
     if (!target) {
       // Check remembered food sites
-      if (goblin.knownFoodSites.length > 0) return sigmoid(goblin.hunger, 40) * 0.4;
+      if (goblin.knownFoodSites.length > 0) return sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8);
       return 0;
     }
-    const base = sigmoid(goblin.hunger, 40) * 0.8;
+    // Forage base higher than mine/chop since food patches are rarer & geographically distant
+    const base = sigmoid(goblin.hunger, 40) * 1.0;
     const score = Math.min(1.0, base);
 
     // Starvation penalty: if desperately hungry, stop looking for new patches
     // and let survival/eat/withdraw take over.
-    return goblin.hunger > 85 ? score * 0.4 : score;
+    const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
+    return finalScore * (1 + foodPriority * 0.8);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
@@ -175,9 +179,10 @@ export const depositFood: Action = {
     if (goblin.inventory.food <= 0) return false;
     return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
-  score: ({ goblin, foodStockpiles }) => {
+  score: ({ goblin, foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles }) => {
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.food, 6, 20) * inverseSigmoid(goblin.hunger, 50) * 0.6 * (onStockpile ? 2.5 : 1.0);
+    const { foodPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+    return ramp(goblin.inventory.food, 6, 20) * inverseSigmoid(goblin.hunger, 50) * 0.6 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
@@ -207,11 +212,12 @@ export const withdrawFood: Action = {
     const hasFood = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
     return hasMeals || hasFood;
   },
-  score: ({ goblin, foodStockpiles, mealStockpiles }) => {
+  score: ({ goblin, foodStockpiles, mealStockpiles, oreStockpiles, woodStockpiles, barStockpiles, plankStockpiles }) => {
     const onFoodStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const onMealStockpile = mealStockpiles?.some(m => m.x === goblin.x && m.y === goblin.y) ?? false;
     const onStockpile = onFoodStockpile || onMealStockpile;
-    return sigmoid(goblin.hunger, 45) * 0.75 * (onStockpile ? 2.5 : 1.0);
+    const { foodPriority } = computeResourceBalanceModifier(foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles);
+    return sigmoid(goblin.hunger, 45) * 0.75 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
   },
   execute: ({ goblin, grid, foodStockpiles, mealStockpiles }) => {
     // Prefer meals from kitchen meal stockpiles over raw food
