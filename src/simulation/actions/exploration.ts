@@ -3,13 +3,13 @@
  * the low-score fallback when nothing urgent — keeps goblins moving and discovering tiles.
  */
 import { TileType } from '../../shared/types';
-import { GRID_SIZE } from '../../shared/constants';
+import { GRID_SIZE, TASK_STRINGS } from '../../shared/constants';
 import { isWalkable } from '../world';
 import { getWarmth } from '../diffusion';
 import { inverseSigmoid } from '../utilityAI';
 import { traitMod, recordSite } from '../agents';
 import { grantXp } from '../skills';
-import { moveTo } from './helpers';
+import { moveTo, getWalkableAdjacent } from './helpers';
 import type { Action } from './types';
 
 // --- wander: default fallback exploration ---
@@ -19,27 +19,21 @@ export const wander: Action = {
   eligible: () => true,
   score: () => 0.05,
   execute: ({ goblin, grid, currentTick, onLog }) => {
-    // Paranoid goblins (wariness 4) roam further; default wariness=2 → normal wander distances
     const WANDER_HOLD_TICKS = 25;
-    const wanDrift  = traitMod(goblin, 'wariness', 2); // higher wariness = wider exploration
-    const WANDER_MIN_DIST   = 8 + wanDrift;
-    const WANDER_MAX_DIST   = 16 + wanDrift * 2;
+    const wanDrift = traitMod(goblin, 'wariness', 2);
+    const WANDER_MIN_DIST = 8 + wanDrift;
+    const WANDER_MAX_DIST = 16 + wanDrift * 2;
 
-    // Invalidate wander target if blocked
-    if (goblin.wanderTarget && !isWalkable(grid, goblin.wanderTarget.x, goblin.wanderTarget.y)) {
-      goblin.wanderTarget = null;
-    }
+    // Check if target is invalid or expired
+    const hasValidTarget = goblin.wanderTarget && isWalkable(grid, goblin.wanderTarget.x, goblin.wanderTarget.y) && currentTick < goblin.wanderExpiry;
+    const reachedTarget = goblin.wanderTarget && goblin.x === goblin.wanderTarget.x && goblin.y === goblin.wanderTarget.y;
 
-    // Scout XP — grant on reaching wander target
-    if (goblin.wanderTarget && goblin.x === goblin.wanderTarget.x && goblin.y === goblin.wanderTarget.y) {
+    if (reachedTarget) {
       grantXp(goblin, 'scout', currentTick, onLog);
     }
 
-    if (!goblin.wanderTarget || currentTick >= goblin.wanderExpiry
-        || (goblin.x === goblin.wanderTarget.x && goblin.y === goblin.wanderTarget.y)) {
-      let picked = false;
-
-      // Home drift
+    if (!hasValidTarget || reachedTarget) {
+      // Try home drift first
       const homeDrift = traitMod(goblin, 'wanderHomeDrift', 0.25);
       if (Math.random() < homeDrift && (goblin.homeTile.x !== 0 || goblin.homeTile.y !== 0)) {
         const hx = goblin.homeTile.x + Math.round((Math.random() - 0.5) * 20);
@@ -47,41 +41,39 @@ export const wander: Action = {
         if (hx >= 0 && hx < GRID_SIZE && hy >= 0 && hy < GRID_SIZE && isWalkable(grid, hx, hy)) {
           goblin.wanderTarget = { x: hx, y: hy };
           goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
-          picked = true;
+          moveTo(goblin, goblin.wanderTarget, grid);
+          goblin.task = TASK_STRINGS.EXPLORING;
+          return;
         }
       }
 
-      if (!picked) {
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist  = WANDER_MIN_DIST + Math.random() * (WANDER_MAX_DIST - WANDER_MIN_DIST);
-          const wx    = Math.round(goblin.x + Math.cos(angle) * dist);
-          const wy    = Math.round(goblin.y + Math.sin(angle) * dist);
-          if (wx >= 0 && wx < GRID_SIZE && wy >= 0 && wy < GRID_SIZE && isWalkable(grid, wx, wy)) {
-            goblin.wanderTarget = { x: wx, y: wy };
-            goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
-            picked = true;
-            break;
-          }
+      // Try random exploration
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = WANDER_MIN_DIST + Math.random() * (WANDER_MAX_DIST - WANDER_MIN_DIST);
+        const wx = Math.round(goblin.x + Math.cos(angle) * dist);
+        const wy = Math.round(goblin.y + Math.sin(angle) * dist);
+        if (wx >= 0 && wx < GRID_SIZE && wy >= 0 && wy < GRID_SIZE && isWalkable(grid, wx, wy)) {
+          goblin.wanderTarget = { x: wx, y: wy };
+          goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+          moveTo(goblin, goblin.wanderTarget, grid);
+          goblin.task = TASK_STRINGS.EXPLORING;
+          return;
         }
       }
 
-      if (!picked) {
-        // Constrained — random adjacent step
-        const fallDirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
-        const fallOpen = fallDirs
-          .map(d => ({ x: goblin.x + d.x, y: goblin.y + d.y }))
-          .filter(p => isWalkable(grid, p.x, p.y));
-        if (fallOpen.length > 0) {
-          const fb = fallOpen[Math.floor(Math.random() * fallOpen.length)];
-          goblin.x = fb.x; goblin.y = fb.y;
-        }
-        goblin.task = 'wandering';
-        return;
+      // Fallback: random adjacent step
+      const fallOpen = getWalkableAdjacent(grid, goblin.x, goblin.y);
+      if (fallOpen.length > 0) {
+        const fb = fallOpen[Math.floor(Math.random() * fallOpen.length)];
+        goblin.x = fb.x;
+        goblin.y = fb.y;
       }
+      goblin.task = TASK_STRINGS.WANDERING;
+      return;
     }
 
-    moveTo(goblin, goblin.wanderTarget!, grid);
+    moveTo(goblin, goblin.wanderTarget, grid);
     goblin.task = 'exploring';
   },
 };
@@ -190,13 +182,13 @@ export const seekWarmth: Action = {
     const warmth = goblin.warmth ?? 0;
     if (targetDist <= traitMod(goblin, 'coziness', 2) || warmth >= 40) {
       goblin.lastLoggedTicks['seekWarmthDone'] = currentTick;
-      goblin.task = 'warming up';
+      goblin.task = TASK_STRINGS.WARMING_UP;
       return;
     }
 
     // Pathfind directly to the target warm tile (handles doorways and walls correctly)
     moveTo(goblin, target, grid);
-    goblin.task = 'seeking warmth';
+    goblin.task = TASK_STRINGS.SEEKING_WARMTH;
   },
 };
 
