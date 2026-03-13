@@ -10,7 +10,8 @@ import { bus } from '../../shared/events';
 import { setNextEventTick } from '../../simulation/events';
 import * as WorldGoals from './WorldGoals';
 import { GRID_SIZE, TILE_SIZE } from '../../shared/constants';
-import { type Chapter, type OverlayMode, type LogEntry, type RoomType } from '../../shared/types';
+import { type Chapter, type OverlayMode, type LogEntry, type RoomType, type Room } from '../../shared/types';
+import { canPlaceRoom } from '../../simulation/rooms';
 import { SPRITE_CONFIG } from '../tileConfig';
 import { drawFlag } from './WorldOverlays';
 import { drawOverlay } from './WorldRender';
@@ -81,6 +82,33 @@ export function initializeWorld(scene: WorldScene) {
     scene.oreStockpiles = [];
     scene.woodStockpiles = [];
     scene.rooms = [];
+
+    // Starter storage room near spawn so goblins can deposit/withdraw from tick 1 (matches headless behaviour)
+    const roomW = 5;
+    const roomH = 5;
+    const storageOffsets = [{ dx: -2, dy: -2 }, { dx: 6, dy: -2 }, { dx: -2, dy: 6 }, { dx: 6, dy: 6 }];
+    for (const { dx, dy } of storageOffsets) {
+      const rx = depotX + dx;
+      const ry = depotY + dy;
+      if (canPlaceRoom(scene.grid, scene.rooms, rx, ry, roomW, roomH)) {
+        const storageRoom: Room = {
+          id: `room-storage-0`,
+          type: 'storage',
+          x: rx,
+          y: ry,
+          w: roomW,
+          h: roomH,
+        };
+        scene.rooms.push(storageRoom);
+        scene.foodStockpiles.push({
+          x: rx + 1,
+          y: ry + 1,
+          food: 0,
+          maxFood: 200,
+        });
+        break;
+      }
+    }
     scene.adventurerKillCount = 0;
     scene.mealsCooked = 0;
     scene.goalStartTick = 0;
@@ -89,8 +117,6 @@ export function initializeWorld(scene: WorldScene) {
     for (const d of scene.goblins) {
       d.homeTile = { x: depotX, y: depotY };
     }
-    const orePerGoblin = Math.floor(150 / scene.goblins.length);
-    for (const d of scene.goblins) d.inventory.ore = orePerGoblin;
   }
 
   scene.foodStockpileGfxList = [];

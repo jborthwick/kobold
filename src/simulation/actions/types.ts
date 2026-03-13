@@ -31,6 +31,13 @@ export interface ActionContext {
   dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile
   weatherType?:    WeatherType;
   rooms?:          Room[];
+  /** Per-tick room context flags, computed once in utilityAI. */
+  roomBonuses?: {
+    hasStorage: boolean;
+    hasLumberHut: boolean;
+    hasBlacksmith: boolean;
+    hasKitchen: boolean;
+  };
   /** Cached per tick: balance (food/material priority) + tier pressures (consumables > materials > upgrades). */
   resourceBalance?: {
     foodPriority: number;

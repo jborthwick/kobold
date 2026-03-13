@@ -45,13 +45,19 @@ export const smith: Action = {
     return (hasOre ?? false) || (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0);
   },
   score: (ctx) => {
-    const { goblin, oreStockpiles, resourceBalance, rooms, goblins } = ctx;
+    const { goblin, oreStockpiles, resourceBalance, rooms, goblins, roomBonuses, barStockpiles } = ctx;
     if (goblin.smithingProgress !== undefined && goblin.smithingProgress > 0) return 0.58;
     const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
     if (totalOre < 5) return 0;
     const oreInputFactor = ramp(totalOre, 5, 25);
+    const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     const { upgradesPressure = 0.35, materialPriority = 1 } = resourceBalance ?? {};
+    const hasBlacksmith = roomBonuses?.hasBlacksmith ?? (rooms?.some(r => r.type === 'blacksmith') ?? false);
+    const barsScarce = hasBlacksmith && totalBars < MAX_BARS_PER_PILE * 0.4;
     let base = upgradesPressure * oreInputFactor * inverseSigmoid(goblin.hunger, 50) * (0.6 + 0.4 * materialPriority);
+    if (hasBlacksmith && barsScarce) {
+      base *= 1.25;
+    }
 
     const smithRoom = rooms?.find(r => r.type === 'blacksmith');
     if (smithRoom && goblins) {

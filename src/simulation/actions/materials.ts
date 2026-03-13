@@ -22,20 +22,36 @@ export const mine: Action = {
   name: 'mine',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance }) => {
+  score: ({ goblin, grid, resourceBalance, oreStockpiles, rooms }) => {
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
     const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
+    const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
+    const totalOre = oreStockpiles?.reduce((s, sp) => s + sp.ore, 0) ?? 0;
+    const oreScarce = hasBlacksmith && totalOre < 80;
 
     if (!target) {
-      if (goblin.knownOreSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * materialsPressure;
+      if (goblin.knownOreSites.length > 0) {
+        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * materialsPressure;
+        if (oreScarce) baseKnown *= 1.25;
+        let flooredKnown = baseKnown;
+        if (materialsPressure > 0.5 && oreScarce) {
+          flooredKnown = Math.max(flooredKnown, 0.35);
+        }
+        return Math.min(1.0, flooredKnown);
+      }
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
-    return Math.min(1.0, base);
+    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    if (oreScarce) base *= 1.25;
+    let score = Math.min(1.0, base);
+    if (materialsPressure > 0.5 && oreScarce) {
+      score = Math.max(score, 0.35);
+    }
+    return score;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -113,20 +129,39 @@ export const chop: Action = {
   name: 'chop',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance }) => {
+  score: ({ goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses, plankStockpiles }) => {
     if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
     const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
+    const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
+    const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
+    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
+    const woodScarce = hasLumberHut && totalWood < 40;
 
     if (!target) {
-      if (goblin.knownWoodSites.length > 0) return inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * materialsPressure;
+      if (goblin.knownWoodSites.length > 0) {
+        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * materialsPressure;
+        if (woodScarce) baseKnown *= 1.3;
+        let flooredKnown = baseKnown;
+        // When materials are scarce, ensure a modest floor so remembered-tree logging competes with other work.
+        if (materialsPressure > 0.5 && woodScarce) {
+          flooredKnown = Math.max(flooredKnown, 0.4);
+        }
+        return Math.min(1.0, flooredKnown);
+      }
       return 0;
     }
-    const base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
-    return Math.min(1.0, base);
+    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    if (woodScarce) base *= 1.3;
+    let score = Math.min(1.0, base);
+    // Stock-the-wood: when stored materials are low, give chop a floor so it can win ties vs. forage.
+    if (materialsPressure > 0.5 && woodScarce) {
+      score = Math.max(score, 0.4);
+    }
+    return score;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -217,9 +252,13 @@ export const depositOre: Action = {
     if (goblin.inventory.ore <= 0) return false;
     return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
-  score: ({ goblin, oreStockpiles }) => {
+  score: ({ goblin, oreStockpiles, resourceBalance }) => {
     const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.ore, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
+    const base = ramp(goblin.inventory.ore, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
+    const { materialsPressure = 0 } = resourceBalance ?? {};
+    // When stored materials are low (high materialsPressure), boost hauling so deposits actually happen.
+    const scarcityBoost = 1 + materialsPressure * 0.5;
+    return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, oreStockpiles }) => {
     const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
@@ -247,9 +286,13 @@ export const depositWood: Action = {
     if (goblin.inventory.wood <= 0) return false;
     return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
-  score: ({ goblin, woodStockpiles }) => {
+  score: ({ goblin, woodStockpiles, resourceBalance }) => {
     const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    return ramp(goblin.inventory.wood, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
+    const base = ramp(goblin.inventory.wood, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
+    const { materialsPressure = 0 } = resourceBalance ?? {};
+    // Same scarcity boost as ore: when wood stockpiles are low, make hauling wood more competitive.
+    const scarcityBoost = 1 + materialsPressure * 0.5;
+    return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, woodStockpiles }) => {
     const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);

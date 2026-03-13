@@ -33,7 +33,15 @@ export const buildWoodWall: Action = {
     if (!rooms || rooms.length === 0) return 0;
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
-    const base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    // Wall completeness: fraction of candidate wall slots that are already walls.
+    const totalSlots = wallSlots.length;
+    const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
+    const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
+    const wallsIncomplete = wallFraction < 0.8;
+    let base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    if (wallsIncomplete) {
+      base *= 1.2;
+    }
     return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, rooms, plankStockpiles, goblins, adventurers, currentTick }) => {
@@ -94,7 +102,14 @@ export const buildStoneWall: Action = {
     if (!rooms || rooms.length === 0) return 0;
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
-    const base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    const totalSlots = wallSlots.length;
+    const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
+    const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
+    const wallsIncomplete = wallFraction < 0.8;
+    let base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
+    if (wallsIncomplete) {
+      base *= 1.2;
+    }
     return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, rooms, barStockpiles, goblins, adventurers, currentTick }) => {

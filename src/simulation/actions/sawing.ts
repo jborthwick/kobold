@@ -45,13 +45,19 @@ export const saw: Action = {
     return (hasWood ?? false) || (goblin.sawingProgress !== undefined && goblin.sawingProgress > 0);
   },
   score: (ctx) => {
-    const { goblin, woodStockpiles, resourceBalance } = ctx;
+    const { goblin, woodStockpiles, resourceBalance, roomBonuses, plankStockpiles } = ctx;
     if (goblin.sawingProgress !== undefined && goblin.sawingProgress > 0) return 0.95;
     const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
     if (totalWood < 5) return 0;
     const woodInputFactor = ramp(totalWood, 5, 25);
+    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
     const { upgradesPressure = 0.35, materialPriority = 1 } = resourceBalance ?? {};
-    const base = upgradesPressure * woodInputFactor * inverseSigmoid(goblin.hunger, 50) * (0.6 + 0.4 * materialPriority);
+    const hasLumberHut = roomBonuses?.hasLumberHut ?? false;
+    const planksScarce = hasLumberHut && totalPlanks < MAX_PLANKS_PER_PILE * 0.4;
+    let base = upgradesPressure * woodInputFactor * inverseSigmoid(goblin.hunger, 50) * (0.6 + 0.4 * materialPriority);
+    if (hasLumberHut && planksScarce) {
+      base *= 1.3;
+    }
     return Math.min(1.0, base);
   },
   execute: (ctx) => {

@@ -74,7 +74,7 @@ export const cook: Action = {
         return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
     },
 
-    score: ({ goblin, foodStockpiles, woodStockpiles, resourceBalance }) => {
+    score: ({ goblin, foodStockpiles, woodStockpiles, resourceBalance, rooms, roomBonuses, mealStockpiles }) => {
         // If already cooking, strong momentum to finish
         if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
             return 0.95;
@@ -90,7 +90,13 @@ export const cook: Action = {
         const woodInput = Math.min(1, ramp(totalWood, 2, 15));
         const hungerFactor = inverseSigmoid(goblin.hunger, 50);
         const { consumablesPressure = 0.5, foodPriority = 0 } = resourceBalance ?? {};
-        const base = foodInput * woodInput * hungerFactor * 1.1 * consumablesPressure * (1 + foodPriority * 0.6);
+        const hasKitchen = roomBonuses?.hasKitchen ?? (rooms?.some(r => r.type === 'kitchen') ?? false);
+        const totalMeals = mealStockpiles?.reduce((s, m) => s + m.meals, 0) ?? 0;
+        const mealsScarce = hasKitchen && totalMeals < MAX_MEALS_STORED * 0.5;
+        let base = foodInput * woodInput * hungerFactor * 1.1 * consumablesPressure * (1 + foodPriority * 0.6);
+        if (hasKitchen && mealsScarce) {
+            base *= 1.3;
+        }
         return Math.min(1.0, base);
     },
 

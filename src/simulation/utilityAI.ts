@@ -7,7 +7,7 @@
  * (unconditional). (3) Score all eligible actions. (4) Execute highest-scoring action.
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
 import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
@@ -118,6 +118,8 @@ function updateNeeds(
   weatherMetabolismMod: number,
   warmthField: Float32Array | undefined,
   weatherType: WeatherType | undefined,
+  rooms?: Room[],
+  grid?: Tile[][],
   onLog?: LogFn,
 ): void {
   // ── Hunger ──────────────────────────────────────────────────────────────────
@@ -181,6 +183,47 @@ function updateNeeds(
   if (weatherType === 'cold' && warmthField) {
     const warmth = getWarmth(warmthField, goblin.x, goblin.y);
     if (warmth < 30) targetMorale -= Math.round(20 * inverseSigmoid(warmth, 15));
+  }
+
+  // Shelter: being inside well-walled rooms feels safer; being exposed in bad weather feels worse.
+  // shelterScore ~ [0,1]: 0 = fully exposed, 1 = inside room with fully walled perimeter.
+  let shelterScore = 0.5;
+  if (rooms && rooms.length > 0 && grid) {
+    const currentRoom = rooms.find(
+      r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
+    );
+    if (currentRoom) {
+      // Perimeter wall fraction for this room
+      let perimeter = 0;
+      let walled = 0;
+      const { x, y, w, h } = currentRoom;
+      for (let yy = y; yy < y + h; yy++) {
+        for (let xx = x; xx < x + w; xx++) {
+          const isEdge = yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1;
+          if (!isEdge) continue;
+          if (!grid[yy] || !grid[yy][xx]) continue;
+          perimeter++;
+          if (isWallType(grid[yy][xx].type)) walled++;
+        }
+      }
+      const wallFraction = perimeter > 0 ? walled / perimeter : 0;
+      // Inside a room: baseline shelter is decent even before walls; walls push it higher.
+      shelterScore = 0.4 + 0.6 * wallFraction;
+    } else {
+      // Outside any room: treat as exposed.
+      shelterScore = 0.1;
+    }
+  }
+
+  // Shelter influences morale softly. Good shelter can add up to ~8 morale, poor shelter can
+  // subtract up to ~8, with stronger effect under cold weather.
+  const coldFactor = weatherType === 'cold' ? 1.0 : 0.5;
+  if (shelterScore < 0.3) {
+    const penalty = Math.round(8 * (0.3 - shelterScore) / 0.3 * coldFactor);
+    targetMorale -= penalty;
+  } else if (shelterScore > 0.7) {
+    const bonus = Math.round(8 * (shelterScore - 0.7) / 0.3);
+    targetMorale += bonus;
   }
 
   targetMorale = Math.max(0, Math.min(100, targetMorale));
@@ -316,7 +359,7 @@ export function tickAgentUtility(
   // ── Step 1: Update needs ──────────────────────────────────────────────────────
   // Hunger, morale, fatigue, and social all advance here before any decision is made.
   // These feed into action scores — a goblin with hunger=80 will score "eat" near 1.0.
-  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, onLog);
+  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, rooms, grid, onLog);
 
   // Exhaustion stumble: above fatigue=70 there's a chance to skip the whole action this tick.
   // The goblin just stands there recovering. Chance scales from ~20% at 70 to ~80% at 100.
@@ -386,12 +429,22 @@ export function tickAgentUtility(
   const resourceBalance = computeResourceBalanceModifier(
     foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
   );
+  const hasStorage = rooms?.some(r => r.type === 'storage') ?? false;
+  const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;
+  const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
+  const hasKitchen = rooms?.some(r => r.type === 'kitchen') ?? false;
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
     warmthField, dangerField, weatherType, rooms, mealStockpiles,
     plankStockpiles, barStockpiles,
     resourceBalance,
+    roomBonuses: {
+      hasStorage,
+      hasLumberHut,
+      hasBlacksmith,
+      hasKitchen,
+    },
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────

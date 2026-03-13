@@ -30,6 +30,8 @@ export const GOAL_CONFIG: Record<ColonyGoalType, GoalDef> = {
       buildStoneWall: 1.4,
       saw:            1.25,   // need planks for wood walls
       smith:          1.25,   // need bars for stone walls
+      chop:           1.3,    // gather wood for future planks/walls
+      mine:           1.2,    // keep ore flowing for bars/stone walls
     },
   },
   cook_meals: {

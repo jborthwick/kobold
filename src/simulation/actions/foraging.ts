@@ -21,7 +21,7 @@ export const forage: Action = {
   name: 'forage',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance }) => {
+  score: ({ goblin, grid, resourceBalance, foodStockpiles, rooms, roomBonuses }) => {
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
     const radius = goblin.hunger > 20
@@ -33,15 +33,22 @@ export const forage: Action = {
     const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
 
+    // Storage-aware bonus: if a storage room exists and stored food is low, gently boost forage.
+    const hasStorageRoom = roomBonuses?.hasStorage ?? (rooms?.some(r => r.type === 'storage') ?? false);
+    const totalStoredFood = foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
+    const storageHungry = hasStorageRoom && totalStoredFood < 40;
+
     if (!target) {
       if (goblin.knownFoodSites.length > 0) {
         let s = sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend;
+        if (storageHungry) s *= 1.3;
         if (consumablesPressure > 0.5) s = Math.max(s, 0.35); // stock the larder
         return Math.min(1.0, s);
       }
       return 0;
     }
     let base = sigmoid(goblin.hunger, 40) * 1.0;
+    if (storageHungry) base *= 1.2;
     if (consumablesPressure > 0.5) base = Math.max(base, 0.35); // stock the larder when colony short on food
     const score = Math.min(1.0, base);
     const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
@@ -182,10 +189,15 @@ export const depositFood: Action = {
     if (goblin.inventory.food <= 0) return false;
     return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
-  score: ({ goblin, foodStockpiles, resourceBalance }) => {
+  score: ({ goblin, foodStockpiles, resourceBalance, rooms, roomBonuses }) => {
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
-    return ramp(goblin.inventory.food, 4, 14) * inverseSigmoid(goblin.hunger, 50) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
+    const hasStorageRoom = roomBonuses?.hasStorage ?? (rooms?.some(r => r.type === 'storage') ?? false);
+    const totalStoredFood = foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
+    const storageHungry = hasStorageRoom && totalStoredFood < 40;
+    let base = ramp(goblin.inventory.food, 4, 14) * inverseSigmoid(goblin.hunger, 50) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
+    if (storageHungry) base *= 1.25;
+    return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
     const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);

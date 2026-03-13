@@ -166,26 +166,24 @@ resetAdventurers();
 const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
 const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);
 
-// Fixed room layout so utility AI has kitchen, lumber hut, blacksmith, storage (no build_rooms goal).
-const storageRoom = { id: 'room-storage', type: 'storage' as const, x: depotX - 2, y: depotY - 2, w: 5, h: 5 };
-const rooms: Room[] = [
-  storageRoom,
-  { id: 'room-kitchen', type: 'kitchen', x: depotX + 6, y: depotY + 6, w: 5, h: 5 },
-  { id: 'room-lumber', type: 'lumber_hut', x: depotX - 10, y: depotY - 2, w: 5, h: 5 },
-  { id: 'room-blacksmith', type: 'blacksmith', x: depotX + 6, y: depotY - 2, w: 5, h: 5 },
-];
+// Starter layout: one storage room near spawn, matching GUI new-colony flow (no kitchen/lumber_hut/blacksmith).
+const storageRoom: Room = { id: 'room-storage', type: 'storage', x: depotX - 2, y: depotY - 2, w: 5, h: 5 };
+const rooms: Room[] = [storageRoom];
 
+// Place a hearth a short walk from spawn so warmth/diffusion behave similarly to the main game.
 grid[depotY + 8][depotX + 8].type = TileType.Hearth;
 
-// Stockpiles: food in storage, meals in kitchen, ore in blacksmith, wood in lumber hut.
+// Stockpiles: start with a single empty food stockpile in storage; other piles will be established by actions.
 const foodStockpiles: FoodStockpile[] = [{ x: storageRoom.x + 1, y: storageRoom.y + 1, food: 0, maxFood: 200 }];
-const mealStockpiles: MealStockpile[] = [{ x: depotX + 7, y: depotY + 7, meals: 0, maxMeals: 100 }];
-const oreStockpiles: OreStockpile[] = [{ x: depotX + 7, y: depotY - 1, ore: 150, maxOre: 200 }];
-const woodStockpiles: WoodStockpile[] = [{ x: depotX - 9, y: depotY - 1, wood: 0, maxWood: 200 }];
+const mealStockpiles: MealStockpile[] = [];
+const oreStockpiles: OreStockpile[] = [];
+const woodStockpiles: WoodStockpile[] = [];
 const plankStockpiles: PlankStockpile[] = [];
 const barStockpiles: BarStockpile[] = [];
 
-for (const g of goblins) g.homeTile = { x: depotX, y: depotY };
+for (const g of goblins) {
+  g.homeTile = { x: depotX, y: depotY };
+}
 
 let colonyGoal = makeGoal('cook_meals', 0);
 let goalStartTick = 0;
@@ -340,6 +338,24 @@ function runRaidsAndCombat(tick: number): void {
 function runWorldEventsAndSuccession(tick: number): void {
   tickWorldEvents(grid, tick, goblins, adventurers);
   tickMushroomSprout(grid, tick);
+
+  // At tick 400, add a lumber hut near storage so headless matches a mid-game GUI where the player
+  // has built their first wood-processing room. This lets us observe chop/saw/wood stockpiling.
+  if (tick === 400) {
+    const lumberX = storageRoom.x - 8;
+    const lumberY = storageRoom.y;
+    const lumberRoom: Room = {
+      id: 'room-lumber',
+      type: 'lumber_hut',
+      x: lumberX,
+      y: lumberY,
+      w: 5,
+      h: 5,
+    };
+    rooms.push(lumberRoom);
+    // Match GUI: place an initial empty wood stockpile at (x+1,y+1) inside the lumber hut.
+    woodStockpiles.push({ x: lumberX + 1, y: lumberY + 1, wood: 0, maxWood: 200 });
+  }
 
   for (let i = pendingSuccessions.length - 1; i >= 0; i--) {
     const s = pendingSuccessions[i];
