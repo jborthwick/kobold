@@ -1,11 +1,13 @@
 /**
  * wander: low-score fallback when nothing urgent — keeps goblins moving and discovering tiles.
  * Warmth is now derived per-goblin (shelter-style); no seekWarmth action.
+ * When cold, wander slightly prefers warmer tiles (emergent drift toward heat).
  */
 import { GRID_SIZE, TASK_STRINGS } from '../../shared/constants';
 import { isWalkable } from '../world';
 import { traitMod } from '../agents';
 import { grantXp } from '../skills';
+import { warmthAtPosition } from '../diffusion';
 import { moveTo, getWalkableAdjacent } from './helpers';
 import type { Action } from './types';
 
@@ -15,7 +17,7 @@ export const wander: Action = {
   tags: ['explore'],
   eligible: () => true,
   score: () => 0.05,
-  execute: ({ goblin, grid, currentTick, onLog }) => {
+  execute: ({ goblin, grid, currentTick, onLog, rooms, weatherType }) => {
     const WANDER_HOLD_TICKS = 25;
     const wanDrift = traitMod(goblin, 'wariness', 2);
     const WANDER_MIN_DIST = 8 + wanDrift;
@@ -44,19 +46,37 @@ export const wander: Action = {
         }
       }
 
-      // Try random exploration
+      // Try random exploration; when cold, prefer warmer tiles
+      const isCold = (goblin.warmth ?? 100) < 35;
+      const candidates: { x: number; y: number; warmth: number }[] = [];
       for (let attempt = 0; attempt < 8; attempt++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = WANDER_MIN_DIST + Math.random() * (WANDER_MAX_DIST - WANDER_MIN_DIST);
         const wx = Math.round(goblin.x + Math.cos(angle) * dist);
         const wy = Math.round(goblin.y + Math.sin(angle) * dist);
         if (wx >= 0 && wx < GRID_SIZE && wy >= 0 && wy < GRID_SIZE && isWalkable(grid, wx, wy)) {
-          goblin.wanderTarget = { x: wx, y: wy };
-          goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
-          moveTo(goblin, goblin.wanderTarget, grid);
-          goblin.task = TASK_STRINGS.EXPLORING;
-          return;
+          if (isCold && rooms !== undefined) {
+            candidates.push({
+              x: wx,
+              y: wy,
+              warmth: warmthAtPosition(wx, wy, grid, rooms, weatherType),
+            });
+          } else {
+            goblin.wanderTarget = { x: wx, y: wy };
+            goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+            moveTo(goblin, goblin.wanderTarget, grid);
+            goblin.task = TASK_STRINGS.EXPLORING;
+            return;
+          }
         }
+      }
+      if (candidates.length > 0) {
+        const best = candidates.reduce((a, b) => (b.warmth > a.warmth ? b : a));
+        goblin.wanderTarget = { x: best.x, y: best.y };
+        goblin.wanderExpiry = currentTick + WANDER_HOLD_TICKS;
+        moveTo(goblin, goblin.wanderTarget, grid);
+        goblin.task = TASK_STRINGS.EXPLORING;
+        return;
       }
 
       // Fallback: random adjacent step

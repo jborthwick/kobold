@@ -119,6 +119,39 @@ export function computeGoblinWarmth(
 }
 
 /**
+ * Warmth 0–100 at a given position (same logic as computeGoblinWarmth).
+ * Used by wander to bias toward warmer tiles when cold.
+ */
+export function warmthAtPosition(
+  x: number,
+  y: number,
+  grid: Tile[][],
+  rooms: Room[] | undefined,
+  weatherType?: WeatherType,
+): number {
+  const sources = getHeatSources(grid);
+  const currentRoom = rooms?.find(
+    r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h,
+  );
+  const inWarmRoom = currentRoom && roomHasHeatSource(currentRoom, grid);
+  const dist = minDistanceToHeat(x, y, grid);
+
+  let raw: number;
+  if (sources.length === 0) {
+    raw = 0;
+  } else if (inWarmRoom) {
+    raw = dist <= 2 ? 70 + (2 - dist) * 15 : 70;
+    raw = Math.min(100, raw);
+  } else {
+    raw = dist <= WARMTH_PROXIMITY_RADIUS ? Math.max(0, 100 - 20 * dist) : 0;
+  }
+
+  if (weatherType === 'cold' && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH);
+  if (weatherType === 'cold') raw *= 0.7;
+  return Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
+}
+
+/**
  * Display-only warmth field: tiles within WARMTH_OVERLAY_RADIUS of a hearth/fire get warmth.
  * Used for the orange ambient overlay; game logic uses computeGoblinWarmth instead.
  */
