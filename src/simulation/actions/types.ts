@@ -27,7 +27,6 @@ export interface ActionContext {
   plankStockpiles?: PlankStockpile[];
   barStockpiles?: BarStockpile[];
   colonyGoal?:     ColonyGoal;
-  warmthField?:    Float32Array;  // diffusion field: warmth 0–100 per tile
   dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile
   weatherType?:    WeatherType;
   rooms?:          Room[];

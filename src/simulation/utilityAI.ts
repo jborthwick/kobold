@@ -8,7 +8,6 @@
  */
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
-import { getWarmth } from './diffusion';
 import { } from '../shared/constants';
 import { isWalkable } from './world';
 import { traitMod, pathNextStep } from './agents';
@@ -106,6 +105,9 @@ function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number):
   return true;
 }
 
+/** Fraction of cold penalty removed at full shelter (0 = no reduction, 0.3 = 30% less penalty). */
+const SHELTER_COLD_REDUCTION = 0.3;
+
 // updateNeeds runs every tick *before* action selection.
 // It mutates need meters directly — these are not actions, just physics.
 // The needs feed into action scores: high hunger → high eat/forage score, etc.
@@ -116,7 +118,6 @@ function updateNeeds(
   goblins: Goblin[] | undefined,
   currentTick: number,
   weatherMetabolismMod: number,
-  warmthField: Float32Array | undefined,
   weatherType: WeatherType | undefined,
   rooms?: Room[],
   grid?: Tile[][],
@@ -127,13 +128,40 @@ function updateNeeds(
   // food more scarce relative to consumption without changing the map.
   goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * weatherMetabolismMod);
 
+  // Shelter: being inside well-walled rooms feels safer; used for cold penalty and morale.
+  // shelterScore ~ [0,1]: 0 = fully exposed, 1 = inside room with fully walled perimeter.
+  let shelterScore = 0.5;
+  if (rooms && rooms.length > 0 && grid) {
+    const currentRoom = rooms.find(
+      r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
+    );
+    if (currentRoom) {
+      let perimeter = 0;
+      let walled = 0;
+      const { x, y, w, h } = currentRoom;
+      for (let yy = y; yy < y + h; yy++) {
+        for (let xx = x; xx < x + w; xx++) {
+          const isEdge = yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1;
+          if (!isEdge) continue;
+          if (!grid[yy] || !grid[yy][xx]) continue;
+          perimeter++;
+          if (isWallType(grid[yy][xx].type)) walled++;
+        }
+      }
+      const wallFraction = perimeter > 0 ? walled / perimeter : 0;
+      shelterScore = 0.4 + 0.6 * wallFraction;
+    } else {
+      shelterScore = 0.1;
+    }
+  }
+
   // ── Cold exposure penalty ────────────────────────────────────────────────────
-  // During cold weather, goblins away from a hearth accumulate fatigue, morale loss,
-  // and extra hunger. coldPenalty is 0 when warm (warmth > 50), rises to 1 when freezing.
-  // This is what makes seekWarmth score highly in cold weather: the penalty is ongoing.
-  if (weatherType === 'cold' && warmthField) {
-    const warmth = getWarmth(warmthField, goblin.x, goblin.y);
-    const coldPenalty = inverseSigmoid(warmth, 30, 0.12);
+  // During cold weather, goblins away from warmth accumulate fatigue and extra hunger.
+  // Shelter reduces effective cold penalty (less wind/rain = less heat loss).
+  if (weatherType === 'cold') {
+    const warmth = goblin.warmth ?? 0;
+    let coldPenalty = inverseSigmoid(warmth, 30, 0.12);
+    coldPenalty *= Math.max(0, 1 - SHELTER_COLD_REDUCTION * shelterScore);
     if (coldPenalty > 0.05) {
       goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
       goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
@@ -180,39 +208,9 @@ function updateNeeds(
   if (goblin.fatigue > 80) targetMorale -= Math.round(15 * sigmoid(goblin.fatigue, 90));
   if (goblin.onFire) targetMorale -= 40;
   
-  if (weatherType === 'cold' && warmthField) {
-    const warmth = getWarmth(warmthField, goblin.x, goblin.y);
+  if (weatherType === 'cold') {
+    const warmth = goblin.warmth ?? 0;
     if (warmth < 30) targetMorale -= Math.round(20 * inverseSigmoid(warmth, 15));
-  }
-
-  // Shelter: being inside well-walled rooms feels safer; being exposed in bad weather feels worse.
-  // shelterScore ~ [0,1]: 0 = fully exposed, 1 = inside room with fully walled perimeter.
-  let shelterScore = 0.5;
-  if (rooms && rooms.length > 0 && grid) {
-    const currentRoom = rooms.find(
-      r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
-    );
-    if (currentRoom) {
-      // Perimeter wall fraction for this room
-      let perimeter = 0;
-      let walled = 0;
-      const { x, y, w, h } = currentRoom;
-      for (let yy = y; yy < y + h; yy++) {
-        for (let xx = x; xx < x + w; xx++) {
-          const isEdge = yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1;
-          if (!isEdge) continue;
-          if (!grid[yy] || !grid[yy][xx]) continue;
-          perimeter++;
-          if (isWallType(grid[yy][xx].type)) walled++;
-        }
-      }
-      const wallFraction = perimeter > 0 ? walled / perimeter : 0;
-      // Inside a room: baseline shelter is decent even before walls; walls push it higher.
-      shelterScore = 0.4 + 0.6 * wallFraction;
-    } else {
-      // Outside any room: treat as exposed.
-      shelterScore = 0.1;
-    }
   }
 
   // Shelter influences morale softly. Good shelter can add up to ~8 morale, poor shelter can
@@ -314,7 +312,6 @@ const ACTION_DISPLAY_NAMES: Record<string, string> = {
   buildWoodWall: 'wood wall',
   buildStoneWall: 'stone wall',
   buildHearth: 'building a hearth',
-  seekWarmth: 'seeking warmth',
   seekSafety: 'fleeing to safety',
   socialize: 'socializing',
   avoidRival: 'avoiding a rival',
@@ -336,7 +333,6 @@ export function tickAgentUtility(
   colonyGoal?: ColonyGoal,
   woodStockpiles?: WoodStockpile[],
   weatherMetabolismMod?: number,
-  warmthField?: Float32Array,
   dangerField?: Float32Array,
   weatherType?: WeatherType,
   rooms?: Room[],
@@ -359,7 +355,7 @@ export function tickAgentUtility(
   // ── Step 1: Update needs ──────────────────────────────────────────────────────
   // Hunger, morale, fatigue, and social all advance here before any decision is made.
   // These feed into action scores — a goblin with hunger=80 will score "eat" near 1.0.
-  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, warmthField, weatherType, rooms, grid, onLog);
+  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, weatherType, rooms, grid, onLog);
 
   // Exhaustion stumble: above fatigue=70 there's a chance to skip the whole action this tick.
   // The goblin just stands there recovering. Chance scales from ~20% at 70 to ~80% at 100.
@@ -436,7 +432,7 @@ export function tickAgentUtility(
   const ctx: ActionContext = {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
-    warmthField, dangerField, weatherType, rooms, mealStockpiles,
+    dangerField, weatherType, rooms, mealStockpiles,
     plankStockpiles, barStockpiles,
     resourceBalance,
     roomBonuses: {

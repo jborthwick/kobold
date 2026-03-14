@@ -3,7 +3,6 @@
  * eat/rest use sigmoid curves so urgency rises as hunger/fatigue worsen.
  */
 import { sigmoid } from '../utilityAI';
-import { getWarmth } from '../diffusion';
 import { traitMod, FORAGEABLE_TILES } from '../agents';
 import { accelerateHealing } from '../wounds';
 import { moveTo, shouldLog, traitText } from './helpers';
@@ -99,8 +98,8 @@ export const rest: Action = {
     const hysteresis = (goblin.task.includes('resting') && goblin.fatigue > 40) ? 0.15 : 0;
     return Math.min(1.0, base + hysteresis);
   },
-  execute: ({ goblin, warmthField, currentTick }) => {
-    const warmth = warmthField ? getWarmth(warmthField, goblin.x, goblin.y) : 0;
+  execute: ({ goblin, currentTick }) => {
+    const warmth = goblin.warmth ?? 0;
     if (warmth >= 40) {
       // Sheltered by hearth — best recovery
       goblin.fatigue = Math.max(0, goblin.fatigue - 1.4);

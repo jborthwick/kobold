@@ -23,7 +23,7 @@ import { tickPooling } from '../src/simulation/pooling';
 import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY } from '../src/simulation/agents';
 import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
-import { createWarmthField, createDangerField, computeWarmth, computeDanger, updateTraffic, findHearths } from '../src/simulation/diffusion';
+import { createDangerField, computeGoblinWarmth, computeDanger, updateTraffic } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
 import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../src/simulation/rooms';
@@ -192,7 +192,6 @@ const pendingSuccessions: { deadGoblinId: string; spawnAtTick: number }[] = [];
 const combatHits = new Map<string, number>();
 
 const weather = createWeather(0);
-const warmthField = createWarmthField();
 const dangerField = createDangerField();
 const dangerPrev = createDangerField();
 
@@ -212,16 +211,14 @@ function runWeatherTick(tick: number): void {
   tickWeather(weather, tick);
 }
 
-/** Warmth from hearths/food, danger from adventurers; blend into goblin warmth. */
+/** Per-goblin warmth (shelter-style); danger from adventurers; traffic. */
 function runDiffusionTick(tick: number): void {
-  const hearths = findHearths(grid);
-  computeWarmth(grid, hearths, foodStockpiles, weather.type, warmthField);
   computeDanger(grid, adventurers, dangerPrev, dangerField);
   dangerPrev.set(dangerField);
   updateTraffic(grid, goblins);
   for (const g of goblins) {
     if (g.alive) {
-      const raw = warmthField[g.y * GRID_SIZE + g.x];
+      const raw = computeGoblinWarmth(g, grid, rooms, weather.type);
       g.warmth = (g.warmth ?? raw) * 0.95 + raw * 0.05;
     }
   }
@@ -239,7 +236,7 @@ function runAgentTicks(tick: number): void {
         }
       },
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
-      metabolismModifier(weather), warmthField, dangerField, weather.type, rooms, mealStockpiles,
+      metabolismModifier(weather), dangerField, weather.type, rooms, mealStockpiles,
       plankStockpiles, barStockpiles,
     );
     if (g.alive) recordAction(g, g.task);

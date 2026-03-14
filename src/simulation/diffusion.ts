@@ -1,8 +1,8 @@
 /**
- * Spatial awareness layers recomputed every tick (index: y * GRID_SIZE + x). Warmth from
- * hearths and stockpiles (walls add shelter); danger from adventurers and map edges (walls
- * block). Goblins seek warmth and flee danger — these fields drive seekWarmth, seekSafety,
- * and rest scoring. Transient (not saved).
+ * Spatial awareness layers recomputed every tick (index: y * GRID_SIZE + x). Warmth is
+ * derived per-goblin from room membership + proximity to heat (shelter-style); danger from
+ * adventurers and map edges (walls block). A display-only warmth overlay shows warm zones.
+ * Transient (not saved).
  */
 
 import { GRID_SIZE } from '../shared/constants';
@@ -13,6 +13,13 @@ const N = GRID_SIZE * GRID_SIZE;
 const WARMTH_RADIUS    = 8;
 const SHELTER_PER_WALL = 0.15;   // 15% warmth bonus per adjacent wall
 const SHELTER_MAX_MULT = 1.5;    // cap at +50%
+
+/** Distance (manhattan) beyond which a heat source no longer warms a goblin. */
+const WARMTH_PROXIMITY_RADIUS = 5;
+/** Display-only overlay: tiles within this distance of heat get orange tint. */
+const WARMTH_OVERLAY_RADIUS = 6;
+/** In cold weather, being in any room adds this much warmth (out of the elements). */
+const ROOM_SHELTER_WARMTH = 12;
 
 const DANGER_RADIUS_ADV  = 12;
 const DANGER_RADIUS_EDGE = 4;
@@ -40,11 +47,104 @@ export function findHearths(grid: Tile[][]): { x: number; y: number }[] {
   return out;
 }
 
+/** All heat source positions (hearths + fire tiles). */
+function getHeatSources(grid: Tile[][]): { x: number; y: number }[] {
+  const out = findHearths(grid);
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      if (grid[y][x].type === TileType.Fire) out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+/** True if the room contains at least one Hearth or Fire tile. */
+function roomHasHeatSource(room: Room, grid: Tile[][]): boolean {
+  for (let dy = 0; dy < room.h; dy++) {
+    for (let dx = 0; dx < room.w; dx++) {
+      const tx = room.x + dx;
+      const ty = room.y + dy;
+      if (tx >= 0 && tx < GRID_SIZE && ty >= 0 && ty < GRID_SIZE) {
+        const t = grid[ty][tx].type;
+        if (t === TileType.Hearth || t === TileType.Fire) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Manhattan distance from (x,y) to nearest heat source, or Infinity if none. */
+function minDistanceToHeat(x: number, y: number, grid: Tile[][]): number {
+  const sources = getHeatSources(grid);
+  if (sources.length === 0) return Infinity;
+  let min = Infinity;
+  for (const s of sources) {
+    const d = Math.abs(s.x - x) + Math.abs(s.y - y);
+    if (d < min) min = d;
+  }
+  return min;
+}
+
 /**
- * Multi-source BFS warmth field.
- * Sources: Hearth tiles (strength 100), food stockpiles (strength 60), placed rooms (strength 40).
- * Walls block propagation; adjacent walls add shelter bonus.
- * Cold weather multiplies all values by 0.7.
+ * Per-goblin warmth 0–100 from context (shelter-style): in a room with a hearth/fire,
+ * or within WARMTH_PROXIMITY_RADIUS of any heat source. Cold weather multiplies by 0.7.
+ */
+export function computeGoblinWarmth(
+  goblin: Goblin,
+  grid: Tile[][],
+  rooms: Room[] | undefined,
+  weatherType?: WeatherType,
+): number {
+  const sources = getHeatSources(grid);
+  const currentRoom = rooms?.find(
+    r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
+  );
+  const inWarmRoom = currentRoom && roomHasHeatSource(currentRoom, grid);
+  const dist = minDistanceToHeat(goblin.x, goblin.y, grid);
+
+  let raw: number;
+  if (sources.length === 0) {
+    raw = 0;
+  } else if (inWarmRoom) {
+    raw = dist <= 2 ? 70 + (2 - dist) * 15 : 70;
+    raw = Math.min(100, raw);
+  } else {
+    raw = dist <= WARMTH_PROXIMITY_RADIUS ? Math.max(0, 100 - 20 * dist) : 0;
+  }
+
+  // In cold, being in any room adds a small warmth (out of the elements).
+  if (weatherType === 'cold' && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH);
+  if (weatherType === 'cold') raw *= 0.7;
+  return Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
+}
+
+/**
+ * Display-only warmth field: tiles within WARMTH_OVERLAY_RADIUS of a hearth/fire get warmth.
+ * Used for the orange ambient overlay; game logic uses computeGoblinWarmth instead.
+ */
+export function computeWarmthOverlay(grid: Tile[][], out: Float32Array): void {
+  out.fill(0);
+  const sources = getHeatSources(grid);
+  for (const s of sources) {
+    for (let dy = -WARMTH_OVERLAY_RADIUS; dy <= WARMTH_OVERLAY_RADIUS; dy++) {
+      for (let dx = -WARMTH_OVERLAY_RADIUS; dx <= WARMTH_OVERLAY_RADIUS; dx++) {
+        const nx = s.x + dx;
+        const ny = s.y + dy;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+          const d = Math.abs(dx) + Math.abs(dy);
+          if (d <= WARMTH_OVERLAY_RADIUS) {
+            const i = ny * GRID_SIZE + nx;
+            out[i] = Math.max(out[i], 100 - 15 * d);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Multi-source BFS warmth field (legacy). Kept only for optional overlay; game logic
+ * uses computeGoblinWarmth. Sources: Hearth (100), food stockpiles (60), room centers (40), Fire (70).
  */
 export function computeWarmth(
   grid: Tile[][],
@@ -56,17 +156,14 @@ export function computeWarmth(
 ): void {
   out.fill(0);
 
-  // Queue: [x, y, strength]
   const queue: [number, number, number][] = [];
   for (const h of hearths)       queue.push([h.x, h.y, 100]);
   for (const s of foodStockpiles) queue.push([s.x, s.y, 60]);
-  // Placed rooms emit modest warmth at their centers — enough to attract goblins when cold
   for (const r of rooms ?? []) {
     const cx = r.x + Math.floor(r.w / 2);
     const cy = r.y + Math.floor(r.h / 2);
     queue.push([cx, cy, 40]);
   }
-  // Fire tiles radiate heat — visible in warmth overlay, shorter range than hearths
   for (let fy = 0; fy < GRID_SIZE; fy++) {
     for (let fx = 0; fx < GRID_SIZE; fx++) {
       if (grid[fy][fx].type === TileType.Fire) queue.push([fx, fy, 70]);
@@ -81,11 +178,10 @@ export function computeWarmth(
     const [x, y, strength] = queue[head++];
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) continue;
     const i = idx(x, y);
-    if (out[i] >= strength) continue;   // already have a stronger value here
+    if (out[i] >= strength) continue;
     out[i] = strength;
 
     const t = grid[y][x];
-    // Walls block propagation for non-source waves
     if (isWallType(t.type) && strength < 99) continue;
 
     const next = strength - STEP;
@@ -98,7 +194,6 @@ export function computeWarmth(
     }
   }
 
-  // Shelter bonus — tiles adjacent to walls get warmth amplified
   const DIRS8 = [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]] as const;
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
@@ -116,7 +211,6 @@ export function computeWarmth(
     }
   }
 
-  // Cold weather dampens all warmth
   if (weatherType === 'cold') {
     for (let i = 0; i < N; i++) out[i] *= 0.7;
   }
@@ -146,7 +240,6 @@ export function computeDanger(
 
   for (const a of adventurers) queue.push([a.x, a.y, 100]);
 
-  // Fire tiles as danger sources — goblins flee when fire is ~3 tiles away
   for (let fy = 0; fy < GRID_SIZE; fy++) {
     for (let fx = 0; fx < GRID_SIZE; fx++) {
       if (grid[fy][fx].type === TileType.Fire) queue.push([fx, fy, 80]);
@@ -171,10 +264,8 @@ export function computeDanger(
     fresh[i] = strength;
 
     const t = grid[y][x];
-    // Determine step size (adventurer vs edge source)
     const step = strength > 40 ? STEP_ADV : STEP_EDGE;
     let next = strength - step;
-    // Walls halve propagated danger
     if (isWallType(t.type)) next *= 0.5;
     if (next <= 0) continue;
 
@@ -185,7 +276,6 @@ export function computeDanger(
     }
   }
 
-  // Merge: take max of decayed old + fresh
   for (let i = 0; i < N; i++) {
     out[i] = Math.min(100, Math.max(out[i], fresh[i]));
   }
@@ -196,7 +286,6 @@ export function computeDanger(
  * Decays ×0.998/tick (~350-tick half-life); +0.5 per goblin per tick.
  */
 export function updateTraffic(grid: Tile[][], goblins: Goblin[]): void {
-  // Decay all tiles with traffic
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
@@ -205,7 +294,6 @@ export function updateTraffic(grid: Tile[][], goblins: Goblin[]): void {
       }
     }
   }
-  // Accumulate from living goblins
   for (const g of goblins) {
     if (!g.alive) continue;
     const t = grid[g.y]?.[g.x];
@@ -213,7 +301,7 @@ export function updateTraffic(grid: Tile[][], goblins: Goblin[]): void {
   }
 }
 
-/** Warmth at a tile coordinate, 0–100. */
+/** Warmth at a tile coordinate, 0–100 (for overlay field). */
 export function getWarmth(field: Float32Array, x: number, y: number): number {
   if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return 0;
   return field[y * GRID_SIZE + x];

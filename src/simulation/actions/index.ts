@@ -11,7 +11,7 @@ import { fight, seekSafety } from './combat';
 import { forage, depositFood, withdrawFood } from './foraging';
 import { mine, chop, depositOre, depositWood } from './materials';
 import { buildWoodWall, buildStoneWall, buildHearth } from './building';
-import { seekWarmth, wander } from './exploration';
+import { wander } from './exploration';
 import { fightFire } from './firefighting';
 import { establishStockpile } from './stockpiling';
 import { cook } from './cooking';
@@ -42,7 +42,6 @@ export const ALL_ACTIONS: Action[] = [
   buildWoodWall,
   buildStoneWall,
   socialize,
-  seekWarmth,   // comfort nudge — low score, loses to most work actions
   avoidRival,
   wander,
 ];

@@ -19,7 +19,7 @@ import { bus } from '../../shared/events';
 import { getGoblinConfig } from '../../shared/goblinConfig';
 
 import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
-import { findHearths, computeWarmth, computeDanger, updateTraffic } from '../../simulation/diffusion';
+import { computeGoblinWarmth, computeWarmthOverlay, computeDanger, updateTraffic } from '../../simulation/diffusion';
 import { tickAgentUtility } from '../../simulation/utilityAI';
 import { SUCCESSION_DELAY, spawnSuccessor } from '../../simulation/agents';
 import { topSkill } from '../../simulation/skills';
@@ -53,18 +53,15 @@ export function gameTick(scene: WorldScene) {
     }
 
     // ── Diffusion fields ─────────────────────────────────────────────────
-    const hearths = findHearths(scene.grid);
-    computeWarmth(scene.grid, hearths, scene.foodStockpiles, scene.weather.type, scene.warmthField, scene.rooms);
+    computeWarmthOverlay(scene.grid, scene.warmthField);
     computeDanger(scene.grid, scene.adventurers, scene.dangerFieldPrev, scene.dangerField);
     scene.dangerFieldPrev.set(scene.dangerField);
     updateTraffic(scene.grid, scene.goblins);
 
-    // Cache warmth on each goblin — smoothed (90% old / 10% new) so the bar decays gradually
-    // as goblins walk away from a hearth (~10 ticks to feel it) rather than snapping to 0
-    // the moment they step outside the 8-tile warmth radius.
+    // Per-goblin warmth (shelter-style): room + proximity to heat; smoothed so the bar decays gradually.
     for (const d of scene.goblins) {
         if (d.alive) {
-            const raw = scene.warmthField[d.y * GRID_SIZE + d.x];
+            const raw = computeGoblinWarmth(d, scene.grid, scene.rooms, scene.weather.type);
             d.warmth = (d.warmth ?? raw) * 0.95 + raw * 0.05;
         }
     }
@@ -85,7 +82,7 @@ export function gameTick(scene: WorldScene) {
             },
             scene.foodStockpiles, scene.adventurers, scene.oreStockpiles,
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
-            metabolismModifier(scene.weather), scene.warmthField, scene.dangerField,
+            metabolismModifier(scene.weather), scene.dangerField,
             scene.weather.type, scene.rooms, scene.mealStockpiles,
             scene.plankStockpiles, scene.barStockpiles
         );
