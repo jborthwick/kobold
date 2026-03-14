@@ -466,6 +466,11 @@ export function tickAgentUtility(
     if (action.name === goblin.lastActionName && action.name !== 'wander') {
       score = Math.min(1.0, score + MOMENTUM_BONUS);
     }
+    // Hunger crisis: no food and hunger > 70 — prefer getting food over work/social so goblins don't starve
+    const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
+    if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
+      score += 0.08;
+    }
     if (score > bestScore) {
       secondScore = bestScore;
       secondName = bestAction?.name ?? '';

@@ -66,7 +66,8 @@ export const forage: Action = {
     let base = sigmoid(goblin.hunger, 40);
     if (storageHungry) base *= 1.2;
     if (stockTheLarder) base = Math.max(base, 0.35);
-    const finalScore = goblin.hunger > 85 ? base * 0.4 : base;
+    // When carrying food, prefer eat over forage at extreme hunger; when no food, keep foraging (can't eat)
+    const finalScore = goblin.hunger > 85 ? (noFood ? base : base * 0.4) : base;
     return Math.min(1.0, finalScore * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
   },
   execute: (ctx) => {
