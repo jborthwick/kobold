@@ -23,7 +23,8 @@ export const mine: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, resourceBalance, oreStockpiles, rooms }) => {
-    if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
+    const warmth = goblin.warmth ?? 100;
+    const warmthFactor = 0.5 + 0.5 * ramp(warmth, 15, 45);
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
@@ -41,7 +42,7 @@ export const mine: Action = {
         if (materialsPressure > 0.5 && oreScarce) {
           flooredKnown = Math.max(flooredKnown, 0.35);
         }
-        return Math.min(1.0, flooredKnown);
+        return Math.min(1.0, flooredKnown) * warmthFactor;
       }
       return 0;
     }
@@ -51,7 +52,7 @@ export const mine: Action = {
     if (materialsPressure > 0.5 && oreScarce) {
       score = Math.max(score, 0.35);
     }
-    return score;
+    return score * warmthFactor;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
@@ -129,8 +130,10 @@ export const chop: Action = {
   name: 'chop',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses, plankStockpiles }) => {
-    if ((goblin.warmth ?? 100) < 15 && !goblin.task.includes('warming')) return 0;
+  score: (ctx) => {
+    const { goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses, plankStockpiles } = ctx;
+    const warmth = goblin.warmth ?? 100;
+    const warmthFactor = 0.5 + 0.5 * ramp(warmth, 15, 45);
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
@@ -150,7 +153,7 @@ export const chop: Action = {
         if (materialsPressure > 0.5 && woodScarce) {
           flooredKnown = Math.max(flooredKnown, 0.4);
         }
-        return Math.min(1.0, flooredKnown);
+        return Math.min(1.0, flooredKnown) * warmthFactor;
       }
       return 0;
     }
@@ -161,7 +164,7 @@ export const chop: Action = {
     if (materialsPressure > 0.5 && woodScarce) {
       score = Math.max(score, 0.4);
     }
-    return score;
+    return score * warmthFactor;
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, onLog } = ctx;
