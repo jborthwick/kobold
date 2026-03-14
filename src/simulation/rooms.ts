@@ -102,7 +102,8 @@ export function findRoomStockpileSlotPreferClustering(
 }
 
 
-function stockpilesInRoom<T extends { x: number; y: number }>(
+/** Piles of any type whose position is inside the given room. Exported for use in stockpiling. */
+export function pilesInRoom<T extends { x: number; y: number }>(
   room: Room,
   piles: T[],
 ): T[] {
@@ -133,7 +134,7 @@ export function expandStockpilesInRooms(
         if (totalInRoom >= MAX_STOCKPILES_PER_STORAGE_ROOM) continue;
 
         // Food: if any food pile in room has last full, add one (clustered with existing food in room)
-        const roomFood = stockpilesInRoom(room, foodStockpiles);
+        const roomFood = pilesInRoom(room, foodStockpiles);
         const lastFood = roomFood[roomFood.length - 1];
         if (lastFood && lastFood.food >= lastFood.maxFood) {
             const sameTypeCoords = roomFood.map(s => ({ x: s.x, y: s.y }));
@@ -148,7 +149,7 @@ export function expandStockpilesInRooms(
         }
 
         // Ore
-        const roomOre = stockpilesInRoom(room, oreStockpiles);
+        const roomOre = pilesInRoom(room, oreStockpiles);
         const lastOre = roomOre[roomOre.length - 1];
         if (lastOre && lastOre.ore >= lastOre.maxOre) {
             const sameTypeCoords = roomOre.map(s => ({ x: s.x, y: s.y }));
@@ -163,7 +164,7 @@ export function expandStockpilesInRooms(
         }
 
         // Wood
-        const roomWood = stockpilesInRoom(room, woodStockpiles);
+        const roomWood = pilesInRoom(room, woodStockpiles);
         const lastWood = roomWood[roomWood.length - 1];
         if (lastWood && lastWood.wood >= lastWood.maxWood) {
             const sameTypeCoords = roomWood.map(s => ({ x: s.x, y: s.y }));
@@ -197,7 +198,7 @@ export function expandLumberHutWoodStockpiles(
   ]);
   for (const room of rooms) {
     if (room.type !== 'lumber_hut') continue;
-    const roomWood = stockpilesInRoom(room, woodStockpiles);
+    const roomWood = pilesInRoom(room, woodStockpiles);
     if (roomWood.length >= MAX_WOOD_IN_LUMBER_HUT) continue;
     const last = roomWood[roomWood.length - 1];
     if (!last || last.wood < last.maxWood) continue;
@@ -228,7 +229,7 @@ export function expandBlacksmithOreStockpiles(
   ]);
   for (const room of rooms) {
     if (room.type !== 'blacksmith') continue;
-    const roomOre = stockpilesInRoom(room, oreStockpiles);
+    const roomOre = pilesInRoom(room, oreStockpiles);
     if (roomOre.length >= MAX_ORE_IN_BLACKSMITH) continue;
     const last = roomOre[roomOre.length - 1];
     if (!last || last.ore < last.maxOre) continue;
