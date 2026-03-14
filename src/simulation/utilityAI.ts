@@ -416,6 +416,12 @@ export function tickAgentUtility(
         goblin.x = next.x;
         goblin.y = next.y;
       }
+      // Exception: pathfinding never routes onto water; when adjacent, step onto water to douse
+      const distToWater = Math.abs(goblin.x - waterTarget.x) + Math.abs(goblin.y - waterTarget.y);
+      if (distToWater === 1) {
+        goblin.x = waterTarget.x;
+        goblin.y = waterTarget.y;
+      }
       goblin.task = `🔥 ON FIRE! → water (${bestDist} tiles)`;
     } else {
       goblin.task = '🔥 ON FIRE! (no water nearby!)';
@@ -474,6 +480,10 @@ export function tickAgentUtility(
     // Hunger crisis: no food and hunger > 70 — prefer getting food over work/social so goblins don't starve
     if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
       score += 0.08;
+    }
+    // When colony is short on food, nudge wander so goblins explore and find distant/event-sprouted mushrooms
+    if (action.name === 'wander' && (ctx.resourceBalance?.consumablesPressure ?? 0) > 0.6) {
+      score += 0.03;
     }
     // Starvation override: no food and hunger > 85 — get-food must beat work momentum. Only boost forage when
     // it can deliver (score > 0.2 means has target or known sites); otherwise we'd lock them into "forage"

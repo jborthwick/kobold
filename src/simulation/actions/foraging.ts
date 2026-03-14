@@ -181,7 +181,11 @@ export const forage: Action = {
       const hadFood = here.foodValue;
       const depleted = Math.min(hadFood, depletionRate);
       here.foodValue = Math.max(0, hadFood - depleted);
-      if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
+      // Mushrooms regrow via world growback(); only non-mushroom forageables become Dirt when depleted
+      if (here.foodValue === 0 && here.type !== TileType.Mushroom) {
+        here.type = TileType.Dirt;
+        here.maxFood = 0;
+      }
       const amount = Math.min(harvestYield, depleted, headroom);
       goblin.inventory.food += amount;
       addWorkFatigue(goblin);
