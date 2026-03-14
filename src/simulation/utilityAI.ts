@@ -69,8 +69,8 @@ export function computeResourceBalanceModifier(
   const materialPriority = 1 - imbalance;
 
   // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > materials > upgrades.
-  // Consumables midpoint 60 so "stock the larder" (forage/deposit floor) persists until ~60 food+meals.
-  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 60) * 1.0);
+  // Consumables midpoint 95 so the colony maintains a larger buffer before relaxing; "stock the larder" stays active longer.
+  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 95) * 1.0);
   const materialsPressure = Math.min(1, inverseSigmoid(materialsTotal, 40) * 0.65);
   const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, 50) * 0.35);
 
@@ -458,6 +458,7 @@ export function tickAgentUtility(
   let bestScore = -1;
   let secondName = '';
   let secondScore = -1;
+  const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
@@ -471,9 +472,17 @@ export function tickAgentUtility(
       score = Math.min(1.0, score + MOMENTUM_BONUS);
     }
     // Hunger crisis: no food and hunger > 70 — prefer getting food over work/social so goblins don't starve
-    const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
       score += 0.08;
+    }
+    // Starvation override: no food and hunger > 85 — get-food must beat work momentum. Only boost forage when
+    // it can deliver (score > 0.2 means has target or known sites); otherwise we'd lock them into "forage"
+    // with nothing to harvest and they starve while "searching".
+    if (noFood && goblin.hunger > 85 && action.name === 'withdrawFood') {
+      score = Math.max(score, 1.05);
+    }
+    if (noFood && goblin.hunger > 85 && action.name === 'forage' && score > 0.2) {
+      score = Math.max(score, 1.05);
     }
     if (score > bestScore) {
       secondScore = bestScore;

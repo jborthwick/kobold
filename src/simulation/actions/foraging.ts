@@ -18,7 +18,7 @@ import type { Action, ActionContext } from './types';
 import { isWalkable } from '../world';
 
 /** Total stored food below which forage/deposit "stock the larder" nudges apply (one place). */
-const LARDER_TARGET = 80;
+const LARDER_TARGET = 100;
 /** consumablesPressure above this → "stock the larder" score floor (aligned with utilityAI consumables midpoint). */
 const CONSUMABLES_STOCK_LARDER = 0.5;
 
@@ -195,7 +195,7 @@ export const forage: Action = {
 
 // --- depositFood: carry surplus food to stockpile ---
 // Score grows with inventory surplus; suppressed when hungry so they eat first. Ramp and base tuned so deposit wins with modest surplus.
-const DEPOSIT_KEEP_FOOD = 6; // food kept after deposit (prevents depositing everything)
+const DEPOSIT_KEEP_FOOD = 4; // food kept after deposit (prevents depositing everything)
 export const depositFood: Action = {
   name: 'depositFood',
   tags: ['work'],
@@ -213,8 +213,9 @@ export const depositFood: Action = {
     let base = ramp(goblin.inventory.food, 3, 12) * inverseSigmoid(goblin.hunger, 58) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
     if (storageHungry) {
       base *= 1.25;
-      base = Math.max(base, 0.25);  // nudge to keep filling until LARDER_TARGET
+      base = Math.max(base, 0.42);  // nudge to keep filling until LARDER_TARGET; competes better with cook/chop
     }
+    if (stockTheLarder && storageHungry) base = Math.max(base, 0.45);
     if (stockTheLarder) base = Math.max(base, 0.35);
     return Math.min(1.0, base);
   },

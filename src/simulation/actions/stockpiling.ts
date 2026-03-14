@@ -25,7 +25,7 @@ import type { Action, ActionContext } from './types';
 const MAX_STOCKPILES_PER_STORAGE_ROOM = 20;
 const MAX_PILES_PER_SPECIAL_ROOM = 5;
 const MAX_FOOD_ORE_WOOD = 200;
-const MAX_MEALS_STORED = 50;
+const MAX_MEALS_STORED = 80;
 const MAX_PLANKS_PER_PILE = 80;
 const MAX_BARS_PER_PILE = 80;
 
