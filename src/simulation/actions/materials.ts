@@ -131,7 +131,7 @@ export const chop: Action = {
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: (ctx) => {
-    const { goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses, plankStockpiles } = ctx;
+    const { goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses } = ctx;
     const warmth = goblin.warmth ?? 100;
     const warmthFactor = 0.5 + 0.5 * ramp(warmth, 15, 45);
 
@@ -141,7 +141,6 @@ export const chop: Action = {
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
     const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
-    const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
     const woodScarce = hasLumberHut && totalWood < 40;
 
     if (!target) {

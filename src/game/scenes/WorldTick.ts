@@ -14,7 +14,6 @@
  *    WorldGoals.updateGoalProgress; emitMiniMap; emitGameState; auto-save every 100 ticks.
  */
 
-import { GRID_SIZE } from '../../shared/constants';
 import { bus } from '../../shared/events';
 import { getGoblinConfig } from '../../shared/goblinConfig';
 
