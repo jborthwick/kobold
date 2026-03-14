@@ -14,6 +14,7 @@ import type { Action } from './types';
 
 const WOOD_WALL_PLANKS = 2;
 const STONE_WALL_BARS = 2;
+const MAX_WALL_BUILD_DISTANCE = 15;
 
 // --- buildWoodWall: build room perimeter from planks (lumber hut) ---
 export const buildWoodWall: Action = {
@@ -21,11 +22,13 @@ export const buildWoodWall: Action = {
   tags: ['work'],
   eligible: ({ rooms, plankStockpiles, grid, goblins, goblin, adventurers }) => {
     if (!rooms || rooms.length === 0) return false;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const hasEmptySlot = wallSlots.some(s => !isWallType(grid[s.y][s.x].type));
-    if (!hasEmptySlot) return false;
     const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
-    return totalPlanks >= WOOD_WALL_PLANKS;
+    if (totalPlanks < WOOD_WALL_PLANKS) return false;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const emptyInRange = wallSlots.filter(
+      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
+    );
+    return emptyInRange.length > 0;
   },
   score: ({ goblin, plankStockpiles, rooms, grid, goblins, adventurers }) => {
     const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
@@ -50,10 +53,12 @@ export const buildWoodWall: Action = {
     if (!buildStockpile) return;
 
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const emptyInRange = wallSlots.filter(
+      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
+    );
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
-    for (const s of wallSlots) {
-      if (isWallType(grid[s.y][s.x].type)) continue;
+    for (const s of emptyInRange) {
       const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
       if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }
@@ -90,11 +95,13 @@ export const buildStoneWall: Action = {
   tags: ['work'],
   eligible: ({ rooms, barStockpiles, grid, goblins, goblin, adventurers }) => {
     if (!rooms || rooms.length === 0) return false;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const hasEmptySlot = wallSlots.some(s => !isWallType(grid[s.y][s.x].type));
-    if (!hasEmptySlot) return false;
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
-    return totalBars >= STONE_WALL_BARS;
+    if (totalBars < STONE_WALL_BARS) return false;
+    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const emptyInRange = wallSlots.filter(
+      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
+    );
+    return emptyInRange.length > 0;
   },
   score: ({ goblin, barStockpiles, rooms, grid, goblins, adventurers }) => {
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
@@ -118,10 +125,12 @@ export const buildStoneWall: Action = {
     if (!buildStockpile) return;
 
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const emptyInRange = wallSlots.filter(
+      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
+    );
     let nearestSlot: { x: number; y: number } | null = null;
     let nearestDist = Infinity;
-    for (const s of wallSlots) {
-      if (isWallType(grid[s.y][s.x].type)) continue;
+    for (const s of emptyInRange) {
       const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
       if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
     }

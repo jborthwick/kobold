@@ -5,13 +5,22 @@
  * Legacy fortWallSlots/fortEnclosureSlots replaced by roomWallSlots.
  */
 
-import { TileType, isWallType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
+import { TileType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 
+/** Tile types that are valid for placing a wall (whitelist). */
+const WALLABLE_TILES = new Set<TileType>([
+  TileType.Dirt,
+  TileType.Grass,
+  TileType.Forest,
+  TileType.Farmland,
+  TileType.Mushroom,
+  TileType.TreeStump,
+]);
+
 /**
- * Generate wall positions for all rooms.
- * Walls go on the 7×7 perimeter ring around each 5×5 room interior.
- * 4 doorways (center of each side) are excluded.
+ * Generate wall positions for all rooms. Walls go on the perimeter ring around each room interior.
+ * 4 doorways (center of each side) are excluded. Only tiles in WALLABLE_TILES are valid slots.
  */
 export function roomWallSlots(
   rooms: Room[],
@@ -34,7 +43,7 @@ export function roomWallSlots(
     const key = `${x},${y}`;
     if (added.has(key)) return;
     const t = grid[y][x];
-    if (isWallType(t.type) || t.type === TileType.Water || t.type === TileType.Ore || t.type === TileType.Stone || t.type === TileType.Pool) return;
+    if (!WALLABLE_TILES.has(t.type)) return;
     if (blocked(x, y)) return;
     added.add(key);
     slots.push({ x, y });
