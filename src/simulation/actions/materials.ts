@@ -13,7 +13,7 @@ import {
 } from '../agents';
 import { grantXp, skillOreBonus, skillChopBonus } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestOreStockpile, nearestWoodStockpile } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -250,7 +250,7 @@ export const depositOre: Action = {
   tags: ['work'],
   eligible: ({ goblin, oreStockpiles }) => {
     if (goblin.inventory.ore <= 0) return false;
-    return nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
+    return nearestStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre) !== null;
   },
   score: ({ goblin, oreStockpiles, resourceBalance }) => {
     const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
@@ -261,7 +261,7 @@ export const depositOre: Action = {
     return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, oreStockpiles }) => {
-    const target = nearestOreStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
+    const target = nearestStockpile(goblin, oreStockpiles, s => s.ore < s.maxOre);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
       const stored = Math.min(goblin.inventory.ore, target.maxOre - target.ore);
@@ -284,7 +284,7 @@ export const depositWood: Action = {
   tags: ['work'],
   eligible: ({ goblin, woodStockpiles }) => {
     if (goblin.inventory.wood <= 0) return false;
-    return nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
+    return nearestStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood) !== null;
   },
   score: ({ goblin, woodStockpiles, resourceBalance }) => {
     const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
@@ -295,7 +295,7 @@ export const depositWood: Action = {
     return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, woodStockpiles }) => {
-    const target = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
+    const target = nearestStockpile(goblin, woodStockpiles, s => s.wood < s.maxWood);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
       const stored = Math.min(goblin.inventory.wood, target.maxWood - target.wood);

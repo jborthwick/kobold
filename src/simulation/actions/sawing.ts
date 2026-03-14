@@ -5,7 +5,7 @@
  */
 import type { PlankStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveToward, addWorkFatigue, nearestWoodStockpile } from './helpers';
+import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 
@@ -74,7 +74,7 @@ export const saw: Action = {
     }
 
     if (goblin.sawingProgress === undefined) {
-      const woodSource = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood >= WOOD_COST);
+      const woodSource = nearestStockpile(goblin, woodStockpiles, s => s.wood >= WOOD_COST);
       if (!woodSource) {
         goblin.task = 'lumber hut needs wood';
         return;

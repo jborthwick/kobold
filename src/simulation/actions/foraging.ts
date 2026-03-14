@@ -5,7 +5,7 @@
  * scores with modest surplus (ramp + hunger gate) so stockpiles fill. Foragers get 2 food/tile, others 1.
  */
 import { TileType } from '../../shared/types';
-import type { ResourceSite } from '../../shared/types';
+import type { Goblin, ResourceSite, Tile } from '../../shared/types';
 import { GRID_SIZE, MAX_INVENTORY_CAPACITY } from '../../shared/constants';
 import { sigmoid, inverseSigmoid, ramp } from '../utilityAI';
 import {
@@ -13,11 +13,25 @@ import {
 } from '../agents';
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile, getWalkableAdjacent } from './helpers';
+import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
 import type { Action, ActionContext } from './types';
 
 /** Total stored food below which forage/deposit "stock the larder" nudges apply (one place). */
 const LARDER_TARGET = 80;
+/** consumablesPressure above this → "stock the larder" score floor (aligned with utilityAI consumables midpoint). */
+const CONSUMABLES_STOCK_LARDER = 0.5;
+
+function getForageRadius(goblin: Goblin): number {
+  const vision = effectiveVision(goblin);
+  const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
+  return goblin.hunger > 20
+    ? maxSearch
+    : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
+}
+
+function getFoodTarget(goblin: Goblin, grid: Tile[][]): { x: number; y: number } | null {
+  return bestFoodTile(goblin, grid, getForageRadius(goblin));
+}
 
 function larderContext(ctx: Pick<ActionContext, 'foodStockpiles' | 'rooms' | 'roomBonuses'>): { totalStoredFood: number; storageHungry: boolean } {
   const hasStorageRoom = ctx.roomBonuses?.hasStorage ?? (ctx.rooms?.some(r => r.type === 'storage') ?? false);
@@ -33,18 +47,12 @@ export const forage: Action = {
   score: (ctx) => {
     const { goblin, grid, resourceBalance } = ctx;
     const { storageHungry } = larderContext(ctx);
-    const vision = effectiveVision(goblin);
-    const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
-    const radius = goblin.hunger > 20
-      ? maxSearch
-      : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
-    const target = bestFoodTile(goblin, grid, radius);
+    const target = getFoodTarget(goblin, grid);
     const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
     const colonyFoodBlend = 0.5 + 0.5 * consumablesPressure;
     const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
-
-    const stockTheLarder = consumablesPressure > 0.5;  // colony short on food (utilityAI midpoint 60)
+    const stockTheLarder = consumablesPressure > CONSUMABLES_STOCK_LARDER;
 
     if (!target) {
       if (goblin.knownFoodSites.length > 0) {
@@ -55,134 +63,116 @@ export const forage: Action = {
       }
       return 0;
     }
-    let base = sigmoid(goblin.hunger, 40) * 1.0;
+    let base = sigmoid(goblin.hunger, 40);
     if (storageHungry) base *= 1.2;
     if (stockTheLarder) base = Math.max(base, 0.35);
-    const score = Math.min(1.0, base);
-    const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
+    const finalScore = goblin.hunger > 85 ? base * 0.4 : base;
     return Math.min(1.0, finalScore * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
   },
   execute: (ctx) => {
     const { goblin, grid, currentTick, goblins, onLog } = ctx;
-    const vision = effectiveVision(goblin);
-    const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
-    const radius = goblin.hunger > 20
-      ? maxSearch
-      : Math.round(Math.min(vision * (1 + sigmoid(goblin.hunger, 60) * 0.8), maxSearch));
-    const foodTarget = bestFoodTile(goblin, grid, radius);
+    const foodTarget = getFoodTarget(goblin, grid);
 
-    // Record visible food sites in memory
-    if (foodTarget) {
-      const tv = grid[foodTarget.y][foodTarget.x].foodValue;
-      if (tv >= SITE_RECORD_THRESHOLD) {
-        recordSite(goblin.knownFoodSites, foodTarget.x, foodTarget.y, tv, currentTick);
-      }
-    }
-
-    if (foodTarget) {
-      if (goblin.x !== foodTarget.x || goblin.y !== foodTarget.y) {
-        moveToward(goblin, foodTarget, grid, currentTick);
-      }
-      const here = grid[goblin.y][goblin.x];
-
-      // Contest yield — if a higher-priority goblin is on the same tile, yield.
-      // Priority = hunger + forage skill level * 5 so experienced foragers can hold their tile
-      // against a slightly hungrier but unskilled rival (skill = social status).
-      if (goblins) {
-        const contestPriority = (g: typeof goblin) => g.hunger + xpToLevel(g.skills.forage) * 5;
-        const rival = goblins.find(d =>
-          d.alive && d.id !== goblin.id &&
-          d.x === goblin.x && d.y === goblin.y &&
-          contestPriority(d) > contestPriority(goblin),
-        );
-        if (rival) {
-          const relation = goblin.relations[rival.id] ?? 50;
-          if (relation >= 60) {
-            goblin.relations[rival.id] = Math.min(100, relation + 2);
-            goblin.task = `sharing tile with ${rival.name}`;
-            return;
+    if (!foodTarget) {
+      if (goblin.knownFoodSites.length > 0) {
+        const best = goblin.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
+        if (goblin.x === best.x && goblin.y === best.y) {
+          const tileHere = grid[goblin.y][goblin.x];
+          const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
+          if (!stillGood) {
+            let better: ResourceSite | null = null;
+            for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
+              for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
+                const nx = best.x + dx, ny = best.y + dy;
+                if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+                const t = grid[ny][nx];
+                if (!FORAGEABLE_TILES.has(t.type) || t.foodValue < 1) continue;
+                if (!better || t.foodValue > better.value) {
+                  better = { x: nx, y: ny, value: t.foodValue, tick: currentTick };
+                }
+              }
+            }
+            if (better) {
+              const replacement = better;
+              goblin.knownFoodSites = goblin.knownFoodSites.map(
+                s => (s.x === best.x && s.y === best.y) ? replacement : s,
+              );
+            } else {
+              goblin.knownFoodSites = goblin.knownFoodSites.filter(
+                s => !(s.x === best.x && s.y === best.y),
+              );
+            }
+          } else {
+            recordSite(goblin.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
           }
-          const penalty = traitMod(goblin, 'contestPenalty', -5);
-          const newRel = Math.max(0, relation + penalty);
-          goblin.relations[rival.id] = newRel;
-          // Rivalry milestone — relation dropped below 20
-          if (relation >= 20 && newRel < 20 && shouldLog(goblin, `rival_${rival.id}`, currentTick, 300)) {
-            onLog?.(`💢 growing rivalry with ${rival.name}`, 'warn');
-          }
-          const escapeOpen = getWalkableAdjacent(grid, goblin.x, goblin.y);
-          if (escapeOpen.length > 0) {
-            const step = escapeOpen[Math.floor(Math.random() * escapeOpen.length)];
-            goblin.x = step.x; goblin.y = step.y;
-          }
-          goblin.task = `yielding to ${rival.name}`;
-          return;
+          // Fall through to let next tick harvest
+        } else {
+          moveToward(goblin, best, grid, currentTick);
+          goblin.task = '→ remembered patch';
         }
-      }
-
-      // Harvest
-      const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
-      if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
-        // Trait can augment gathering power; skill yield bonus from forage skill level
-        const gatherBonus = traitMod(goblin, 'gatheringPower', 0);
-        const depletionRate = 5 + gatherBonus;
-        const baseYield = 1 + gatherBonus + skillYieldBonus(goblin);
-        const moraleScale = 0.5 + (goblin.morale / 100) * 0.5;
-        const fatigueScale = 1.0 - inverseSigmoid(goblin.fatigue, 70, 0.12) * 0.5;
-        const woundScale = woundYieldMultiplier(goblin);
-        const harvestYield = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
-        const hadFood = here.foodValue;
-        const depleted = Math.min(hadFood, depletionRate);
-        here.foodValue = Math.max(0, hadFood - depleted);
-        if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
-        const amount = Math.min(harvestYield, depleted, headroom);
-        goblin.inventory.food += amount;
-        addWorkFatigue(goblin);
-        // Forage XP — grant on successful harvest
-        grantXp(goblin, 'forage', currentTick, onLog);
-        goblin.task = `harvesting (food: ${goblin.inventory.food.toFixed(0)})`;
-      } else {
-        goblin.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
       }
       return;
     }
 
-    // No food visible — try remembered food site
-    if (goblin.knownFoodSites.length > 0) {
-      const best = goblin.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
-      if (goblin.x === best.x && goblin.y === best.y) {
-        // Arrived — check if still harvestable
-        const tileHere = grid[goblin.y][goblin.x];
-        const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
-        if (!stillGood) {
-          let better: ResourceSite | null = null;
-          for (let dy = -PATCH_MERGE_RADIUS; dy <= PATCH_MERGE_RADIUS; dy++) {
-            for (let dx = -PATCH_MERGE_RADIUS; dx <= PATCH_MERGE_RADIUS; dx++) {
-              const nx = best.x + dx, ny = best.y + dy;
-              if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-              const t = grid[ny][nx];
-              if (!FORAGEABLE_TILES.has(t.type) || t.foodValue < 1) continue;
-              if (!better || t.foodValue > better.value) {
-                better = { x: nx, y: ny, value: t.foodValue, tick: currentTick };
-              }
-            }
-          }
-          if (better) {
-            goblin.knownFoodSites = goblin.knownFoodSites.map(
-              s => (s.x === best.x && s.y === best.y) ? better! : s,
-            );
-          } else {
-            goblin.knownFoodSites = goblin.knownFoodSites.filter(
-              s => !(s.x === best.x && s.y === best.y),
-            );
-          }
-        } else {
-          recordSite(goblin.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
-        }
-        // Fall through to let next tick harvest
-      } else {
-        moveToward(goblin, best, grid, currentTick);
-        goblin.task = '→ remembered patch';
+    const targetTile = grid[foodTarget.y][foodTarget.x];
+    if (targetTile.foodValue >= SITE_RECORD_THRESHOLD) {
+      recordSite(goblin.knownFoodSites, foodTarget.x, foodTarget.y, targetTile.foodValue, currentTick);
+    }
+
+    if (goblin.x !== foodTarget.x || goblin.y !== foodTarget.y) {
+      moveToward(goblin, foodTarget, grid, currentTick);
+      return;
+    }
+
+    const here = grid[goblin.y][goblin.x];
+    const contestPriority = (g: Goblin) => g.hunger + xpToLevel(g.skills.forage) * 5;
+    const rival = goblins?.find(d =>
+      d.alive && d.id !== goblin.id &&
+      d.x === goblin.x && d.y === goblin.y &&
+      contestPriority(d) > contestPriority(goblin),
+    );
+    if (rival) {
+      const relation = goblin.relations[rival.id] ?? 50;
+      if (relation >= 60) {
+        goblin.relations[rival.id] = Math.min(100, relation + 2);
+        goblin.task = `sharing tile with ${rival.name}`;
+        return;
       }
+      const penalty = traitMod(goblin, 'contestPenalty', -5);
+      const newRel = Math.max(0, relation + penalty);
+      goblin.relations[rival.id] = newRel;
+      if (relation >= 20 && newRel < 20 && shouldLog(goblin, `rival_${rival.id}`, currentTick, 300)) {
+        onLog?.(`💢 growing rivalry with ${rival.name}`, 'warn');
+      }
+      const escapeOpen = getWalkableAdjacent(grid, goblin.x, goblin.y);
+      if (escapeOpen.length > 0) {
+        const step = escapeOpen[Math.floor(Math.random() * escapeOpen.length)];
+        goblin.x = step.x; goblin.y = step.y;
+      }
+      goblin.task = `yielding to ${rival.name}`;
+      return;
+    }
+
+    const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
+    if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
+      const gatherBonus = traitMod(goblin, 'gatheringPower', 0);
+      const depletionRate = 5 + gatherBonus;
+      const baseYield = 1 + gatherBonus + skillYieldBonus(goblin);
+      const moraleScale = 0.5 + (goblin.morale / 100) * 0.5;
+      const fatigueScale = 1.0 - inverseSigmoid(goblin.fatigue, 70, 0.12) * 0.5;
+      const woundScale = woundYieldMultiplier(goblin);
+      const harvestYield = Math.max(1, Math.round(baseYield * moraleScale * fatigueScale * woundScale));
+      const hadFood = here.foodValue;
+      const depleted = Math.min(hadFood, depletionRate);
+      here.foodValue = Math.max(0, hadFood - depleted);
+      if (here.foodValue === 0) { here.type = TileType.Dirt; here.maxFood = 0; }
+      const amount = Math.min(harvestYield, depleted, headroom);
+      goblin.inventory.food += amount;
+      addWorkFatigue(goblin);
+      grantXp(goblin, 'forage', currentTick, onLog);
+      goblin.task = `harvesting (food: ${goblin.inventory.food.toFixed(0)})`;
+    } else {
+      goblin.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
     }
   },
 };
@@ -195,14 +185,14 @@ export const depositFood: Action = {
   tags: ['work'],
   eligible: ({ goblin, foodStockpiles }) => {
     if (goblin.inventory.food <= 0) return false;
-    return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
+    return nearestStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
   score: (ctx) => {
     const { goblin, foodStockpiles, resourceBalance } = ctx;
     const { storageHungry } = larderContext(ctx);
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
-    const stockTheLarder = consumablesPressure > 0.5;  // colony short on food (utilityAI midpoint 60)
+    const stockTheLarder = consumablesPressure > CONSUMABLES_STOCK_LARDER;
     // Ramp 3–12 so deposit scores with less carried food; hunger gate at 58 so they still haul when moderately hungry
     let base = ramp(goblin.inventory.food, 3, 12) * inverseSigmoid(goblin.hunger, 58) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
     if (storageHungry) {
@@ -213,7 +203,7 @@ export const depositFood: Action = {
     return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {
-    const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
+    const target = nearestStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
       const amount = goblin.inventory.food - DEPOSIT_KEEP_FOOD;
@@ -237,7 +227,7 @@ export const withdrawFood: Action = {
   eligible: ({ goblin, foodStockpiles, mealStockpiles }) => {
     if (goblin.inventory.food >= 4 || goblin.inventory.meals >= 4) return false; // already have enough
     const hasMeals = mealStockpiles?.some(m => m.meals > 0) ?? false;
-    const hasFood = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
+    const hasFood = nearestStockpile(goblin, foodStockpiles, s => s.food > 0) !== null;
     return hasMeals || hasFood;
   },
   score: ({ goblin, foodStockpiles, mealStockpiles, resourceBalance }) => {
@@ -252,11 +242,8 @@ export const withdrawFood: Action = {
     return score;
   },
   execute: ({ goblin, grid, foodStockpiles, mealStockpiles }) => {
-    // Prefer meals from kitchen meal stockpiles over raw food
     if (mealStockpiles && goblin.inventory.meals < 4) {
-      const nearestMeal = mealStockpiles
-        .filter(m => m.meals > 0)
-        .sort((a, b) => (Math.abs(a.x - goblin.x) + Math.abs(a.y - goblin.y)) - (Math.abs(b.x - goblin.x) + Math.abs(b.y - goblin.y)))[0];
+      const nearestMeal = nearestStockpile(goblin, mealStockpiles, m => m.meals > 0);
       if (nearestMeal) {
         if (goblin.x === nearestMeal.x && goblin.y === nearestMeal.y) {
           const amount = Math.min(4, nearestMeal.meals);
@@ -264,16 +251,14 @@ export const withdrawFood: Action = {
           goblin.inventory.meals += Math.min(amount, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
           goblin.task = `withdrew ${amount.toFixed(0)} meals`;
           return;
-        } else {
-          moveTo(goblin, nearestMeal, grid);
-          goblin.task = `→ kitchen (${nearestMeal.meals.toFixed(0)} meals)`;
-          return;
         }
+        moveTo(goblin, nearestMeal, grid);
+        goblin.task = `→ kitchen (${nearestMeal.meals.toFixed(0)} meals)`;
+        return;
       }
     }
 
-    // Fallback: raw food from food stockpile
-    const target = nearestFoodStockpile(goblin, foodStockpiles, s => s.food > 0);
+    const target = nearestStockpile(goblin, foodStockpiles, s => s.food > 0);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
       const amount = Math.min(4, target.food);

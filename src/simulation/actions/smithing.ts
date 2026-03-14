@@ -5,7 +5,7 @@
  */
 import type { BarStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveToward, addWorkFatigue, nearestOreStockpile } from './helpers';
+import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 
@@ -83,7 +83,7 @@ export const smith: Action = {
     }
 
     if (goblin.smithingProgress === undefined) {
-      const oreSource = nearestOreStockpile(goblin, oreStockpiles, s => s.ore >= ORE_COST);
+      const oreSource = nearestStockpile(goblin, oreStockpiles, s => s.ore >= ORE_COST);
       if (!oreSource) {
         goblin.task = 'blacksmith needs ore';
         return;

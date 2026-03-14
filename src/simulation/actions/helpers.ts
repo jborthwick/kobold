@@ -6,12 +6,11 @@
  * for a few ticks — otherwise re-scanning every tick makes them ping-pong between two equally
  * good tiles. moveTo does one A* step and adds fatigue; leg wounds can skip (wounds.ts).
  * Fatigue: fatigueRate() is trait-modified. moveTo adds 0.2× rate per step; addWorkFatigue() adds
- * 0.4× (call from harvest/mine/chop/build). Stockpiles: nearest*Stockpile(filter) returns
- * Manhattan-nearest matching pile. Logging: traitText() for eat/rest/share; shouldLog() is
+ * 0.4× (call from harvest/mine/chop/build). Stockpiles: nearestStockpile(goblin, array, filter) returns Manhattan-nearest matching pile. Logging: traitText() for eat/rest/share; shouldLog() is
  * cooldown-gated so logs don't spam.
  */
 
-import type { Goblin, Tile, GoblinTrait, FoodStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile } from '../../shared/types';
+import type { Goblin, Tile, GoblinTrait } from '../../shared/types';
 import { pathNextStep, traitMod } from '../agents';
 import { isLegWoundSkip } from '../wounds';
 import { isWalkable } from '../world';
@@ -96,61 +95,17 @@ export function addWorkFatigue(goblin: Goblin): void {
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.4 * fatigueRate(goblin));
 }
 
-/** Find nearest food stockpile matching a filter. */
-export function nearestFoodStockpile(
-  goblin: Goblin, stockpiles: FoodStockpile[] | undefined, filter: (s: FoodStockpile) => boolean,
-): FoodStockpile | null {
-  return stockpiles
-    ?.filter(filter)
-    .reduce<FoodStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
-      return dist < bestDist ? s : best;
-    }, null) ?? null;
-}
+type WithCoords = { x: number; y: number };
 
-export function nearestOreStockpile(
-  goblin: Goblin, stockpiles: OreStockpile[] | undefined, filter: (s: OreStockpile) => boolean,
-): OreStockpile | null {
+/** Find nearest stockpile matching a filter (Manhattan distance). */
+export function nearestStockpile<T extends WithCoords>(
+  goblin: Goblin,
+  stockpiles: T[] | undefined,
+  filter: (s: T) => boolean,
+): T | null {
   return stockpiles
     ?.filter(filter)
-    .reduce<OreStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
-      return dist < bestDist ? s : best;
-    }, null) ?? null;
-}
-
-export function nearestWoodStockpile(
-  goblin: Goblin, stockpiles: WoodStockpile[] | undefined, filter: (s: WoodStockpile) => boolean,
-): WoodStockpile | null {
-  return stockpiles
-    ?.filter(filter)
-    .reduce<WoodStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
-      return dist < bestDist ? s : best;
-    }, null) ?? null;
-}
-
-export function nearestPlankStockpile(
-  goblin: Goblin, stockpiles: PlankStockpile[] | undefined, filter: (s: PlankStockpile) => boolean,
-): PlankStockpile | null {
-  return stockpiles
-    ?.filter(filter)
-    .reduce<PlankStockpile | null>((best, s) => {
-      const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
-      return dist < bestDist ? s : best;
-    }, null) ?? null;
-}
-
-export function nearestBarStockpile(
-  goblin: Goblin, stockpiles: BarStockpile[] | undefined, filter: (s: BarStockpile) => boolean,
-): BarStockpile | null {
-  return stockpiles
-    ?.filter(filter)
-    .reduce<BarStockpile | null>((best, s) => {
+    .reduce<T | null>((best, s) => {
       const dist     = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
       const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
       return dist < bestDist ? s : best;

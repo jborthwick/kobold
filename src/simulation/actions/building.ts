@@ -8,7 +8,7 @@ import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
-import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestWoodStockpile, nearestPlankStockpile, nearestBarStockpile, getOrSetMoveTarget } from './helpers';
+import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestStockpile, getOrSetMoveTarget } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -46,7 +46,7 @@ export const buildWoodWall: Action = {
   },
   execute: ({ goblin, grid, rooms, plankStockpiles, goblins, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return;
-    const buildStockpile = nearestPlankStockpile(goblin, plankStockpiles ?? [], s => s.planks >= WOOD_WALL_PLANKS);
+    const buildStockpile = nearestStockpile(goblin, plankStockpiles ?? [], s => s.planks >= WOOD_WALL_PLANKS);
     if (!buildStockpile) return;
 
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
@@ -114,7 +114,7 @@ export const buildStoneWall: Action = {
   },
   execute: ({ goblin, grid, rooms, barStockpiles, goblins, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return;
-    const buildStockpile = nearestBarStockpile(goblin, barStockpiles ?? [], s => s.bars >= STONE_WALL_BARS);
+    const buildStockpile = nearestStockpile(goblin, barStockpiles ?? [], s => s.bars >= STONE_WALL_BARS);
     if (!buildStockpile) return;
 
     const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
@@ -227,7 +227,7 @@ export const buildHearth: Action = {
     const inventoryWood = goblin.inventory.wood;
     const needFromStockpile = Math.max(0, 2 - inventoryWood);
     const buildStockpile = needFromStockpile > 0
-      ? nearestWoodStockpile(goblin, woodStockpiles ?? [], s => s.wood >= needFromStockpile)
+      ? nearestStockpile(goblin, woodStockpiles ?? [], s => s.wood >= needFromStockpile)
       : null;
     // If we need stockpile wood but don't have it, bail
     if (needFromStockpile > 0 && !buildStockpile) return;

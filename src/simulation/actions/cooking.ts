@@ -6,7 +6,7 @@ import { TileType } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { moveToward, addWorkFatigue, nearestFoodStockpile, nearestWoodStockpile } from './helpers';
+import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';
@@ -117,8 +117,8 @@ export const cook: Action = {
 
         // 2. Start cooking if not started
         if (goblin.cookingProgress === undefined) {
-            const foodSource = nearestFoodStockpile(goblin, foodStockpiles, s => s.food >= FOOD_COST);
-            const woodSource = nearestWoodStockpile(goblin, woodStockpiles, s => s.wood >= WOOD_COST);
+            const foodSource = nearestStockpile(goblin, foodStockpiles, s => s.food >= FOOD_COST);
+            const woodSource = nearestStockpile(goblin, woodStockpiles, s => s.wood >= WOOD_COST);
 
             if (!foodSource || !woodSource) {
                 goblin.task = 'kitchen is missing ingredients';
