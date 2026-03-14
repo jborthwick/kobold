@@ -348,7 +348,8 @@ export function tickAgentUtility(
   if (!isWalkable(grid, goblin.x, goblin.y)) {
     for (const d of CARDINAL_DIRECTIONS) {
       if (isWalkable(grid, goblin.x + d.x, goblin.y + d.y)) {
-        goblin.x += d.x; goblin.y += d.y; break;
+        goblin.x += d.x; goblin.y += d.y;
+        break;
       }
     }
   }
@@ -410,8 +411,10 @@ export function tickAgentUtility(
     }
     if (waterTarget) {
       const next = pathNextStep({ x: goblin.x, y: goblin.y }, waterTarget, grid);
-      goblin.x = next.x;
-      goblin.y = next.y;
+      if (isWalkable(grid, next.x, next.y)) {
+        goblin.x = next.x;
+        goblin.y = next.y;
+      }
       goblin.task = `🔥 ON FIRE! → water (${bestDist} tiles)`;
     } else {
       goblin.task = '🔥 ON FIRE! (no water nearby!)';

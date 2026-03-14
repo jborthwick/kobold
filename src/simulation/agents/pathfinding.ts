@@ -96,11 +96,9 @@ export function pathNextStep(
 ): { x: number; y: number } {
   if (from.x === to.x && from.y === to.y) return from;
   const path: { x: number; y: number }[] = [];
-  const astar = new ROT.Path.AStar(
-    to.x, to.y,
-    (x, y) => (x === to.x && y === to.y) || isWalkable(grid, x, y),
-    { topology: 4 },
-  );
+  // Only walkable tiles: never path onto wall/water. Path goes to last walkable tile (e.g. adjacent to water).
+  const astar = new ROT.Path.AStar(to.x, to.y, (x, y) => isWalkable(grid, x, y), { topology: 4 });
   astar.compute(from.x, from.y, (x, y) => path.push({ x, y }));
-  return path[1] ?? from;
+  const next = path[1] ?? from;
+  return next;
 }

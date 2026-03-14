@@ -73,6 +73,11 @@ export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: T
   // Leg wound: 40% chance to skip this tick's movement (limp)
   if (isLegWoundSkip(goblin)) return;
   const next = pathNextStep({ x: goblin.x, y: goblin.y }, target, grid);
+  if (!isWalkable(grid, next.x, next.y)) {
+    goblin.moveTarget = undefined;
+    goblin.moveExpiry = undefined;
+    return;
+  }
   goblin.x = next.x;
   goblin.y = next.y;
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));

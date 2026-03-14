@@ -15,6 +15,7 @@ import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
 import type { Action, ActionContext } from './types';
+import { isWalkable } from '../world';
 
 /** Total stored food below which forage/deposit "stock the larder" nudges apply (one place). */
 const LARDER_TARGET = 80;
@@ -109,6 +110,16 @@ export const forage: Action = {
             goblin.task = 'at patch (harvesting)';
           }
         } else {
+          const tileAtBest = grid[best.y]?.[best.x];
+          const bestWalkable = tileAtBest !== undefined && isWalkable(grid, best.x, best.y);
+          const bestForageable = tileAtBest !== undefined && FORAGEABLE_TILES.has(tileAtBest.type);
+          if (!tileAtBest || !bestWalkable || !bestForageable) {
+            goblin.knownFoodSites = goblin.knownFoodSites.filter(
+              s => !(s.x === best.x && s.y === best.y),
+            );
+            goblin.task = 'searching for food';
+            return;
+          }
           moveToward(goblin, best, grid, currentTick);
           goblin.task = '→ remembered patch';
         }
