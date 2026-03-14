@@ -6,7 +6,7 @@ import { TileType } from '../../shared/types';
 import type { Tile } from '../../shared/types';
 import { GRID_SIZE, HEARTH_FUEL_MAX, HEARTH_FUEL_PER_WOOD } from '../../shared/constants';
 import { ramp, inverseSigmoid } from '../utilityAI';
-import { moveTo, addWorkFatigue, nearestStockpile, shouldLog } from './helpers';
+import { moveToward, addWorkFatigue, nearestStockpile, shouldLog } from './helpers';
 import { getUnfurnishedKitchen } from './building';
 import type { Action } from './types';
 
@@ -76,7 +76,7 @@ export const refuelHearth: Action = {
     if (!target) return;
 
     if (!isAdjacent(goblin.x, goblin.y, target.x, target.y)) {
-      moveTo(goblin, target, grid);
+      moveToward(goblin, target, grid, currentTick, 15);
       goblin.task = '→ hearth to refuel';
       return;
     }

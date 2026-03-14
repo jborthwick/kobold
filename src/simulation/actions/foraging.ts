@@ -13,7 +13,10 @@ import {
 } from '../agents';
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
-import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
+import { moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
+
+/** Commitment expiry for pathing to stockpile/kitchen — prevents ping-pong with forage. */
+const DEPOSIT_WITHDRAW_COMMIT_TICKS = 15;
 import type { Action, ActionContext } from './types';
 import { isWalkable } from '../world';
 
@@ -223,7 +226,7 @@ export const depositFood: Action = {
     if (stockTheLarder) base = Math.max(base, 0.35);
     return Math.min(1.0, base);
   },
-  execute: ({ goblin, grid, foodStockpiles }) => {
+  execute: ({ goblin, grid, foodStockpiles, currentTick }) => {
     const target = nearestStockpile(goblin, foodStockpiles, s => s.food < s.maxFood);
     if (!target) return;
     if (goblin.x === target.x && goblin.y === target.y) {
@@ -237,7 +240,7 @@ export const depositFood: Action = {
         goblin.task = 'at stockpile';
       }
     } else {
-      moveTo(goblin, target, grid);
+      moveToward(goblin, target, grid, currentTick, DEPOSIT_WITHDRAW_COMMIT_TICKS);
       goblin.task = '→ home (deposit)';
     }
   },
@@ -264,7 +267,7 @@ export const withdrawFood: Action = {
     if (noFood && goblin.hunger > 65) score = Math.min(1.0, score * 1.3);
     return score;
   },
-  execute: ({ goblin, grid, foodStockpiles, mealStockpiles }) => {
+  execute: ({ goblin, grid, foodStockpiles, mealStockpiles, currentTick }) => {
     if (mealStockpiles && goblin.inventory.meals < 4) {
       const nearestMeal = nearestStockpile(goblin, mealStockpiles, m => m.meals > 0);
       if (nearestMeal) {
@@ -275,7 +278,7 @@ export const withdrawFood: Action = {
           goblin.task = `withdrew ${amount.toFixed(0)} meals`;
           return;
         }
-        moveTo(goblin, nearestMeal, grid);
+        moveToward(goblin, nearestMeal, grid, currentTick, DEPOSIT_WITHDRAW_COMMIT_TICKS);
         goblin.task = `→ kitchen (${nearestMeal.meals.toFixed(0)} meals)`;
         return;
       }
@@ -289,7 +292,7 @@ export const withdrawFood: Action = {
       goblin.inventory.food += Math.min(amount, MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory));
       goblin.task = `withdrew ${amount.toFixed(0)} food`;
     } else {
-      moveTo(goblin, target, grid);
+      moveToward(goblin, target, grid, currentTick, DEPOSIT_WITHDRAW_COMMIT_TICKS);
       goblin.task = `→ stockpile (${target.food.toFixed(0)} food)`;
     }
   },

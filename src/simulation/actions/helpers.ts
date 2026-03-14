@@ -60,7 +60,9 @@ export function getOrSetMoveTarget(
 ): { x: number; y: number } {
   const t = goblin.moveTarget;
   const arrived = t && Math.max(Math.abs(goblin.x - t.x), Math.abs(goblin.y - t.y)) <= arrivalRadius;
-  if (t && !arrived && currentTick < (goblin.moveExpiry ?? 0)) {
+  const sameTarget = t && t.x === newTarget.x && t.y === newTarget.y;
+  // Only keep commitment if we're still heading to the same tile; otherwise the winning action takes over (stops hearth/forage/kitchen ping-pong).
+  if (t && !arrived && currentTick < (goblin.moveExpiry ?? 0) && sameTarget) {
     return t;  // committed — keep going
   }
   goblin.moveTarget = newTarget;
