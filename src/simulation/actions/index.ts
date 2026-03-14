@@ -11,6 +11,7 @@ import { fight, seekSafety } from './combat';
 import { forage, depositFood, withdrawFood } from './foraging';
 import { mine, chop, depositOre, depositWood } from './materials';
 import { buildWoodWall, buildStoneWall, buildHearth } from './building';
+import { refuelHearth } from './hearth';
 import { wander } from './exploration';
 import { fightFire } from './firefighting';
 import { establishStockpile } from './stockpiling';
@@ -28,6 +29,7 @@ export const ALL_ACTIONS: Action[] = [
   share,
   fight,
   buildHearth,
+  refuelHearth,
   establishStockpile,
   cook,
   saw,

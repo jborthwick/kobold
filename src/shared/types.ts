@@ -35,6 +35,7 @@ export interface Tile {
   poolTick?: number;      // tick when rain pool formed; undefined means not pooled
   priorType?: TileType;   // tile type before pooling (restored on evaporation)
   trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
+  hearthFuel?: number;    // 0 = extinguished, >0 = lit; decay 1/tick (hearths only)
 }
 
 /** True for any wall tile (Wall legacy, WoodWall, StoneWall). Use for blocking, diffusion, rendering. */
@@ -44,6 +45,11 @@ export function isWallType(type: TileType): boolean {
 
 export function isWall(tile: Tile): boolean {
   return isWallType(tile.type);
+}
+
+/** True if tile is a Hearth with fuel (lit). After save migration, lit = hearthFuel > 0. */
+export function isHearthLit(tile: Tile): boolean {
+  return tile.type === TileType.Hearth && (tile.hearthFuel === undefined || tile.hearthFuel > 0);
 }
 
 export interface Inventory {

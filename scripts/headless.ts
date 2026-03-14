@@ -29,7 +29,7 @@ import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/si
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../src/simulation/rooms';
 import { rollWound } from '../src/simulation/wounds';
 import { getGoblinConfig } from '../src/shared/goblinConfig';
-import { GRID_SIZE } from '../src/shared/constants';
+import { GRID_SIZE, HEARTH_FUEL_MAX } from '../src/shared/constants';
 import type { Goblin, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
 import { TileType } from '../src/shared/types';
 import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
@@ -171,7 +171,8 @@ const storageRoom: Room = { id: 'room-storage', type: 'storage', x: depotX - 2, 
 const rooms: Room[] = [storageRoom];
 
 // Place a hearth a short walk from spawn so warmth/diffusion behave similarly to the main game.
-grid[depotY + 8][depotX + 8].type = TileType.Hearth;
+const hearthCell = grid[depotY + 8][depotX + 8];
+grid[depotY + 8][depotX + 8] = { ...hearthCell, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0, hearthFuel: HEARTH_FUEL_MAX };
 
 // Stockpiles: start with a single empty food stockpile in storage; other piles will be established by actions.
 const foodStockpiles: FoodStockpile[] = [{ x: storageRoom.x + 1, y: storageRoom.y + 1, food: 0, maxFood: 200 }];

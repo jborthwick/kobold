@@ -116,7 +116,7 @@ export function drawTerrain(scene: WorldScene) {
             } else if (isWall(tile)) {
                 baseTint = 0x88aacc;
             } else if (tile.type === TileType.Hearth) {
-                baseTint = 0xff8844;
+                baseTint = (tile.hearthFuel ?? 0) > 0 ? 0xff8844 : 0x555555;
             } else if (tile.type === TileType.Fire) {
                 const phase = (scene.tick + x * 3 + y * 7) % 3;
                 baseTint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;

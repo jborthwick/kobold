@@ -10,6 +10,8 @@
 
 import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
+import { HEARTH_FUEL_MAX } from './constants';
+import { TileType } from './types';
 
 export interface SaveData {
   version: 2;
@@ -130,6 +132,17 @@ export function loadGame(): SaveData | null {
     for (const sp of data.foodStockpiles) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (sp as any).meals;
+    }
+    // Migrate: hearth tiles get initial fuel so "lit" = hearthFuel > 0
+    for (let gy = 0; gy < data.grid.length; gy++) {
+      const row = data.grid[gy];
+      if (!row) continue;
+      for (let gx = 0; gx < row.length; gx++) {
+        const t = row[gx];
+        if (t?.type === TileType.Hearth && t.hearthFuel === undefined) {
+          t.hearthFuel = HEARTH_FUEL_MAX;
+        }
+      }
     }
     return data;
   } catch {

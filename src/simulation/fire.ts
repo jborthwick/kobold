@@ -5,7 +5,7 @@
  */
 
 import { TileType, type Tile, type Goblin, type WeatherType } from '../shared/types';
-import { GRID_SIZE } from '../shared/constants';
+import { GRID_SIZE, HEARTH_FUEL_DECAY } from '../shared/constants';
 import { ramp } from './utilityAI';
 
 const FLAMMABLE = new Set([TileType.Grass, TileType.Forest, TileType.Mushroom, TileType.Farmland, TileType.TreeStump, TileType.WoodWall]);
@@ -60,12 +60,23 @@ export function tickFire(
   const extinguished: { x: number; y: number }[] = [];
   let loggedIgnition = false;
 
+  // Decay hearth fuel first (extinguished hearths don't ignite or provide warmth)
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const t = grid[y][x];
+      if (t.type === TileType.Hearth && typeof t.hearthFuel === 'number' && t.hearthFuel > 0) {
+        t.hearthFuel = Math.max(0, t.hearthFuel - HEARTH_FUEL_DECAY);
+      }
+    }
+  }
+
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const t = grid[y][x];
 
       if (t.type === TileType.Hearth) {
-        if (mod.ignition === 0) continue;
+        const lit = t.hearthFuel === undefined || t.hearthFuel > 0;
+        if (!lit || mod.ignition === 0) continue;
         for (const [dx, dy] of DIRS) {
           const nx = x + dx, ny = y + dy;
           if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;

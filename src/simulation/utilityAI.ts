@@ -313,6 +313,7 @@ const ACTION_DISPLAY_NAMES: Record<string, string> = {
   buildWoodWall: 'wood wall',
   buildStoneWall: 'stone wall',
   buildHearth: 'building a hearth',
+  refuelHearth: 'refueling the hearth',
   seekSafety: 'fleeing to safety',
   socialize: 'socializing',
   avoidRival: 'avoiding a rival',

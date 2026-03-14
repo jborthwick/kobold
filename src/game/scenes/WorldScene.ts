@@ -4,7 +4,7 @@ import { canPlaceRoom } from '../../simulation/rooms';
 import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpile, drawPlankStockpile, drawBarStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
-import { TICK_RATE_MS, TILE_SIZE } from '../../shared/constants';
+import { TICK_RATE_MS, TILE_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
 import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, TileType } from '../../shared/types';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
@@ -195,7 +195,7 @@ export class WorldScene extends Phaser.Scene {
       const cx = x + Math.floor(5 / 2);
       const cy = y + Math.floor(5 / 2);
       const t = this.grid[cy][cx];
-      this.grid[cy][cx] = { ...t, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0 };
+      this.grid[cy][cx] = { ...t, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0, hearthFuel: HEARTH_FUEL_MAX };
       // Update tilemap visual for the hearth tile
       const hearthFrames = TILE_CONFIG[TileType.Hearth];
       const hearthFrame = hearthFrames ? hearthFrames[0] : 504;

@@ -13,6 +13,13 @@ export const INITIAL_GOBLINS = 5;
 /** Goblin inventory cap (food + ore + wood); harvesting stops when total reaches this. */
 export const MAX_INVENTORY_CAPACITY = 20;
 
+/** Hearth fuel: cap and initial when built; decay 1 per tick. */
+export const HEARTH_FUEL_MAX = 200;
+/** Hearth fuel consumed per tick when lit. */
+export const HEARTH_FUEL_DECAY = 1;
+/** Hearth fuel added per wood when refuelling. */
+export const HEARTH_FUEL_PER_WOOD = 50;
+
 /** Name pool for goblins (spawn and succession). */
 export const GOBLIN_NAMES = [
   'Grix', 'Snot', 'Murg', 'Blix', 'Rak',

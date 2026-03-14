@@ -2,7 +2,7 @@
  * cook. Requires a kitchen room; consumes food + wood to produce meals into the kitchen's
  * meal stockpile. Meals improve morale (ate_tasty_meal thought) and feed withdrawFood.
  */
-import { TileType } from '../../shared/types';
+import { TileType, isHearthLit } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
@@ -51,14 +51,14 @@ export const cook: Action = {
         const hasFood = foodStockpiles?.some(s => s.food >= FOOD_COST);
         const hasWood = woodStockpiles?.some(s => s.wood >= WOOD_COST);
 
-        // We also require at least one Hearth tile in or adjacent to the kitchen
+        // We also require at least one lit Hearth in or adjacent to the kitchen
         let kitchenHasHearth = false;
         for (const r of rooms) {
             if (r.type !== 'kitchen') continue;
             // check the room and a 1-tile buffer
             for (let y = Math.max(0, r.y - 1); y <= Math.min(GRID_SIZE - 1, r.y + r.h); y++) {
                 for (let x = Math.max(0, r.x - 1); x <= Math.min(GRID_SIZE - 1, r.x + r.w); x++) {
-                    if (grid[y] && grid[y][x] && grid[y][x].type === TileType.Hearth) {
+                    if (grid[y]?.[x] && isHearthLit(grid[y][x])) {
                         kitchenHasHearth = true;
                         break;
                     }

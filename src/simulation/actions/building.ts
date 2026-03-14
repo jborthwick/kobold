@@ -3,9 +3,9 @@
  * from planks or bars; hearths go in kitchen centers. Room-aware so goblins fortify where the
  * player placed zones.
  */
-import { TileType, isWallType } from '../../shared/types';
+import { TileType, isWallType, isHearthLit } from '../../shared/types';
 import type { Tile, Room } from '../../shared/types';
-import { GRID_SIZE } from '../../shared/constants';
+import { GRID_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
 import { roomWallSlots, recordSite, pathNextStep } from '../agents';
 import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestStockpile, getOrSetMoveTarget } from './helpers';
@@ -159,20 +159,21 @@ export const buildStoneWall: Action = {
 const HEARTH_COVERAGE_RADIUS = 8;  // matches warmth BFS radius — if a hearth covers you, don't build
 const HEARTH_BUILD_COOLDOWN = 300; // personal cooldown after placing, prevents back-to-back builds
 
-function getUnfurnishedKitchen(rooms: Room[] | undefined, grid: Tile[][]): Room | null {
+export function getUnfurnishedKitchen(rooms: Room[] | undefined, grid: Tile[][]): Room | null {
   if (!rooms) return null;
   for (const r of rooms) {
     if (r.type !== 'kitchen') continue;
-    let hasHearth = false;
+    let hasLitHearth = false;
     for (let dy = 0; dy < r.h; dy++) {
       for (let dx = 0; dx < r.w; dx++) {
         const ny = r.y + dy, nx = r.x + dx;
         if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-          if (grid[ny][nx].type === TileType.Hearth || grid[ny][nx].type === TileType.Fire) hasHearth = true;
+          const t = grid[ny][nx];
+          if (t.type === TileType.Fire || isHearthLit(t)) hasLitHearth = true;
         }
       }
     }
-    if (!hasHearth) return r;
+    if (!hasLitHearth) return r;
   }
   return null;
 }
@@ -193,12 +194,12 @@ export const buildHearth: Action = {
 
     // Personal cooldown — prevents a goblin from placing one then immediately starting another
     if (currentTick - (goblin.lastLoggedTicks['builtHearth'] ?? 0) < HEARTH_BUILD_COOLDOWN) return false;
-    // A hearth already within coverage radius means this area is served — building would be wasteful
+    // A lit hearth already within coverage radius means this area is served — building would be wasteful
     for (let dy = -HEARTH_COVERAGE_RADIUS; dy <= HEARTH_COVERAGE_RADIUS; dy++) {
       for (let dx = -HEARTH_COVERAGE_RADIUS; dx <= HEARTH_COVERAGE_RADIUS; dx++) {
         const nx = goblin.x + dx, ny = goblin.y + dy;
         if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE
-          && grid[ny][nx].type === TileType.Hearth) return false;
+          && isHearthLit(grid[ny][nx])) return false;
       }
     }
     return true;
@@ -271,6 +272,7 @@ export const buildHearth: Action = {
     grid[buildTarget.y][buildTarget.x] = {
       ...t, type: TileType.Hearth,
       foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0,
+      hearthFuel: HEARTH_FUEL_MAX,
     };
     // Deduct wood: use inventory first, then pull remainder from stockpile
     const useFromInv = Math.min(goblin.inventory.wood, 2);

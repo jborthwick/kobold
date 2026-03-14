@@ -6,7 +6,7 @@
  */
 
 import { GRID_SIZE } from '../shared/constants';
-import { TileType, isWallType, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType, type Room } from '../shared/types';
+import { TileType, isWallType, isHearthLit, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType, type Room } from '../shared/types';
 
 const N = GRID_SIZE * GRID_SIZE;
 
@@ -36,12 +36,12 @@ function idx(x: number, y: number): number {
 export function createWarmthField(): Float32Array { return new Float32Array(N); }
 export function createDangerField(): Float32Array { return new Float32Array(N); }
 
-/** Scan the grid and return positions of all Hearth tiles. */
+/** Scan the grid and return positions of lit Hearth tiles (hearthFuel > 0). */
 export function findHearths(grid: Tile[][]): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
-      if (grid[y][x].type === TileType.Hearth) out.push({ x, y });
+      if (isHearthLit(grid[y][x])) out.push({ x, y });
     }
   }
   return out;
@@ -58,15 +58,15 @@ function getHeatSources(grid: Tile[][]): { x: number; y: number }[] {
   return out;
 }
 
-/** True if the room contains at least one Hearth or Fire tile. */
+/** True if the room contains at least one lit Hearth or Fire tile. */
 function roomHasHeatSource(room: Room, grid: Tile[][]): boolean {
   for (let dy = 0; dy < room.h; dy++) {
     for (let dx = 0; dx < room.w; dx++) {
       const tx = room.x + dx;
       const ty = room.y + dy;
       if (tx >= 0 && tx < GRID_SIZE && ty >= 0 && ty < GRID_SIZE) {
-        const t = grid[ty][tx].type;
-        if (t === TileType.Hearth || t === TileType.Fire) return true;
+        const tile = grid[ty][tx];
+        if (tile.type === TileType.Fire || isHearthLit(tile)) return true;
       }
     }
   }
