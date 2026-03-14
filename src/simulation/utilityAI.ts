@@ -524,10 +524,10 @@ export function tickAgentUtility(
 function idleDescription(goblin: Goblin): string {
   if (goblin.fatigue > 60) return 'exhausted, catching breath';
   if (goblin.fatigue > 20) return 'catching breath';
-  if ((goblin.warmth ?? 100) < 20) return 'looking for warmth';
-  if (goblin.morale < 25) return 'brooding';
   if (goblin.hunger > 70) return 'desperately hungry';
   if (goblin.hunger > 50) return 'hungry, looking for food';
+  if ((goblin.warmth ?? 100) < 20) return 'looking for warmth';
+  if (goblin.morale < 25) return 'brooding';
   if (goblin.social > 65) return 'feeling lonely';
   if ((goblin.warmth ?? 100) < 35) return 'a bit chilly';
   return 'idle';
