@@ -102,14 +102,17 @@ export const forage: Action = {
                 s => !(s.x === best.x && s.y === best.y),
               );
             }
+            goblin.task = 'searching for food';
           } else {
             recordSite(goblin.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
+            goblin.task = 'at patch (harvesting)';
           }
-          // Fall through to let next tick harvest
         } else {
           moveToward(goblin, best, grid, currentTick);
           goblin.task = '→ remembered patch';
         }
+      } else {
+        goblin.task = 'searching for food';
       }
       return;
     }
@@ -121,6 +124,7 @@ export const forage: Action = {
 
     if (goblin.x !== foodTarget.x || goblin.y !== foodTarget.y) {
       moveToward(goblin, foodTarget, grid, currentTick);
+      goblin.task = `foraging → (${foodTarget.x},${foodTarget.y})`;
       return;
     }
 
@@ -184,7 +188,7 @@ export const depositFood: Action = {
   name: 'depositFood',
   tags: ['work'],
   eligible: ({ goblin, foodStockpiles }) => {
-    if (goblin.inventory.food <= 0) return false;
+    if (goblin.inventory.food <= DEPOSIT_KEEP_FOOD) return false;
     return nearestStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
   score: (ctx) => {
@@ -212,6 +216,8 @@ export const depositFood: Action = {
         target.food += stored;
         goblin.inventory.food -= stored;
         goblin.task = `deposited ${stored.toFixed(0)} → stockpile`;
+      } else {
+        goblin.task = 'at stockpile';
       }
     } else {
       moveTo(goblin, target, grid);
