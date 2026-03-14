@@ -14,14 +14,25 @@ import {
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, shouldLog, totalLoad, nearestFoodStockpile, getWalkableAdjacent } from './helpers';
-import type { Action } from './types';
+import type { Action, ActionContext } from './types';
+
+/** Total stored food below which forage/deposit "stock the larder" nudges apply (one place). */
+const LARDER_TARGET = 80;
+
+function larderContext(ctx: Pick<ActionContext, 'foodStockpiles' | 'rooms' | 'roomBonuses'>): { totalStoredFood: number; storageHungry: boolean } {
+  const hasStorageRoom = ctx.roomBonuses?.hasStorage ?? (ctx.rooms?.some(r => r.type === 'storage') ?? false);
+  const totalStoredFood = ctx.foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
+  return { totalStoredFood, storageHungry: hasStorageRoom && totalStoredFood < LARDER_TARGET };
+}
 
 // --- forage: scan for food, pathfind, harvest ---
 export const forage: Action = {
   name: 'forage',
   tags: ['work'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance, foodStockpiles, rooms, roomBonuses }) => {
+  score: (ctx) => {
+    const { goblin, grid, resourceBalance } = ctx;
+    const { storageHungry } = larderContext(ctx);
     const vision = effectiveVision(goblin);
     const maxSearch = traitMod(goblin, 'maxSearchRadius', 15);
     const radius = goblin.hunger > 20
@@ -33,23 +44,20 @@ export const forage: Action = {
     const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
 
-    // Storage-aware bonus: if a storage room exists and stored food is low, gently boost forage.
-    const hasStorageRoom = roomBonuses?.hasStorage ?? (rooms?.some(r => r.type === 'storage') ?? false);
-    const totalStoredFood = foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
-    const storageHungry = hasStorageRoom && totalStoredFood < 40;
+    const stockTheLarder = consumablesPressure > 0.5;  // colony short on food (utilityAI midpoint 60)
 
     if (!target) {
       if (goblin.knownFoodSites.length > 0) {
         let s = sigmoid(goblin.hunger, 40) * 0.4 * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend;
         if (storageHungry) s *= 1.3;
-        if (consumablesPressure > 0.5) s = Math.max(s, 0.35); // stock the larder
+        if (stockTheLarder) s = Math.max(s, 0.35);
         return Math.min(1.0, s);
       }
       return 0;
     }
     let base = sigmoid(goblin.hunger, 40) * 1.0;
     if (storageHungry) base *= 1.2;
-    if (consumablesPressure > 0.5) base = Math.max(base, 0.35); // stock the larder when colony short on food
+    if (stockTheLarder) base = Math.max(base, 0.35);
     const score = Math.min(1.0, base);
     const finalScore = goblin.hunger > 85 ? score * 0.4 : score;
     return Math.min(1.0, finalScore * (1 + foodPriority * 0.8) * survivalBoost * colonyFoodBlend);
@@ -189,14 +197,19 @@ export const depositFood: Action = {
     if (goblin.inventory.food <= 0) return false;
     return nearestFoodStockpile(goblin, foodStockpiles, s => s.food < s.maxFood) !== null;
   },
-  score: ({ goblin, foodStockpiles, resourceBalance, rooms, roomBonuses }) => {
+  score: (ctx) => {
+    const { goblin, foodStockpiles, resourceBalance } = ctx;
+    const { storageHungry } = larderContext(ctx);
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
-    const { foodPriority } = resourceBalance ?? { foodPriority: 0 };
-    const hasStorageRoom = roomBonuses?.hasStorage ?? (rooms?.some(r => r.type === 'storage') ?? false);
-    const totalStoredFood = foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
-    const storageHungry = hasStorageRoom && totalStoredFood < 40;
-    let base = ramp(goblin.inventory.food, 4, 14) * inverseSigmoid(goblin.hunger, 50) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
-    if (storageHungry) base *= 1.25;
+    const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
+    const stockTheLarder = consumablesPressure > 0.5;  // colony short on food (utilityAI midpoint 60)
+    // Ramp 3–12 so deposit scores with less carried food; hunger gate at 58 so they still haul when moderately hungry
+    let base = ramp(goblin.inventory.food, 3, 12) * inverseSigmoid(goblin.hunger, 58) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
+    if (storageHungry) {
+      base *= 1.25;
+      base = Math.max(base, 0.25);  // nudge to keep filling until LARDER_TARGET
+    }
+    if (stockTheLarder) base = Math.max(base, 0.35);
     return Math.min(1.0, base);
   },
   execute: ({ goblin, grid, foodStockpiles }) => {

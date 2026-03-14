@@ -68,8 +68,9 @@ export function computeResourceBalanceModifier(
   const foodPriority = imbalance;
   const materialPriority = 1 - imbalance;
 
-  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > materials > upgrades
-  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 25) * 1.0);
+  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > materials > upgrades.
+  // Consumables midpoint 60 so "stock the larder" (forage/deposit floor) persists until ~60 food+meals.
+  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 60) * 1.0);
   const materialsPressure = Math.min(1, inverseSigmoid(materialsTotal, 40) * 0.65);
   const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, 50) * 0.35);
 
