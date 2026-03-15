@@ -119,6 +119,26 @@ export function nearestStockpile<T extends WithCoords>(
     }, null) ?? null;
 }
 
+/** Find nearest point from a list (Manhattan distance). Returns null if list is empty. */
+export function nearestPoint(
+  goblin: Goblin,
+  points: { x: number; y: number }[],
+): { x: number; y: number } | null {
+  return points.reduce<{ x: number; y: number } | null>((best, p) => {
+    const dist = Math.abs(p.x - goblin.x) + Math.abs(p.y - goblin.y);
+    const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
+    return dist < bestDist ? p : best;
+  }, null);
+}
+
+/** True if two cells are adjacent (Chebyshev distance ≤ 1). */
+export function isAdjacent(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): boolean {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) <= 1;
+}
+
 // ── Grid navigation helpers ──────────────────────────────────────────────────
 
 /** Cardinal directions (N, S, E, W) for neighbor enumeration. */
