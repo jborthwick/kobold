@@ -15,6 +15,10 @@ import type { Action } from './types';
 const WOOD_WALL_PLANKS = 2;
 const STONE_WALL_BARS = 2;
 const MAX_WALL_BUILD_DISTANCE = 15;
+const WALL_COMPLETE_THRESHOLD = 0.99;  // bonus until nearly every slot is filled (e.g. after 1–2 burn)
+const WALL_INCOMPLETE_BOOST = 0.5;
+const WALL_GAP_FLOOR = 1.2;            // minimum multiplier when any gap exists (so refinishing after fire wins)
+const WALL_BASE_SCALE = 0.55;
 
 // --- buildWoodWall: build room perimeter from planks (lumber hut) ---
 export const buildWoodWall: Action = {
@@ -40,10 +44,10 @@ export const buildWoodWall: Action = {
     const totalSlots = wallSlots.length;
     const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
     const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
-    const wallsIncomplete = wallFraction < 0.8;
-    let base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
-    if (wallsIncomplete) {
-      base *= 1.2;
+    let base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * WALL_BASE_SCALE;
+    if (wallFraction < WALL_COMPLETE_THRESHOLD) {
+      const scaledBoost = 1 + WALL_INCOMPLETE_BOOST * (1 - wallFraction);
+      base *= Math.max(scaledBoost, WALL_GAP_FLOOR);
     }
     return Math.min(1.0, base);
   },
@@ -112,10 +116,10 @@ export const buildStoneWall: Action = {
     const totalSlots = wallSlots.length;
     const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
     const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
-    const wallsIncomplete = wallFraction < 0.8;
-    let base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * 0.45;
-    if (wallsIncomplete) {
-      base *= 1.2;
+    let base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * WALL_BASE_SCALE;
+    if (wallFraction < WALL_COMPLETE_THRESHOLD) {
+      const scaledBoost = 1 + WALL_INCOMPLETE_BOOST * (1 - wallFraction);
+      base *= Math.max(scaledBoost, WALL_GAP_FLOOR);
     }
     return Math.min(1.0, base);
   },
