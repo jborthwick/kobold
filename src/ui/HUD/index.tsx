@@ -3,6 +3,7 @@ export { SelectedGoblinPanel } from './GoblinPanel';
 export { TokenDebugPanel } from './TokenDebugPanel';
 export { TileTooltip } from './TileTooltip';
 export { StockpilePanel } from './StockpilePanel';
+export { HearthPanel } from './HearthPanel';
 export { AdventurerPanel } from './AdventurerPanel';
 export { ColonyGoalPanel } from './ColonyGoalPanel';
 export { ChroniclePanel } from './ChroniclePanel';

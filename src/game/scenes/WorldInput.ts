@@ -3,6 +3,7 @@ import { GRID_SIZE, TILE_SIZE } from '../../shared/constants';
 import { isWalkable } from '../../simulation/world';
 import { bus } from '../../shared/events';
 import type { TileInfo, OverlayMode } from '../../shared/types';
+import { TileType } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
 import { drawFlag, drawBuildPreview } from './WorldOverlays';
 import { emitGameState } from './WorldState';
@@ -231,29 +232,48 @@ export function setupInput(scene: WorldScene) {
         const foodIdx = findStockpile(scene.foodStockpiles);
         if (foodIdx >= 0) {
             scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
+            bus.emit('hearthSelect', null);
             return;
         }
         const oreIdx = findStockpile(scene.oreStockpiles);
         if (oreIdx >= 0) {
             scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
+            bus.emit('hearthSelect', null);
             return;
         }
         const woodIdx = findStockpile(scene.woodStockpiles);
         if (woodIdx >= 0) {
             scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
+            bus.emit('hearthSelect', null);
             return;
         }
         const mealIdx = findStockpile(scene.mealStockpiles);
         if (mealIdx >= 0) {
             scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'meal', idx: mealIdx });
+            bus.emit('hearthSelect', null);
+            return;
+        }
+
+        // Check for hearth click (tile-based)
+        const tile = scene.grid[ty]?.[tx];
+        if (tile?.type === TileType.Hearth) {
+            scene.selectedGoblinId = null;
+            scene.selectedHearth = { x: tx, y: ty };
+            bus.emit('adventurerSelect', null);
+            bus.emit('stockpileSelect', null);
+            bus.emit('hearthSelect', { x: tx, y: ty });
             return;
         }
 
@@ -271,7 +291,9 @@ export function setupInput(scene: WorldScene) {
         const adventurer = findNearest(scene.adventurers);
         if (adventurer) {
             scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
             bus.emit('stockpileSelect', null);
+            bus.emit('hearthSelect', null);
             bus.emit('adventurerSelect', adventurer);
             return;
         }
@@ -282,7 +304,9 @@ export function setupInput(scene: WorldScene) {
         const hitAlive = findNearest(aliveGoblins);
         const hitDead = !hitAlive ? findNearest(deadGoblins) : undefined;
         scene.selectedGoblinId = (hitAlive ?? hitDead)?.id ?? null;
+        scene.selectedHearth = null;
         bus.emit('stockpileSelect', null);
+        bus.emit('hearthSelect', null);
         bus.emit('adventurerSelect', null);
         emitGameState(scene); // update panel immediately even when paused
     });

@@ -309,4 +309,6 @@ export interface GameState {
   weatherSeason?: Season;
   weatherType?: WeatherType;
   rooms: Room[];
+  /** When the player has clicked a hearth, its position and current fuel (for HearthPanel). */
+  selectedHearthTile?: { x: number; y: number; hearthFuel: number } | null;
 }

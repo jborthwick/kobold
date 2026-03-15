@@ -8,6 +8,7 @@ import { getNextEventTick } from '../../simulation/events';
 import { TILE_SIZE } from '../../shared/constants';
 import type { SaveData } from '../../shared/save';
 import type { MiniMapData } from '../../shared/types';
+import { TileType } from '../../shared/types';
 import type { WorldScene } from './WorldScene';
 
 /** Serialise the full simulation state into a plain object suitable for JSON.
@@ -79,6 +80,13 @@ export function emitGameState(scene: WorldScene) {
         weatherSeason: scene.weather.season,
         weatherType: scene.weather.type,
         rooms: scene.rooms.map(r => ({ ...r })),
+        selectedHearthTile: (() => {
+            const h = scene.selectedHearth;
+            if (!h) return null;
+            const t = scene.grid[h.y]?.[h.x];
+            if (!t || t.type !== TileType.Hearth) return null;
+            return { x: h.x, y: h.y, hearthFuel: t.hearthFuel ?? 0 };
+        })(),
     });
 }
 

@@ -21,6 +21,8 @@ export class WorldScene extends Phaser.Scene {
   public goblins: Goblin[] = [];
   public tick = 0;
   public selectedGoblinId: string | null = null;
+  /** Selected hearth tile (click-to-show fuel); cleared when selecting something else. */
+  public selectedHearth: { x: number; y: number } | null = null;
   public terrainDirty = true;
   public lastTickTime = 0;
   public paused = false;
