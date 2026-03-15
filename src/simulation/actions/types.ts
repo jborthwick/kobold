@@ -47,7 +47,7 @@ export interface ActionContext {
   };
 }
 
-/** Tags for trait-based score biasing (traitActionBias.ts). */
+/** Tags for trait-based score biasing (traitActionBias.ts). Includes work-skill tags. */
 export type ActionTag =
   | 'player'
   | 'eat'
@@ -60,7 +60,13 @@ export type ActionTag =
   | 'comfort'
   | 'fire'
   | 'share'
-  | 'withdraw';
+  | 'withdraw'
+  | 'chop'
+  | 'cook'
+  | 'forage'
+  | 'saw'
+  | 'forge'
+  | 'mine';
 
 /** One action: eligible = hard gate, score = 0–1, execute mutates ctx.goblin. */
 export interface Action {

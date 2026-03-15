@@ -46,7 +46,7 @@ function larderContext(ctx: Pick<ActionContext, 'foodStockpiles' | 'rooms' | 'ro
 // --- forage: scan for food, pathfind, harvest ---
 export const forage: Action = {
   name: 'forage',
-  tags: ['work'],
+  tags: ['work', 'forage'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: (ctx) => {
     const { goblin, grid, resourceBalance } = ctx;

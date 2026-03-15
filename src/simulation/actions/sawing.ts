@@ -35,7 +35,7 @@ function getOrCreatePlankStockpile(ctx: ActionContext): PlankStockpile | null {
 
 export const saw: Action = {
   name: 'saw',
-  tags: ['work'],
+  tags: ['work', 'saw'],
   eligible: (ctx) => {
     const { rooms, woodStockpiles, goblin, plankStockpiles } = ctx;
     if (!rooms?.some(r => r.type === 'lumber_hut')) return false;

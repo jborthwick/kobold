@@ -71,7 +71,7 @@ export interface Adventurer {
 }
 
 // Permanent personality trait assigned at spawn
-export type GoblinTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful';
+export type GoblinTrait = 'lazy' | 'forgetful' | 'helpful' | 'mean' | 'paranoid' | 'brave' | 'greedy' | 'cheerful' | 'curious' | 'stubborn' | 'cowardly' | 'glutton' | 'crafty';
 
 // A tile location a goblin has seen or visited — used for resource routing
 export interface ResourceSite {

@@ -96,6 +96,11 @@ export const GOBLIN_CONFIG: GoblinConfig = {
     cheerful: 'Cheerful: Annoyingly Cheerful',
     mean: 'Mean: Bitey',
     forgetful: 'Forgetful: What Was I Doing?',
+    curious: 'Curious: Can\'t Leave a Rock Unturned',
+    stubborn: 'Stubborn: Won\'t Quit',
+    cowardly: 'Cowardly: Nope Nope Nope',
+    glutton: 'Glutton: Mouth First',
+    crafty: 'Crafty: Tinkers',
   },
 
   llmSpecies: 'goblin',

@@ -32,6 +32,11 @@ export const TRAIT_FLAVOR: Record<GoblinTrait, Record<string, string>> = {
   mean:      { eat: 'ate alone, growling',             rest: 'rested, glaring at everyone',    share: 'begrudgingly shared' },
   paranoid:  { eat: 'ate while looking around wildly', rest: 'rested with both eyes open',     share: 'cautiously shared' },
   forgetful: { eat: 'ate... wait, what?',              rest: 'dozed off mid-thought',          share: 'shared (forgot he gave it away)' },
+  curious:   { eat: 'ate while staring at something else', rest: 'rested one eye on the horizon', share: 'shared, then wandered off' },
+  stubborn:  { eat: 'wolfed food and got back to it',  rest: 'rested grudgingly',             share: 'shared despite wanting to keep going' },
+  cowardly:  { eat: 'ate while watching the exits',   rest: 'rested near the door',           share: 'shared from a safe distance' },
+  glutton:   { eat: 'devoured food noisily',          rest: 'napped dreaming of more food',  share: 'parted with a tiny bit, reluctantly' },
+  crafty:    { eat: 'ate between tinkering',           rest: 'rested with a blueprint in hand', share: 'shared and explained how it was made' },
 };
 
 export function traitText(goblin: Goblin, action: string): string {

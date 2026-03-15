@@ -35,7 +35,7 @@ function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
 
 export const cook: Action = {
     name: 'cook',
-    tags: ['work'],
+    tags: ['work', 'cook'],
     eligible: ({ rooms, foodStockpiles, woodStockpiles, goblin, grid, mealStockpiles }) => {
         if (!rooms || rooms.length === 0) return false;
 

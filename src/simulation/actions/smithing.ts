@@ -35,7 +35,7 @@ function getOrCreateBarStockpile(ctx: ActionContext): BarStockpile | null {
 
 export const smith: Action = {
   name: 'smith',
-  tags: ['work'],
+  tags: ['work', 'forge'],
   eligible: (ctx) => {
     const { rooms, oreStockpiles, goblin, barStockpiles } = ctx;
     if (!rooms?.some(r => r.type === 'blacksmith')) return false;

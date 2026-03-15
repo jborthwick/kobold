@@ -41,6 +41,11 @@ export const TRAIT_MODS: Record<GoblinTrait, TraitMods> = {
   cheerful:  { shareThreshold: 6, shareRelationGate: 20, socialDecayBonus: 0.15, generosityRange: 3 },
   mean:      { shareThreshold: 14, contestPenalty: -10, shareRelationGate: 55, lonelinessCrisisThreshold: 85, generosityRange: 1 },
   forgetful: {},
+  curious:   {},
+  stubborn:  {},
+  cowardly:  {},
+  glutton:   {},
+  crafty:    {},
 };
 
 export function traitMod<K extends keyof TraitMods>(goblin: Goblin, key: K, fallback: number): number {
@@ -57,6 +62,7 @@ export const GOBLIN_TRAIT_DISPLAY = new Proxy({} as Record<GoblinTrait, string>,
 
 export const GOBLIN_TRAITS: GoblinTrait[] = [
   'lazy', 'forgetful', 'helpful', 'mean', 'paranoid', 'brave', 'greedy', 'cheerful',
+  'curious', 'stubborn', 'cowardly', 'glutton', 'crafty',
 ];
 
 export function getGoblinBios(): string[] {

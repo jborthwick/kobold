@@ -20,7 +20,7 @@ import type { Action } from './types';
 // --- mine: miners target ore tiles ---
 export const mine: Action = {
   name: 'mine',
-  tags: ['work'],
+  tags: ['work', 'mine'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: ({ goblin, grid, resourceBalance, oreStockpiles, rooms }) => {
     const warmth = goblin.warmth ?? 100;
@@ -128,7 +128,7 @@ export const mine: Action = {
 // --- chop: lumberjacks target forest tiles ---
 export const chop: Action = {
   name: 'chop',
-  tags: ['work'],
+  tags: ['work', 'chop'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
   score: (ctx) => {
     const { goblin, grid, resourceBalance, woodStockpiles, rooms, roomBonuses } = ctx;
