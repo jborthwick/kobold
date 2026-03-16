@@ -16,8 +16,8 @@ const WORLD_CONFIG = {
   forestFoodMax: 12,
   forestGrowback: 0.04,
 
-  forestWoodMin: 8,
-  forestWoodMax: 12,
+  forestWoodMin: 28,
+  forestWoodMax: 32,
 
   farmFoodMin: 2,
   farmFoodMax: 3,
@@ -31,8 +31,8 @@ const WORLD_CONFIG = {
   grassMeadowFoodMax: 4,
   grassMeadowGrowback: 0.02,
 
-  mushroomFoodMin: 3,
-  mushroomFoodMax: 5,
+  mushroomFoodMin: 12,
+  mushroomFoodMax: 15,
   mushroomGrowback: 0.08,
 } as const;
 

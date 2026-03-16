@@ -185,15 +185,15 @@ export const chop: Action = {
           (here.type === TileType.TreeStump && here.materialValue >= 1);
         if (isWoodSource && here.materialValue >= 1) {
           const hadWood = here.materialValue;
-          const baseChop = 5 + traitMod(goblin, 'chopPower', 0) + skillChopBonus(goblin);
+          const baseChop = 15 + traitMod(goblin, 'chopPower', 0) + skillChopBonus(goblin);
           const chopYield = Math.max(1, Math.round(baseChop * woundYieldMultiplier(goblin)));
           const chopped = Math.min(hadWood, chopYield);
           here.materialValue = Math.max(0, hadWood - chopped);
           if (here.type === TileType.Forest && here.materialValue === 0) {
             // Forest becomes stump when fully harvested — stumps have small wood yield
             here.type = TileType.TreeStump;
-            here.maxMaterial = 4;  // Stump provides a little wood
-            here.materialValue = 4;
+            here.maxMaterial = 10;  // Stump provides a little wood
+            here.materialValue = 10;
             here.growbackRate = 0;
             goblin.task = `logging (felled tree)`;
           } else if (here.type === TileType.TreeStump && here.materialValue === 0) {

@@ -15,6 +15,8 @@ export const MAX_INVENTORY_CAPACITY = 20;
 
 /** Hearth fuel: cap and initial when built; decay per tick (lower = refuel less often). */
 export const HEARTH_FUEL_MAX = 400;
+/** Refuel only when fuel is below this (low or out). ~25% of max so goblins don't refuel at 90%+. */
+export const HEARTH_REFUEL_THRESHOLD = 100;
 /** Hearth fuel consumed per tick when lit. */
 export const HEARTH_FUEL_DECAY = 0.5;
 /** Hearth fuel added per wood when refuelling. */
