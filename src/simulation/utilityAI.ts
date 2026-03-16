@@ -23,9 +23,10 @@ import { xpToLevel } from './skills';
 import { getRefuelableHearthCount } from './actions/hearth';
 import {
   CONSUMABLES_BUFFER_PER_GOBLIN,
-  ORE_MIDPOINT,
-  WOOD_MIDPOINT,
+  DEFAULT_GOBLINS_FOR_PRESSURE,
+  ORE_BUFFER_PER_GOBLIN,
   UPGRADES_MIDPOINT,
+  WOOD_BUFFER_PER_GOBLIN,
 } from './resourceTuning';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
@@ -39,9 +40,9 @@ export function sigmoid(value: number, midpoint: number, steepness = 0.15): numb
 /**
  * Central scarcity and resource balance: computed once per tick, passed to all actions.
  *
- * 1) Consumables = food + meals (one tier). consumablesPressure uses per-goblin scaling when
- *    livingGoblinCount > 0: pressure is high when (food+meals)/goblin is below
- *    CONSUMABLES_BUFFER_PER_GOBLIN. Other tier pressures use absolute midpoints.
+ * 1) Consumables, ore, wood: per-goblin scaling. Pressure is high when (stock/goblin) is below
+ *    the tier's buffer-per-goblin constant. Fallback when livingGoblinCount is 0 uses
+ *    DEFAULT_GOBLINS_FOR_PRESSURE. Upgrades use a single absolute midpoint (UPGRADES_MIDPOINT).
  *
  * 2) Balance (foodPriority / materialPriority): when materials >> consumables, boost food
  *    actions and nerf material actions (0.6+0.4*materialPriority in smith/saw/mine/chop).
@@ -78,16 +79,21 @@ export function computeResourceBalanceModifier(
   const foodPriority = imbalance;
   const materialPriority = 1 - imbalance;
 
-  // Consumables pressure: per-goblin when count known, else fallback (e.g. 5 goblins)
-  const effectiveConsumables =
-    livingGoblinCount !== undefined && livingGoblinCount > 0
-      ? consumablesTotal / livingGoblinCount
-      : consumablesTotal / 5;
+  const goblinsForPressure = livingGoblinCount !== undefined && livingGoblinCount > 0
+    ? livingGoblinCount
+    : DEFAULT_GOBLINS_FOR_PRESSURE;
+
+  // Consumables pressure: per-goblin
+  const effectiveConsumables = consumablesTotal / goblinsForPressure;
   const consumablesPressure = Math.min(1, inverseSigmoid(effectiveConsumables, CONSUMABLES_BUFFER_PER_GOBLIN) * 1.0);
 
-  // Other tier pressures: absolute midpoints
-  const orePressure = Math.min(1, inverseSigmoid(totalOre, ORE_MIDPOINT) * 0.65);
-  const woodPressure = Math.min(1, inverseSigmoid(totalWood, WOOD_MIDPOINT) * 0.65);
+  // Ore and wood pressure: per-goblin (same scaling as consumables)
+  const effectiveOrePerGoblin = totalOre / goblinsForPressure;
+  const effectiveWoodPerGoblin = totalWood / goblinsForPressure;
+  const orePressure = Math.min(1, inverseSigmoid(effectiveOrePerGoblin, ORE_BUFFER_PER_GOBLIN) * 0.65);
+  const woodPressure = Math.min(1, inverseSigmoid(effectiveWoodPerGoblin, WOOD_BUFFER_PER_GOBLIN) * 0.65);
+
+  // Upgrades: absolute midpoint
   const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, UPGRADES_MIDPOINT) * 0.35);
 
   return {

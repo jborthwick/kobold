@@ -89,9 +89,20 @@ Every tick: (1) needs are updated (hunger, morale, fatigue, social), (2) all eli
 
 Scoring curves: `sigmoid()` (0→1 as value rises), `inverseSigmoid()` (1→0 as value rises), `ramp()` (linear 0→1 between min/max).
 
-**Central scarcity** (`computeResourceBalanceModifier()` in `utilityAI.ts`): one place computes tier pressures from stockpile totals. Tiers are consumables (food+meals) > raw materials (ore+wood) > upgrades (bars+planks). Each tier uses `inverseSigmoid(total, midpoint)` with tier-specific midpoints and weights so food/meals urgency dominates; actions use one of `consumablesPressure`, `materialsPressure`, or `upgradesPressure` instead of per-action scarcity curves. Cook, forage, withdraw use consumables; mine, chop use materials; smith, saw use upgrades.
+**Central scarcity** (`computeResourceBalanceModifier()` in `utilityAI.ts`): one place computes tier pressures from stockpile totals. Tiers are consumables (food+meals) > raw materials (ore+wood) > upgrades (bars+planks). Actions use `consumablesPressure`, `orePressure`, `woodPressure`, `upgradesPressure` and the balance modifiers; all constants live in `resourceTuning.ts` (see below). Cook, forage, withdraw use consumables; mine, chop use ore/wood pressure; smith, saw use upgrades.
 
 **Resource balance**: when (ore+wood+bars+planks) >> (food+meals), `foodPriority` boosts food actions and `materialPriority` nerfs material actions (smith, saw, mine, chop use `0.6 + 0.4 * materialPriority`).
+
+**Resource tuning** ([`src/simulation/resourceTuning.ts`](src/simulation/resourceTuning.ts)): single source of truth for scarcity and “stock the larder” behaviour. One knob per tier keeps pressure curves and action heuristics in sync.
+
+| Tier | Scaling | Main constant | Purpose |
+|------|---------|----------------|---------|
+| Consumables | per-goblin | `CONSUMABLES_BUFFER_PER_GOBLIN` | Pressure high when (food+meals)/goblin below this. Drives forage/deposit/cook. |
+| Ore | per-goblin | `ORE_BUFFER_PER_GOBLIN` | Pressure high when totalOre/goblin below this. Mine uses `orePressure` for scarcity floors. |
+| Wood | per-goblin | `WOOD_BUFFER_PER_GOBLIN` | Same for wood; chop uses `woodPressure`. `HEARTH_WOOD_LOW_PER_HEARTH` nudge for refuel. |
+| Upgrades | absolute | `UPGRADES_MIDPOINT` | Bars+planks total where upgradesPressure ~0.5. Smith/saw use `upgradesPressure`. |
+
+When `livingGoblinCount` is 0 or unknown, pressures use `DEFAULT_GOBLINS_FOR_PRESSURE` (default 5) so small/early colonies still get sensible curves. To tune: change the buffer or midpoint in `resourceTuning.ts`; all actions that use that tier’s pressure will stay consistent.
 
 Traits shift sigmoid midpoints and apply score multipliers (see `traitActionBias.ts`).
 

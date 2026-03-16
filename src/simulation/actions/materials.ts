@@ -16,38 +16,30 @@ import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
-import {
-  HEARTH_WOOD_LOW_PER_HEARTH,
-  ORE_SCARCE_PER_GOBLIN,
-  WOOD_SCARCE_PER_GOBLIN,
-} from '../resourceTuning';
+import { HEARTH_WOOD_LOW_PER_HEARTH } from '../resourceTuning';
 
 // --- mine: miners target ore tiles ---
 export const mine: Action = {
   name: 'mine',
   tags: ['work', 'mine'],
   eligible: ({ goblin }) => totalLoad(goblin.inventory) < MAX_INVENTORY_CAPACITY,
-  score: ({ goblin, grid, resourceBalance, oreStockpiles, rooms }) => {
+  score: ({ goblin, grid, resourceBalance, rooms }) => {
     const warmth = goblin.warmth ?? 100;
     const warmthFactor = 0.5 + 0.5 * ramp(warmth, 15, 45);
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
-    const { materialPriority = 1, orePressure = 0.65, livingGoblinCount = 0 } = resourceBalance ?? {};
+    const { materialPriority = 1, orePressure = 0.65 } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
-    const totalOre = oreStockpiles?.reduce((s, sp) => s + sp.ore, 0) ?? 0;
-    const effectiveOreScarce = livingGoblinCount > 0
-      ? ORE_SCARCE_PER_GOBLIN * livingGoblinCount
-      : ORE_SCARCE_PER_GOBLIN * 5;
-    const oreScarce = hasBlacksmith && totalOre < effectiveOreScarce;
+    const oreScarce = hasBlacksmith && orePressure > 0.5;
 
     if (!target) {
       if (goblin.knownOreSites.length > 0) {
         let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * orePressure;
         if (oreScarce) baseKnown *= 1.25;
         let flooredKnown = baseKnown;
-        if (orePressure > 0.5 && oreScarce) {
+        if (oreScarce) {
           flooredKnown = Math.max(flooredKnown, 0.35);
         }
         return Math.min(1.0, flooredKnown) * warmthFactor;
@@ -57,7 +49,7 @@ export const mine: Action = {
     let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * orePressure;
     if (oreScarce) base *= 1.25;
     let score = Math.min(1.0, base);
-    if (orePressure > 0.5 && oreScarce) {
+    if (oreScarce) {
       score = Math.max(score, 0.35);
     }
     return score * warmthFactor;
@@ -149,23 +141,18 @@ export const chop: Action = {
       materialPriority = 1,
       woodPressure = 0.65,
       refuelableHearthCount = 0,
-      livingGoblinCount = 0,
     } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
     const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
-    const effectiveWoodScarce = livingGoblinCount > 0
-      ? WOOD_SCARCE_PER_GOBLIN * livingGoblinCount
-      : WOOD_SCARCE_PER_GOBLIN * 5;
-    const woodScarce = hasLumberHut && totalWood < effectiveWoodScarce;
+    const woodScarce = hasLumberHut && woodPressure > 0.5;
 
     if (!target) {
       if (goblin.knownWoodSites.length > 0) {
         let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * woodPressure;
         if (woodScarce) baseKnown *= 1.3;
         let flooredKnown = baseKnown;
-        // When wood is scarce, ensure a modest floor so remembered-tree logging competes with other work.
-        if (woodPressure > 0.5 && woodScarce) {
+        if (woodScarce) {
           flooredKnown = Math.max(flooredKnown, 0.4);
         }
         return Math.min(1.0, flooredKnown) * warmthFactor;
@@ -175,11 +162,9 @@ export const chop: Action = {
     let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * woodPressure;
     if (woodScarce) base *= 1.3;
     let score = Math.min(1.0, base);
-    // Stock-the-wood: when stored wood is low, give chop a floor so it can win ties vs. forage.
-    if (woodPressure > 0.5 && woodScarce) {
+    if (woodScarce) {
       score = Math.max(score, 0.4);
     }
-    // Hearth nudge: if many hearths need fuel and wood is scarce, slightly boost chop so fires get wood.
     const effectiveHearthWoodLow = refuelableHearthCount > 0
       ? HEARTH_WOOD_LOW_PER_HEARTH * refuelableHearthCount
       : HEARTH_WOOD_LOW_PER_HEARTH;
