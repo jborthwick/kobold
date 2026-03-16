@@ -30,6 +30,11 @@ const TRAIT_COLORS: Record<GoblinTrait, string> = {
   brave:     '#3498db',
   greedy:    '#f0c040',
   cheerful:  '#ff9fd8',
+  curious:   '#87cefa',
+  stubborn:  '#b5651d',
+  cowardly:  '#95a5a6',
+  glutton:   '#ffb347',
+  crafty:    '#9b59b6',
 };
 function traitColor(trait: GoblinTrait): string {
   return TRAIT_COLORS[trait] ?? '#aaa';
