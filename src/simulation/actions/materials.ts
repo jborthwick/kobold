@@ -16,6 +16,11 @@ import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
+import {
+  HEARTH_WOOD_LOW,
+  ORE_SCARCE_WITH_BLACKSMITH,
+  WOOD_SCARCE_WITH_LUMBER_HUT,
+} from '../resourceTuning';
 
 // --- mine: miners target ore tiles ---
 export const mine: Action = {
@@ -32,7 +37,7 @@ export const mine: Action = {
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
     const totalOre = oreStockpiles?.reduce((s, sp) => s + sp.ore, 0) ?? 0;
-    const oreScarce = hasBlacksmith && totalOre < 80;
+    const oreScarce = hasBlacksmith && totalOre < ORE_SCARCE_WITH_BLACKSMITH;
 
     if (!target) {
       if (goblin.knownOreSites.length > 0) {
@@ -145,7 +150,7 @@ export const chop: Action = {
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
     const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
-    const woodScarce = hasLumberHut && totalWood < 40;
+    const woodScarce = hasLumberHut && totalWood < WOOD_SCARCE_WITH_LUMBER_HUT;
 
     if (!target) {
       if (goblin.knownWoodSites.length > 0) {
@@ -168,7 +173,7 @@ export const chop: Action = {
       score = Math.max(score, 0.4);
     }
     // Hearth nudge: if many hearths need fuel and wood is scarce, slightly boost chop so fires get wood.
-    if (refuelableHearthCount > 0 && woodPressure > 0.5 && totalWood < 20) {
+    if (refuelableHearthCount > 0 && woodPressure > 0.5 && totalWood < HEARTH_WOOD_LOW) {
       score = Math.min(1.0, score + 0.1);
     }
     return score * warmthFactor;

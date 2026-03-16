@@ -10,13 +10,13 @@ import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';
+import { MAX_MEALS_STORED } from '../resourceTuning';
 
 const MEALS_PER_BATCH = 5;
 const FOOD_COST = 5;
 const WOOD_COST = 1;
 const COOKING_TICKS_REQUIRED = 50;
 const FIRE_CHANCE_PER_TICK = 0.001; // 0.1% chance per tick to start a fire (~5% per batch)
-const MAX_MEALS_STORED = 80;
 
 /** Find or auto-create a MealStockpile at the top-left corner of the given kitchen. */
 function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {

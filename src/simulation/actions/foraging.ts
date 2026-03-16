@@ -14,16 +14,15 @@ import {
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
+import {
+  FOOD_LARDER_TARGET,
+  FOOD_STOCK_LARDER_PRESSURE,
+} from '../resourceTuning';
 
 /** Commitment expiry for pathing to stockpile/kitchen — prevents ping-pong with forage. */
 const DEPOSIT_WITHDRAW_COMMIT_TICKS = 15;
 import type { Action, ActionContext } from './types';
 import { isWalkable } from '../world';
-
-/** Total stored food below which forage/deposit "stock the larder" nudges apply (one place). */
-const LARDER_TARGET = 100;
-/** consumablesPressure above this → "stock the larder" score floor (aligned with utilityAI consumables midpoint). */
-const CONSUMABLES_STOCK_LARDER = 0.5;
 
 function getForageRadius(goblin: Goblin): number {
   const vision = effectiveVision(goblin);
@@ -40,7 +39,7 @@ function getFoodTarget(goblin: Goblin, grid: Tile[][]): { x: number; y: number }
 function larderContext(ctx: Pick<ActionContext, 'foodStockpiles' | 'rooms' | 'roomBonuses'>): { totalStoredFood: number; storageHungry: boolean } {
   const hasStorageRoom = ctx.roomBonuses?.hasStorage ?? (ctx.rooms?.some(r => r.type === 'storage') ?? false);
   const totalStoredFood = ctx.foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
-  return { totalStoredFood, storageHungry: hasStorageRoom && totalStoredFood < LARDER_TARGET };
+  return { totalStoredFood, storageHungry: hasStorageRoom && totalStoredFood < FOOD_LARDER_TARGET };
 }
 
 // --- forage: scan for food, pathfind, harvest ---
@@ -56,7 +55,7 @@ export const forage: Action = {
     const colonyFoodBlend = 0.5 + 0.5 * consumablesPressure;
     const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
     const survivalBoost = noFood && goblin.hunger > 65 ? 1.3 : 1.0;
-    const stockTheLarder = consumablesPressure > CONSUMABLES_STOCK_LARDER;
+    const stockTheLarder = consumablesPressure > FOOD_STOCK_LARDER_PRESSURE;
 
     if (!target) {
       if (goblin.knownFoodSites.length > 0) {
@@ -215,7 +214,7 @@ export const depositFood: Action = {
     const { storageHungry } = larderContext(ctx);
     const onStockpile = foodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const { foodPriority = 0, consumablesPressure = 0.5 } = resourceBalance ?? {};
-    const stockTheLarder = consumablesPressure > CONSUMABLES_STOCK_LARDER;
+    const stockTheLarder = consumablesPressure > FOOD_STOCK_LARDER_PRESSURE;
     // Ramp 3–12 so deposit scores with less carried food; hunger gate at 58 so they still haul when moderately hungry
     let base = ramp(goblin.inventory.food, 3, 12) * inverseSigmoid(goblin.hunger, 58) * 0.65 * (onStockpile ? 2.5 : 1.0) * (1 + foodPriority * 0.4);
     if (storageHungry) {

@@ -21,6 +21,12 @@ import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 import { actionNameToWorkCategory, getSkillForCategory, LAST_JOB_PERSIST_TICKS, type WorkCategoryId, type WorkerTargets } from './workerTargets';
 import { xpToLevel } from './skills';
 import { getRefuelableHearthCount } from './actions/hearth';
+import {
+  CONSUMABLES_MIDPOINT,
+  ORE_MIDPOINT,
+  WOOD_MIDPOINT,
+  UPGRADES_MIDPOINT,
+} from './resourceTuning';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
 // Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
@@ -72,12 +78,12 @@ export function computeResourceBalanceModifier(
   const materialPriority = 1 - imbalance;
 
   // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > raw > upgrades.
-  // Consumables midpoint 95 so the colony maintains a larger buffer before relaxing; "stock the larder" stays active longer.
-  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 95) * 1.0);
+  // Midpoints are centralized in resourceTuning so balance can be adjusted in one place.
+  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, CONSUMABLES_MIDPOINT) * 1.0);
   // Separate raw-material pressures so ore-heavy colonies can still feel wood scarcity.
-  const orePressure = Math.min(1, inverseSigmoid(totalOre, 40) * 0.65);
-  const woodPressure = Math.min(1, inverseSigmoid(totalWood, 25) * 0.65);
-  const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, 50) * 0.35);
+  const orePressure = Math.min(1, inverseSigmoid(totalOre, ORE_MIDPOINT) * 0.65);
+  const woodPressure = Math.min(1, inverseSigmoid(totalWood, WOOD_MIDPOINT) * 0.65);
+  const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, UPGRADES_MIDPOINT) * 0.35);
 
   return {
     foodPriority,
