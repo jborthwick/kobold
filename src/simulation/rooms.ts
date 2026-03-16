@@ -50,6 +50,28 @@ export function canPlaceRoom(grid: Tile[][], rooms: Room[], rx: number, ry: numb
     return true;
 }
 
+/** Tile types we never clear (room furniture + tiles already blocked by canPlaceRoom). Everything else becomes Dirt so new ground types are cleared without listing them. */
+function shouldNotClear(tileType: TileType): boolean {
+    return tileType === TileType.Hearth
+        || tileType === TileType.Water || tileType === TileType.Stone || tileType === TileType.Ore || tileType === TileType.Pool
+        || isWallType(tileType);
+}
+
+/** Convert all ground tiles in the rectangle to Dirt, except those in shouldNotClear. Call before adding room-specific items (hearth, stockpiles). */
+export function clearRoomGroundToDirt(grid: Tile[][], rx: number, ry: number, w: number, h: number): void {
+    const cleanDirt: Tile = { type: TileType.Dirt, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0 };
+    for (let dy = 0; dy < h; dy++) {
+        for (let dx = 0; dx < w; dx++) {
+            const tx = rx + dx, ty = ry + dy;
+            if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) continue;
+            const t = grid[ty][tx];
+            if (!shouldNotClear(t.type)) {
+                grid[ty][tx] = { ...cleanDirt };
+            }
+        }
+    }
+}
+
 function isWalkableInRoom(grid: Tile[][], tx: number, ty: number): boolean {
     if (tx < 0 || tx >= GRID_SIZE || ty < 0 || ty >= GRID_SIZE) return false;
     const t = grid[ty][tx];

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 // Note: import * as Phaser is required — Phaser's dist build has no default export
-import { canPlaceRoom } from '../../simulation/rooms';
+import { canPlaceRoom, clearRoomGroundToDirt } from '../../simulation/rooms';
 import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpile, drawPlankStockpile, drawBarStockpile, drawTerrain, drawOverlay, drawAgents, drawOffScreenIndicator } from './WorldRender';
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
@@ -178,6 +178,7 @@ export class WorldScene extends Phaser.Scene {
     const { x, y } = this.buildPreview;
     const w = 5, h = 5;
     if (!canPlaceRoom(this.grid, this.rooms, x, y, w, h)) return;
+    clearRoomGroundToDirt(this.grid, x, y, w, h);
 
     const room: Room = {
       id: `room - ${Date.now()} `,

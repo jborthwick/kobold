@@ -11,7 +11,7 @@ import { setNextEventTick } from '../../simulation/events';
 import * as WorldGoals from './WorldGoals';
 import { GRID_SIZE, TILE_SIZE } from '../../shared/constants';
 import { type Chapter, type OverlayMode, type LogEntry, type RoomType, type Room } from '../../shared/types';
-import { canPlaceRoom } from '../../simulation/rooms';
+import { canPlaceRoom, clearRoomGroundToDirt } from '../../simulation/rooms';
 import { WORK_CATEGORIES, type WorkCategoryId, type WorkerTargets } from '../../simulation/workerTargets';
 import { SPRITE_CONFIG } from '../tileConfig';
 import { drawFlag } from './WorldOverlays';
@@ -97,6 +97,7 @@ export function initializeWorld(scene: WorldScene) {
       const rx = depotX + dx;
       const ry = depotY + dy;
       if (canPlaceRoom(scene.grid, scene.rooms, rx, ry, roomW, roomH)) {
+        clearRoomGroundToDirt(scene.grid, rx, ry, roomW, roomH);
         const storageRoom: Room = {
           id: `room-storage-0`,
           type: 'storage',

@@ -26,7 +26,7 @@ import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventur
 import { createDangerField, computeGoblinWarmth, computeDanger, updateTraffic } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
 import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
-import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../src/simulation/rooms';
+import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles, clearRoomGroundToDirt } from '../src/simulation/rooms';
 import { rollWound } from '../src/simulation/wounds';
 import { getGoblinConfig } from '../src/shared/goblinConfig';
 import { GRID_SIZE, HEARTH_FUEL_MAX } from '../src/shared/constants';
@@ -342,6 +342,7 @@ function runWorldEventsAndSuccession(tick: number): void {
   if (tick === 400) {
     const lumberX = storageRoom.x - 8;
     const lumberY = storageRoom.y;
+    clearRoomGroundToDirt(grid, lumberX, lumberY, 5, 5);
     const lumberRoom: Room = {
       id: 'room-lumber',
       type: 'lumber_hut',
