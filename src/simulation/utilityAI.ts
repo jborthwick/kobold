@@ -8,7 +8,6 @@
  */
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
-import { } from '../shared/constants';
 import { isWalkable } from './world';
 import { traitMod, pathNextStep } from './agents';
 import { TileType } from '../shared/types';
@@ -131,6 +130,9 @@ function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number):
 
 /** Fraction of cold penalty removed at full shelter (0 = no reduction, 0.3 = 30% less penalty). */
 const SHELTER_COLD_REDUCTION = 0.3;
+
+/** Ticks of inactivity after which cooking/sawing/smithing progress is cleared when task no longer matches. */
+const PROGRESS_GRACE_TICKS = 40;
 
 // updateNeeds runs every tick *before* action selection.
 // It mutates need meters directly — these are not actions, just physics.
@@ -342,7 +344,73 @@ const ACTION_DISPLAY_NAMES: Record<string, string> = {
   avoidRival: 'avoiding a rival',
   wander: 'exploring',
   commandMove: 'following orders',
+  cook: 'cooking',
+  saw: 'sawing',
+  smith: 'smithing',
+  fightFire: 'fighting fire',
+  establishStockpile: 'establishing stockpile',
 };
+
+/** On-fire override: move toward nearest water/pool and set task; pathfinding never routes onto water so we step on when adjacent. */
+function tickOnFireGoblin(goblin: Goblin, grid: Tile[][]): void {
+  goblin.carryingWater = false;
+  const WATER_SEARCH = 30;
+  let waterTarget: { x: number; y: number } | null = null;
+  let bestDist = Infinity;
+  const x0 = Math.max(0, goblin.x - WATER_SEARCH), x1 = Math.min(grid[0].length - 1, goblin.x + WATER_SEARCH);
+  const y0 = Math.max(0, goblin.y - WATER_SEARCH), y1 = Math.min(grid.length - 1, goblin.y + WATER_SEARCH);
+  for (let wy = y0; wy <= y1; wy++) {
+    for (let wx = x0; wx <= x1; wx++) {
+      const tt = grid[wy][wx].type;
+      if (tt !== TileType.Water && tt !== TileType.Pool) continue;
+      const d = Math.abs(wx - goblin.x) + Math.abs(wy - goblin.y);
+      if (d < bestDist) { bestDist = d; waterTarget = { x: wx, y: wy }; }
+    }
+  }
+  if (waterTarget) {
+    const next = pathNextStep({ x: goblin.x, y: goblin.y }, waterTarget, grid);
+    if (isWalkable(grid, next.x, next.y)) {
+      goblin.x = next.x;
+      goblin.y = next.y;
+    }
+    const distToWater = Math.abs(goblin.x - waterTarget.x) + Math.abs(goblin.y - waterTarget.y);
+    if (distToWater === 1) {
+      goblin.x = waterTarget.x;
+      goblin.y = waterTarget.y;
+    }
+    goblin.task = `🔥 ON FIRE! → water (${bestDist} tiles)`;
+  } else {
+    goblin.task = '🔥 ON FIRE! (no water nearby!)';
+  }
+}
+
+/** Clear cooking/sawing/smithing progress if the goblin has been doing something else for longer than PROGRESS_GRACE_TICKS. Only cooking logs. */
+function clearProgressIfInterrupted(
+  goblin: Goblin,
+  kind: 'cooking' | 'sawing' | 'smithing',
+  currentTick: number,
+  onLog?: LogFn,
+): void {
+  if (kind === 'cooking') {
+    const idle = currentTick - (goblin.cookingLastActiveTick ?? 0);
+    if (goblin.cookingProgress !== undefined && !goblin.task.includes('cooking') && idle > PROGRESS_GRACE_TICKS) {
+      goblin.cookingProgress = undefined;
+      if (shouldLog(goblin, 'cooking_interrupted', currentTick, 100)) {
+        onLog?.(`🔥 ${goblin.name} abandoned their cooking! The food is ruined!`, 'warn');
+      }
+    }
+  } else if (kind === 'sawing') {
+    const idle = currentTick - (goblin.sawingLastActiveTick ?? 0);
+    if (goblin.sawingProgress !== undefined && !goblin.task.includes('sawing') && idle > PROGRESS_GRACE_TICKS) {
+      goblin.sawingProgress = undefined;
+    }
+  } else {
+    const idle = currentTick - (goblin.smithingLastActiveTick ?? 0);
+    if (goblin.smithingProgress !== undefined && !goblin.task.includes('smithing') && idle > PROGRESS_GRACE_TICKS) {
+      goblin.smithingProgress = undefined;
+    }
+  }
+}
 
 // ── Selector loop ──────────────────────────────────────────────────────────────
 
@@ -418,43 +486,12 @@ export function tickAgentUtility(
   }
 
   // ── Step 2b: Burning goblin override ─────────────────────────────────────────
-  // A goblin on fire overrides ALL action scoring — they sprint to the nearest
-  // water or rain pool. carryingWater is cleared so they don't waste time dousing.
   if (goblin.onFire) {
-    goblin.carryingWater = false;
-    const WATER_SEARCH = 30;
-    let waterTarget: { x: number; y: number } | null = null;
-    let bestDist = Infinity;
-    const x0 = Math.max(0, goblin.x - WATER_SEARCH), x1 = Math.min(grid[0].length - 1, goblin.x + WATER_SEARCH);
-    const y0 = Math.max(0, goblin.y - WATER_SEARCH), y1 = Math.min(grid.length - 1, goblin.y + WATER_SEARCH);
-    for (let wy = y0; wy <= y1; wy++) {
-      for (let wx = x0; wx <= x1; wx++) {
-        const tt = grid[wy][wx].type;
-        if (tt !== TileType.Water && tt !== TileType.Pool) continue;
-        const d = Math.abs(wx - goblin.x) + Math.abs(wy - goblin.y);
-        if (d < bestDist) { bestDist = d; waterTarget = { x: wx, y: wy }; }
-      }
-    }
-    if (waterTarget) {
-      const next = pathNextStep({ x: goblin.x, y: goblin.y }, waterTarget, grid);
-      if (isWalkable(grid, next.x, next.y)) {
-        goblin.x = next.x;
-        goblin.y = next.y;
-      }
-      // Exception: pathfinding never routes onto water; when adjacent, step onto water to douse
-      const distToWater = Math.abs(goblin.x - waterTarget.x) + Math.abs(goblin.y - waterTarget.y);
-      if (distToWater === 1) {
-        goblin.x = waterTarget.x;
-        goblin.y = waterTarget.y;
-      }
-      goblin.task = `🔥 ON FIRE! → water (${bestDist} tiles)`;
-    } else {
-      goblin.task = '🔥 ON FIRE! (no water nearby!)';
-    }
+    tickOnFireGoblin(goblin, grid);
     return;
   }
 
-  // ── Step 4: Build action context ─────────────────────────────────────────────
+  // ── Step 3: Build action context ─────────────────────────────────────────────
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
   // Compute resource balance once per tick and cache it to avoid redundant array reduces.
@@ -489,7 +526,7 @@ export function tickAgentUtility(
     currentHeadcounts,
   };
 
-  // ── Step 5: Score all eligible actions ───────────────────────────────────────
+  // ── Step 4: Score all eligible actions ──────────────────────────────────────
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
@@ -509,26 +546,22 @@ export function tickAgentUtility(
     if (!action.eligible(ctx)) continue;
     let score = action.score(ctx);
     score = applyTraitBias(goblin, action, score);
-    // Worker target: nudge under-staffed categories; skill level amplifies for forage/mine/chop
     const category = actionNameToWorkCategory(action.name);
+    const skillKey = category ? getSkillForCategory(category) : null;
+    const level = skillKey ? xpToLevel(goblin.skills[skillKey]) : 0;
+    // Worker target: nudge under-staffed categories; skill level amplifies for forage/mine/chop
     if (category && workerTargets?.[category] != null && currentHeadcounts?.[category] != null) {
       const target = workerTargets[category]!;
       const current = currentHeadcounts[category]!;
       if (target > 0 && current < target) {
         let bonus = 0.05 * (target - current) / Math.max(target, 1);
-        const skillKey = getSkillForCategory(category);
-        if (skillKey) {
-          const level = xpToLevel(goblin.skills[skillKey]);
-          bonus *= 1 + 0.1 * level;
-        }
+        if (skillKey) bonus *= 1 + 0.1 * level;
         bonus = Math.min(bonus, UNDERSTAFF_BONUS_CAP);
         score = Math.min(1.0, score + bonus);
       }
     }
     // Skill preference: nudge toward work this goblin is good at (forage/mine/chop)
-    const skillKey = category ? getSkillForCategory(category) : null;
     if (skillKey) {
-      const level = xpToLevel(goblin.skills[skillKey]);
       const skillBonus = Math.min(SKILL_PREFERENCE_PER_LEVEL * level, SKILL_PREFERENCE_CAP);
       score = Math.min(1.0, score + skillBonus);
     }
@@ -539,17 +572,13 @@ export function tickAgentUtility(
     if (action.name === goblin.lastActionName && action.name !== 'wander') {
       score = Math.min(1.0, score + MOMENTUM_BONUS);
     }
-    // Hunger crisis: no food and hunger > 70 — prefer getting food over work/social so goblins don't starve
+    // Hunger crisis / starvation override: when no food and high hunger, bias toward get-food so goblins don't starve.
     if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
       score += 0.08;
     }
-    // When colony is short on food, nudge wander so goblins explore and find distant/event-sprouted mushrooms
     if (action.name === 'wander' && (ctx.resourceBalance?.consumablesPressure ?? 0) > 0.6) {
       score += 0.03;
     }
-    // Starvation override: no food and hunger > 85 — get-food must beat work momentum. Only boost forage when
-    // it can deliver (score > 0.2 means has target or known sites); otherwise we'd lock them into "forage"
-    // with nothing to harvest and they starve while "searching".
     if (noFood && goblin.hunger > 85 && action.name === 'withdrawFood') {
       score = Math.max(score, 1.05);
     }
@@ -578,27 +607,24 @@ export function tickAgentUtility(
     }
   }
 
-  // ── Step 6: Execute ───────────────────────────────────────────────────────────
+  // ── Step 5: Execute ──────────────────────────────────────────────────────────
   // Set an idle description first — execute() will overwrite goblin.task if it does real work.
   // If execute() returns early (e.g. pathfinding finds nothing), the idle string shows in the HUD.
   goblin.task = idleDescription(goblin);
+  let workCategoryRefreshedThisTick = false;
   if (bestAction) {
     bestAction.execute(ctx);
-    // Record winner for momentum bonus next tick
     goblin.lastActionName = bestAction.name;
     const workCat = actionNameToWorkCategory(bestAction.name);
     if (workCat != null) {
       goblin.lastWorkCategory = workCat;
       goblin.lastWorkCategoryTick = currentTick;
-    } else {
-      const age = currentTick - (goblin.lastWorkCategoryTick ?? 0);
-      if (age > LAST_JOB_PERSIST_TICKS) {
-        goblin.lastWorkCategory = undefined;
-        goblin.lastWorkCategoryTick = undefined;
-      }
+      workCategoryRefreshedThisTick = true;
     }
   } else {
     goblin.lastActionName = '';
+  }
+  if (!workCategoryRefreshedThisTick) {
     const age = currentTick - (goblin.lastWorkCategoryTick ?? 0);
     if (age > LAST_JOB_PERSIST_TICKS) {
       goblin.lastWorkCategory = undefined;
@@ -606,24 +632,10 @@ export function tickAgentUtility(
     }
   }
 
-  // ── Step 7: Handle Interrupted Cooking ────────────────────────────────────────
-  // If a goblin was cooking but their newly assigned task is NOT cooking, they lose all progress
-  // — but only after cooking has been inactive for >40 ticks (grace window for brief interruptions).
-  const cookingIdle = currentTick - (goblin.cookingLastActiveTick ?? 0);
-  if (goblin.cookingProgress !== undefined && !goblin.task.includes('cooking') && cookingIdle > 40) {
-    goblin.cookingProgress = undefined;
-    if (shouldLog(goblin, 'cooking_interrupted', currentTick, 100)) {
-      onLog?.(`🔥 ${goblin.name} abandoned their cooking! The food is ruined!`, 'warn');
-    }
-  }
-  const sawingIdle = currentTick - (goblin.sawingLastActiveTick ?? 0);
-  if (goblin.sawingProgress !== undefined && !goblin.task.includes('sawing') && sawingIdle > 40) {
-    goblin.sawingProgress = undefined;
-  }
-  const smithingIdle = currentTick - (goblin.smithingLastActiveTick ?? 0);
-  if (goblin.smithingProgress !== undefined && !goblin.task.includes('smithing') && smithingIdle > 40) {
-    goblin.smithingProgress = undefined;
-  }
+  // ── Step 6: Handle interrupted multi-tick progress ────────────────────────────
+  clearProgressIfInterrupted(goblin, 'cooking', currentTick, onLog);
+  clearProgressIfInterrupted(goblin, 'sawing', currentTick, onLog);
+  clearProgressIfInterrupted(goblin, 'smithing', currentTick, onLog);
 }
 
 /** Describe why a goblin is between actions — shown when execute returns early or nothing wins. */
