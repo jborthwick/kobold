@@ -180,6 +180,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize:   12,
     color:      '#ccc',
     overflowY:  'auto',
+    overscrollBehavior: 'contain',
     scrollbarWidth: 'thin',
     scrollbarColor: '#444 transparent',
     userSelect: 'none',

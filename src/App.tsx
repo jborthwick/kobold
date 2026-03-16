@@ -63,7 +63,9 @@ export default function App() {
           width: sidebarWidth,
           display: 'flex',
           flexDirection: 'column',
-          pointerEvents: 'none',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          pointerEvents: 'auto',
         }}>
           <ColonyGoalPanel />
           <WorkTargetsPanel />
