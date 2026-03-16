@@ -17,9 +17,9 @@ import { moveTo, moveToward, addWorkFatigue, totalLoad, nearestStockpile } from 
 import { addThought } from '../mood';
 import type { Action } from './types';
 import {
-  HEARTH_WOOD_LOW,
-  ORE_SCARCE_WITH_BLACKSMITH,
-  WOOD_SCARCE_WITH_LUMBER_HUT,
+  HEARTH_WOOD_LOW_PER_HEARTH,
+  ORE_SCARCE_PER_GOBLIN,
+  WOOD_SCARCE_PER_GOBLIN,
 } from '../resourceTuning';
 
 // --- mine: miners target ore tiles ---
@@ -33,11 +33,14 @@ export const mine: Action = {
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
-    const { materialPriority = 1, orePressure = 0.65 } = resourceBalance ?? {};
+    const { materialPriority = 1, orePressure = 0.65, livingGoblinCount = 0 } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
     const totalOre = oreStockpiles?.reduce((s, sp) => s + sp.ore, 0) ?? 0;
-    const oreScarce = hasBlacksmith && totalOre < ORE_SCARCE_WITH_BLACKSMITH;
+    const effectiveOreScarce = livingGoblinCount > 0
+      ? ORE_SCARCE_PER_GOBLIN * livingGoblinCount
+      : ORE_SCARCE_PER_GOBLIN * 5;
+    const oreScarce = hasBlacksmith && totalOre < effectiveOreScarce;
 
     if (!target) {
       if (goblin.knownOreSites.length > 0) {
@@ -146,11 +149,15 @@ export const chop: Action = {
       materialPriority = 1,
       woodPressure = 0.65,
       refuelableHearthCount = 0,
+      livingGoblinCount = 0,
     } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
     const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
-    const woodScarce = hasLumberHut && totalWood < WOOD_SCARCE_WITH_LUMBER_HUT;
+    const effectiveWoodScarce = livingGoblinCount > 0
+      ? WOOD_SCARCE_PER_GOBLIN * livingGoblinCount
+      : WOOD_SCARCE_PER_GOBLIN * 5;
+    const woodScarce = hasLumberHut && totalWood < effectiveWoodScarce;
 
     if (!target) {
       if (goblin.knownWoodSites.length > 0) {
@@ -173,7 +180,10 @@ export const chop: Action = {
       score = Math.max(score, 0.4);
     }
     // Hearth nudge: if many hearths need fuel and wood is scarce, slightly boost chop so fires get wood.
-    if (refuelableHearthCount > 0 && woodPressure > 0.5 && totalWood < HEARTH_WOOD_LOW) {
+    const effectiveHearthWoodLow = refuelableHearthCount > 0
+      ? HEARTH_WOOD_LOW_PER_HEARTH * refuelableHearthCount
+      : HEARTH_WOOD_LOW_PER_HEARTH;
+    if (refuelableHearthCount > 0 && woodPressure > 0.5 && totalWood < effectiveHearthWoodLow) {
       score = Math.min(1.0, score + 0.1);
     }
     return score * warmthFactor;

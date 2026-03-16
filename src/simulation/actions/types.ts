@@ -46,6 +46,7 @@ export interface ActionContext {
     woodPressure: number;
     upgradesPressure: number;
     refuelableHearthCount: number;
+    livingGoblinCount: number;
   };
   workerTargets?: import('../../simulation/workerTargets').WorkerTargets;
   currentHeadcounts?: Record<import('../../simulation/workerTargets').WorkCategoryId, number>;

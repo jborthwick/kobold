@@ -22,7 +22,7 @@ import { actionNameToWorkCategory, getSkillForCategory, LAST_JOB_PERSIST_TICKS, 
 import { xpToLevel } from './skills';
 import { getRefuelableHearthCount } from './actions/hearth';
 import {
-  CONSUMABLES_MIDPOINT,
+  CONSUMABLES_BUFFER_PER_GOBLIN,
   ORE_MIDPOINT,
   WOOD_MIDPOINT,
   UPGRADES_MIDPOINT,
@@ -39,9 +39,9 @@ export function sigmoid(value: number, midpoint: number, steepness = 0.15): numb
 /**
  * Central scarcity and resource balance: computed once per tick, passed to all actions.
  *
- * 1) Tier pressures (consumables > raw materials > upgrades): inverseSigmoid on stockpile
- *    totals with tier-specific midpoints, then scaled by tier weight so food/meals urgency
- *    dominates bars/planks. Actions use one pressure; no per-action scarcity curves.
+ * 1) Consumables = food + meals (one tier). consumablesPressure uses per-goblin scaling when
+ *    livingGoblinCount > 0: pressure is high when (food+meals)/goblin is below
+ *    CONSUMABLES_BUFFER_PER_GOBLIN. Other tier pressures use absolute midpoints.
  *
  * 2) Balance (foodPriority / materialPriority): when materials >> consumables, boost food
  *    actions and nerf material actions (0.6+0.4*materialPriority in smith/saw/mine/chop).
@@ -53,6 +53,7 @@ export function computeResourceBalanceModifier(
   mealStockpiles: MealStockpile[] | undefined,
   barStockpiles: BarStockpile[] | undefined,
   plankStockpiles: PlankStockpile[] | undefined,
+  livingGoblinCount?: number,
 ): {
   foodPriority: number;
   materialPriority: number;
@@ -77,10 +78,14 @@ export function computeResourceBalanceModifier(
   const foodPriority = imbalance;
   const materialPriority = 1 - imbalance;
 
-  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > raw > upgrades.
-  // Midpoints are centralized in resourceTuning so balance can be adjusted in one place.
-  const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, CONSUMABLES_MIDPOINT) * 1.0);
-  // Separate raw-material pressures so ore-heavy colonies can still feel wood scarcity.
+  // Consumables pressure: per-goblin when count known, else fallback (e.g. 5 goblins)
+  const effectiveConsumables =
+    livingGoblinCount !== undefined && livingGoblinCount > 0
+      ? consumablesTotal / livingGoblinCount
+      : consumablesTotal / 5;
+  const consumablesPressure = Math.min(1, inverseSigmoid(effectiveConsumables, CONSUMABLES_BUFFER_PER_GOBLIN) * 1.0);
+
+  // Other tier pressures: absolute midpoints
   const orePressure = Math.min(1, inverseSigmoid(totalOre, ORE_MIDPOINT) * 0.65);
   const woodPressure = Math.min(1, inverseSigmoid(totalWood, WOOD_MIDPOINT) * 0.65);
   const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, UPGRADES_MIDPOINT) * 0.35);
@@ -447,13 +452,16 @@ export function tickAgentUtility(
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
   // Compute resource balance once per tick and cache it to avoid redundant array reduces.
+  const livingGoblinCount = goblins?.reduce((n, g) => n + (g.alive ? 1 : 0), 0) ?? 0;
   const resourceBalanceBase = computeResourceBalanceModifier(
     foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
+    livingGoblinCount,
   );
   const refuelableHearthCount = getRefuelableHearthCount(grid);
   const resourceBalance = {
     ...resourceBalanceBase,
     refuelableHearthCount,
+    livingGoblinCount,
   };
   const hasStorage = rooms?.some(r => r.type === 'storage') ?? false;
   const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;

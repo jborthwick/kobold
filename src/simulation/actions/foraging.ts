@@ -1,8 +1,9 @@
 /**
  * Forage (scan for food, pathfind, harvest), depositFood, withdrawFood.
- * Hunger-driven; uses knownFoodSites when no patch in range. When colony is short on food,
- * forage gets a score floor so goblins "stock the larder" even when not hungry. depositFood
- * scores with modest surplus (ramp + hunger gate) so stockpiles fill. Foragers get 2 food/tile, others 1.
+ * Hunger-driven; uses knownFoodSites when no patch in range. "Stock the larder" and
+ * storage-hungry behaviour use consumablesPressure only (single food+meals tier); no
+ * separate raw-food target. depositFood scores with modest surplus so stockpiles fill.
+ * Foragers get 2 food/tile, others 1.
  */
 import { TileType } from '../../shared/types';
 import type { Goblin, ResourceSite, Tile } from '../../shared/types';
@@ -14,10 +15,7 @@ import {
 import { grantXp, skillYieldBonus, xpToLevel } from '../skills';
 import { effectiveVision, woundYieldMultiplier } from '../wounds';
 import { moveToward, addWorkFatigue, shouldLog, totalLoad, nearestStockpile, getWalkableAdjacent } from './helpers';
-import {
-  FOOD_LARDER_TARGET,
-  FOOD_STOCK_LARDER_PRESSURE,
-} from '../resourceTuning';
+import { FOOD_STOCK_LARDER_PRESSURE } from '../resourceTuning';
 
 /** Commitment expiry for pathing to stockpile/kitchen — prevents ping-pong with forage. */
 const DEPOSIT_WITHDRAW_COMMIT_TICKS = 15;
@@ -36,10 +34,11 @@ function getFoodTarget(goblin: Goblin, grid: Tile[][]): { x: number; y: number }
   return bestFoodTile(goblin, grid, getForageRadius(goblin));
 }
 
-function larderContext(ctx: Pick<ActionContext, 'foodStockpiles' | 'rooms' | 'roomBonuses'>): { totalStoredFood: number; storageHungry: boolean } {
+/** Storage is "hungry" when we have storage and consumables pressure is above threshold (single consumables tier, no separate food target). */
+function larderContext(ctx: Pick<ActionContext, 'rooms' | 'roomBonuses' | 'resourceBalance'>): { storageHungry: boolean } {
   const hasStorageRoom = ctx.roomBonuses?.hasStorage ?? (ctx.rooms?.some(r => r.type === 'storage') ?? false);
-  const totalStoredFood = ctx.foodStockpiles?.reduce((s, sp) => s + sp.food, 0) ?? 0;
-  return { totalStoredFood, storageHungry: hasStorageRoom && totalStoredFood < FOOD_LARDER_TARGET };
+  const consumablesPressure = ctx.resourceBalance?.consumablesPressure ?? 0;
+  return { storageHungry: hasStorageRoom && consumablesPressure > FOOD_STOCK_LARDER_PRESSURE };
 }
 
 // --- forage: scan for food, pathfind, harvest ---

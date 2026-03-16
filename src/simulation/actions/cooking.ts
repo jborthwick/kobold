@@ -1,6 +1,11 @@
 /**
  * cook. Requires a kitchen room; consumes food + wood to produce meals into the kitchen's
  * meal stockpile. Meals improve morale (ate_tasty_meal thought) and feed withdrawFood.
+ *
+ * Unified consumables model: colony-wide food safety is consumablesPressure (food+meals).
+ * Cooking is gated by consumablesPressure (only cook when colony has some buffer) and
+ * mealsFraction (cook when meals < MEALS_FRACTION_COOK_BELOW of total consumables); no
+ * separate per-goblin meal cap.
  */
 import { TileType, isHearthLit } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
@@ -10,7 +15,7 @@ import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
 import { bus } from '../../shared/events';
-import { MAX_MEALS_STORED } from '../resourceTuning';
+import { COOK_MIN_CONSUMABLES_PRESSURE, MEALS_FRACTION_COOK_BELOW } from '../resourceTuning';
 
 const MEALS_PER_BATCH = 5;
 const FOOD_COST = 5;
@@ -27,7 +32,9 @@ function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
   const py = kitchen.y + 1;
   let pile = ctx.mealStockpiles.find(m => m.x === px && m.y === py);
   if (!pile) {
-    pile = { x: px, y: py, meals: 0, maxMeals: MAX_MEALS_STORED };
+    // maxMeals is a capacity hint for the stockpile UI; the real cap is enforced
+    // by the cooking logic using a per-goblin effectiveMealsCap.
+    pile = { x: px, y: py, meals: 0, maxMeals: Number.MAX_SAFE_INTEGER };
     ctx.mealStockpiles.push(pile);
   }
   return pile;
@@ -36,16 +43,21 @@ function getOrCreateMealStockpile(ctx: ActionContext): MealStockpile | null {
 export const cook: Action = {
     name: 'cook',
     tags: ['work', 'cook'],
-    eligible: ({ rooms, foodStockpiles, woodStockpiles, goblin, grid, mealStockpiles }) => {
+    eligible: ({ rooms, foodStockpiles, woodStockpiles, goblin, grid, mealStockpiles, resourceBalance }) => {
         if (!rooms || rooms.length === 0) return false;
 
         // Must have a kitchen
         const hasKitchen = rooms.some(r => r.type === 'kitchen');
         if (!hasKitchen) return false;
 
-        // Don't cook if meals are full
+        // Unified consumables: only cook when colony has enough buffer (pressure above min) and meals are below target fraction
+        const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
         const totalMeals = mealStockpiles?.reduce((s, m) => s + m.meals, 0) ?? 0;
-        if (totalMeals >= MAX_MEALS_STORED) return false;
+        const consumablesTotal = totalFood + totalMeals;
+        const mealsFraction = consumablesTotal > 0 ? totalMeals / consumablesTotal : 0;
+        const consumablesPressure = resourceBalance?.consumablesPressure ?? 0;
+        if (consumablesPressure < COOK_MIN_CONSUMABLES_PRESSURE) return false;
+        if (mealsFraction >= MEALS_FRACTION_COOK_BELOW) return false;
 
         // Must have resources OR be already cooking
         const hasFood = foodStockpiles?.some(s => s.food >= FOOD_COST);
@@ -74,7 +86,7 @@ export const cook: Action = {
         return (hasFood && hasWood) || (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0);
     },
 
-    score: ({ goblin, foodStockpiles, woodStockpiles, resourceBalance, rooms, roomBonuses, mealStockpiles }) => {
+    score: ({ goblin, foodStockpiles, woodStockpiles, resourceBalance, mealStockpiles }) => {
         // If already cooking, strong momentum to finish
         if (goblin.cookingProgress !== undefined && goblin.cookingProgress > 0) {
             return 0.95;
@@ -85,18 +97,17 @@ export const cook: Action = {
         if (totalFood < 1) return 0;
         if (totalWood < 1) return 0;
 
-        // Input gates only; scarcity from central consumablesPressure
+        // Input gates only; scarcity from central consumablesPressure; prefer cooking when meals fraction is low
         const foodInput = Math.min(1, ramp(totalFood, 3, 40));
         const woodInput = Math.min(1, ramp(totalWood, 2, 15));
         const hungerFactor = inverseSigmoid(goblin.hunger, 50);
         const { consumablesPressure = 0.5, foodPriority = 0 } = resourceBalance ?? {};
-        const hasKitchen = roomBonuses?.hasKitchen ?? (rooms?.some(r => r.type === 'kitchen') ?? false);
         const totalMeals = mealStockpiles?.reduce((s, m) => s + m.meals, 0) ?? 0;
-        const mealsScarce = hasKitchen && totalMeals < MAX_MEALS_STORED * 0.5;
-        let base = foodInput * woodInput * hungerFactor * 1.1 * consumablesPressure * (1 + foodPriority * 0.6);
-        if (hasKitchen && mealsScarce) {
-            base *= 1.3;
-        }
+        const consumablesTotal = totalFood + totalMeals;
+        const mealsFraction = consumablesTotal > 0 ? totalMeals / consumablesTotal : 0;
+        // Boost score when meals are below target fraction (e.g. below 0.5)
+        const mealsRatioBoost = mealsFraction < MEALS_FRACTION_COOK_BELOW ? 1.3 : 1.0;
+        const base = foodInput * woodInput * hungerFactor * 1.1 * consumablesPressure * (1 + foodPriority * 0.6) * mealsRatioBoost;
         return Math.min(1.0, base);
     },
 
