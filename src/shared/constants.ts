@@ -13,10 +13,10 @@ export const INITIAL_GOBLINS = 5;
 /** Goblin inventory cap (food + ore + wood); harvesting stops when total reaches this. */
 export const MAX_INVENTORY_CAPACITY = 20;
 
-/** Hearth fuel: cap and initial when built; decay 1 per tick. */
-export const HEARTH_FUEL_MAX = 200;
+/** Hearth fuel: cap and initial when built; decay per tick (lower = refuel less often). */
+export const HEARTH_FUEL_MAX = 400;
 /** Hearth fuel consumed per tick when lit. */
-export const HEARTH_FUEL_DECAY = 1;
+export const HEARTH_FUEL_DECAY = 0.5;
 /** Hearth fuel added per wood when refuelling. */
 export const HEARTH_FUEL_PER_WOOD = 50;
 
