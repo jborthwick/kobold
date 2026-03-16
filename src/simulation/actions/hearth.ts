@@ -24,6 +24,10 @@ function getRefuelableHearths(grid: Tile[][]): { x: number; y: number }[] {
   return out;
 }
 
+export function getRefuelableHearthCount(grid: Tile[][]): number {
+  return getRefuelableHearths(grid).length;
+}
+
 export const refuelHearth: Action = {
   name: 'refuelHearth',
   tags: ['work', 'comfort'],

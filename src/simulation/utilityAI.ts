@@ -20,6 +20,7 @@ import { tickWoundHealing } from './wounds';
 import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
 import { actionNameToWorkCategory, getSkillForCategory, LAST_JOB_PERSIST_TICKS, type WorkCategoryId, type WorkerTargets } from './workerTargets';
 import { xpToLevel } from './skills';
+import { getRefuelableHearthCount } from './actions/hearth';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
 // Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
@@ -50,7 +51,8 @@ export function computeResourceBalanceModifier(
   foodPriority: number;
   materialPriority: number;
   consumablesPressure: number;
-  materialsPressure: number;
+  orePressure: number;
+  woodPressure: number;
   upgradesPressure: number;
 } {
   const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
@@ -61,7 +63,6 @@ export function computeResourceBalanceModifier(
   const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
 
   const consumablesTotal = totalFood + totalMeals;
-  const materialsTotal = totalOre + totalWood;
   const upgradesTotal = totalBars + totalPlanks;
   const materialsForBalance = totalOre + totalWood + totalBars + totalPlanks;
 
@@ -70,17 +71,20 @@ export function computeResourceBalanceModifier(
   const foodPriority = imbalance;
   const materialPriority = 1 - imbalance;
 
-  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > materials > upgrades.
+  // Tier pressures: scarcity (0–1 when low stock) × tier weight so consumables > raw > upgrades.
   // Consumables midpoint 95 so the colony maintains a larger buffer before relaxing; "stock the larder" stays active longer.
   const consumablesPressure = Math.min(1, inverseSigmoid(consumablesTotal, 95) * 1.0);
-  const materialsPressure = Math.min(1, inverseSigmoid(materialsTotal, 40) * 0.65);
+  // Separate raw-material pressures so ore-heavy colonies can still feel wood scarcity.
+  const orePressure = Math.min(1, inverseSigmoid(totalOre, 40) * 0.65);
+  const woodPressure = Math.min(1, inverseSigmoid(totalWood, 25) * 0.65);
   const upgradesPressure = Math.min(1, inverseSigmoid(upgradesTotal, 50) * 0.35);
 
   return {
     foodPriority,
     materialPriority,
     consumablesPressure,
-    materialsPressure,
+    orePressure,
+    woodPressure,
     upgradesPressure,
   };
 }
@@ -437,9 +441,14 @@ export function tickAgentUtility(
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
   // Compute resource balance once per tick and cache it to avoid redundant array reduces.
-  const resourceBalance = computeResourceBalanceModifier(
+  const resourceBalanceBase = computeResourceBalanceModifier(
     foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
   );
+  const refuelableHearthCount = getRefuelableHearthCount(grid);
+  const resourceBalance = {
+    ...resourceBalanceBase,
+    refuelableHearthCount,
+  };
   const hasStorage = rooms?.some(r => r.type === 'storage') ?? false;
   const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;
   const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;

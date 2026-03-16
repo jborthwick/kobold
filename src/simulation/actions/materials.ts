@@ -28,7 +28,7 @@ export const mine: Action = {
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestMaterialTile(goblin, grid, radius);
-    const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
+    const { materialPriority = 1, orePressure = 0.65 } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
     const totalOre = oreStockpiles?.reduce((s, sp) => s + sp.ore, 0) ?? 0;
@@ -36,20 +36,20 @@ export const mine: Action = {
 
     if (!target) {
       if (goblin.knownOreSites.length > 0) {
-        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * materialsPressure;
+        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.2 * balanceFactor * orePressure;
         if (oreScarce) baseKnown *= 1.25;
         let flooredKnown = baseKnown;
-        if (materialsPressure > 0.5 && oreScarce) {
+        if (orePressure > 0.5 && oreScarce) {
           flooredKnown = Math.max(flooredKnown, 0.35);
         }
         return Math.min(1.0, flooredKnown) * warmthFactor;
       }
       return 0;
     }
-    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * orePressure;
     if (oreScarce) base *= 1.25;
     let score = Math.min(1.0, base);
-    if (materialsPressure > 0.5 && oreScarce) {
+    if (orePressure > 0.5 && oreScarce) {
       score = Math.max(score, 0.35);
     }
     return score * warmthFactor;
@@ -137,7 +137,11 @@ export const chop: Action = {
 
     const radius = Math.max(effectiveVision(goblin), traitMod(goblin, 'maxSearchRadius', 15));
     const target = bestWoodTile(goblin, grid, radius);
-    const { materialPriority = 1, materialsPressure = 0.65 } = resourceBalance ?? {};
+    const {
+      materialPriority = 1,
+      woodPressure = 0.65,
+      refuelableHearthCount = 0,
+    } = resourceBalance ?? {};
     const balanceFactor = 0.5 + 0.5 * materialPriority;
     const hasLumberHut = roomBonuses?.hasLumberHut ?? (rooms?.some(r => r.type === 'lumber_hut') ?? false);
     const totalWood = woodStockpiles?.reduce((s, sp) => s + sp.wood, 0) ?? 0;
@@ -145,23 +149,27 @@ export const chop: Action = {
 
     if (!target) {
       if (goblin.knownWoodSites.length > 0) {
-        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * materialsPressure;
+        let baseKnown = inverseSigmoid(goblin.hunger, 60) * 0.35 * balanceFactor * woodPressure;
         if (woodScarce) baseKnown *= 1.3;
         let flooredKnown = baseKnown;
-        // When materials are scarce, ensure a modest floor so remembered-tree logging competes with other work.
-        if (materialsPressure > 0.5 && woodScarce) {
+        // When wood is scarce, ensure a modest floor so remembered-tree logging competes with other work.
+        if (woodPressure > 0.5 && woodScarce) {
           flooredKnown = Math.max(flooredKnown, 0.4);
         }
         return Math.min(1.0, flooredKnown) * warmthFactor;
       }
       return 0;
     }
-    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * materialsPressure;
+    let base = inverseSigmoid(goblin.hunger, 60) * 0.6 * balanceFactor * woodPressure;
     if (woodScarce) base *= 1.3;
     let score = Math.min(1.0, base);
-    // Stock-the-wood: when stored materials are low, give chop a floor so it can win ties vs. forage.
-    if (materialsPressure > 0.5 && woodScarce) {
+    // Stock-the-wood: when stored wood is low, give chop a floor so it can win ties vs. forage.
+    if (woodPressure > 0.5 && woodScarce) {
       score = Math.max(score, 0.4);
+    }
+    // Hearth nudge: if many hearths need fuel and wood is scarce, slightly boost chop so fires get wood.
+    if (refuelableHearthCount > 0 && woodPressure > 0.5 && totalWood < 20) {
+      score = Math.min(1.0, score + 0.1);
     }
     return score * warmthFactor;
   },
@@ -257,9 +265,9 @@ export const depositOre: Action = {
   score: ({ goblin, oreStockpiles, resourceBalance }) => {
     const onStockpile = oreStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const base = ramp(goblin.inventory.ore, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
-    const { materialsPressure = 0 } = resourceBalance ?? {};
-    // When stored materials are low (high materialsPressure), boost hauling so deposits actually happen.
-    const scarcityBoost = 1 + materialsPressure * 0.5;
+    const { orePressure = 0 } = resourceBalance ?? {};
+    // When stored ore is low (high orePressure), boost hauling so deposits actually happen.
+    const scarcityBoost = 1 + orePressure * 0.5;
     return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, oreStockpiles }) => {
@@ -291,9 +299,9 @@ export const depositWood: Action = {
   score: ({ goblin, woodStockpiles, resourceBalance }) => {
     const onStockpile = woodStockpiles?.some(s => s.x === goblin.x && s.y === goblin.y) ?? false;
     const base = ramp(goblin.inventory.wood, 4, 14) * 0.6 * (onStockpile ? 2.5 : 1.0);
-    const { materialsPressure = 0 } = resourceBalance ?? {};
-    // Same scarcity boost as ore: when wood stockpiles are low, make hauling wood more competitive.
-    const scarcityBoost = 1 + materialsPressure * 0.5;
+    const { woodPressure = 0 } = resourceBalance ?? {};
+    // When stored wood is low (high woodPressure), make hauling wood more competitive.
+    const scarcityBoost = 1 + woodPressure * 0.5;
     return Math.min(1.0, base * scarcityBoost);
   },
   execute: ({ goblin, grid, woodStockpiles }) => {

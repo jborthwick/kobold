@@ -42,8 +42,10 @@ export interface ActionContext {
     foodPriority: number;
     materialPriority: number;
     consumablesPressure: number;
-    materialsPressure: number;
+    orePressure: number;
+    woodPressure: number;
     upgradesPressure: number;
+    refuelableHearthCount: number;
   };
   workerTargets?: import('../../simulation/workerTargets').WorkerTargets;
   currentHeadcounts?: Record<import('../../simulation/workerTargets').WorkCategoryId, number>;
