@@ -18,7 +18,7 @@ export const DEFAULT_GOBLINS_FOR_PRESSURE = 5;
  * Desired combined food+meals buffer per living goblin. Drives consumablesPressure:
  * pressure is high when (food+meals)/goblin is below this.
  */
-export const CONSUMABLES_BUFFER_PER_GOBLIN = 19;
+export const CONSUMABLES_BUFFER_PER_GOBLIN = 18;
 
 /**
  * consumablesPressure above this → "stock the larder" floors apply in forage/deposit.
@@ -39,13 +39,13 @@ export const ORE_BUFFER_PER_GOBLIN = 16;
  * Desired wood buffer per living goblin. Drives woodPressure: pressure is high when
  * totalWood/goblin is below this. Chop action uses woodPressure for scarcity floors.
  */
-export const WOOD_BUFFER_PER_GOBLIN = 8;
+export const WOOD_BUFFER_PER_GOBLIN = 20;
 
 /**
  * Wood buffer per refuelable hearth. When totalWood < this × refuelableHearthCount,
  * chop gets a small boost so hearths get fuel.
  */
-export const HEARTH_WOOD_LOW_PER_HEARTH = 20;
+export const HEARTH_WOOD_LOW_PER_HEARTH = 40;
 
 // ── Upgrades (bars + planks; absolute target) ─────────────────────────────────
 
