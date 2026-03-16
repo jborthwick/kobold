@@ -10,6 +10,7 @@
 
 import type { Tile, Goblin, Adventurer, ColonyGoal, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, OverlayMode, LogEntry, Chapter, Room } from './types';
 import type { Weather } from '../simulation/weather';
+import type { WorkerTargets } from '../simulation/workerTargets';
 import { HEARTH_FUEL_MAX } from './constants';
 import { TileType } from './types';
 
@@ -49,6 +50,8 @@ export interface SaveData {
   barStockpiles?: BarStockpile[];
   /** Cumulative meals cooked this colony — optional for backward compat. */
   mealsCooked?: number;
+  /** Target worker headcounts per work category — optional for backward compat. */
+  workerTargets?: WorkerTargets;
 }
 
 const KEY = 'kobold_save_v2';
@@ -91,6 +94,7 @@ export function loadGame(): SaveData | null {
       if (d.moveExpiry === undefined) d.moveExpiry = 0;
       if (d.cookingLastActiveTick === undefined) d.cookingLastActiveTick = 0;
       if (d.lastActionName === undefined) d.lastActionName = '';
+      // lastWorkCategory / lastWorkCategoryTick optional — no migration needed (undefined = not set)
       // wound is optional (undefined = healthy) — no migration needed
       // Iteration 17: split inventory.materials → inventory.ore + inventory.wood
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,6 +129,7 @@ export function loadGame(): SaveData | null {
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];
+    data.workerTargets ??= {};
     data.plankStockpiles ??= [];
     data.barStockpiles ??= [];
     data.mealsCooked ??= 0;

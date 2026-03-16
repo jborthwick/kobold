@@ -8,6 +8,7 @@
 
 import mitt from 'mitt';
 import type { GameState, LogEntry, TileInfo, MiniMapData, Adventurer, OverlayMode, Chapter, RoomType } from './types';
+import type { WorkCategoryId } from '../simulation/workerTargets';
 
 type Events = {
   gameState:      GameState;
@@ -38,6 +39,8 @@ type Events = {
   buildMode: { roomType: RoomType } | null;
   /** A batch of meals was cooked. */
   mealsCooked: number;
+  /** Worker target change from planning panel. */
+  workerTargetChange: { category: WorkCategoryId; value: number };
 };
 
 export const bus = mitt<Events>();

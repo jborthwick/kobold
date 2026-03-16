@@ -45,6 +45,8 @@ export interface ActionContext {
     materialsPressure: number;
     upgradesPressure: number;
   };
+  workerTargets?: import('../../simulation/workerTargets').WorkerTargets;
+  currentHeadcounts?: Record<import('../../simulation/workerTargets').WorkCategoryId, number>;
 }
 
 /** Tags for trait-based score biasing (traitActionBias.ts). Includes work-skill tags. */

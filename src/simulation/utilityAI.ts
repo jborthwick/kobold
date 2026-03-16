@@ -18,6 +18,8 @@ import { applyTraitBias } from './traitActionBias';
 import { GOAL_CONFIG } from './goalConfig';
 import { tickWoundHealing } from './wounds';
 import { THOUGHT_DEFS, MEMORY_DEFS, addMemory } from './mood';
+import { actionNameToWorkCategory, getSkillForCategory, LAST_JOB_PERSIST_TICKS, type WorkCategoryId, type WorkerTargets } from './workerTargets';
+import { xpToLevel } from './skills';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
 // Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
@@ -341,6 +343,8 @@ export function tickAgentUtility(
   mealStockpiles?: MealStockpile[],
   plankStockpiles?: PlankStockpile[],
   barStockpiles?: BarStockpile[],
+  workerTargets?: WorkerTargets,
+  currentHeadcounts?: Record<WorkCategoryId, number>,
 ): void {
   if (!goblin.alive) return;
 
@@ -452,13 +456,15 @@ export function tickAgentUtility(
       hasBlacksmith,
       hasKitchen,
     },
+    workerTargets,
+    currentHeadcounts,
   };
 
   // ── Step 5: Score all eligible actions ───────────────────────────────────────
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
-  const MOMENTUM_BONUS = 0.25;  // single tune point for action stickiness
+  const MOMENTUM_BONUS = 0.4;  // single tune point for action stickiness
   const goalBonuses = colonyGoal ? GOAL_CONFIG[colonyGoal.type].actionBonuses : {};
   let bestAction: Action | null = null;
   let bestScore = -1;
@@ -466,10 +472,37 @@ export function tickAgentUtility(
   let secondScore = -1;
   const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
 
+  const UNDERSTAFF_BONUS_CAP = 0.12;
+  const SKILL_PREFERENCE_PER_LEVEL = 0.02;
+  const SKILL_PREFERENCE_CAP = 0.08;
+
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
     let score = action.score(ctx);
     score = applyTraitBias(goblin, action, score);
+    // Worker target: nudge under-staffed categories; skill level amplifies for forage/mine/chop
+    const category = actionNameToWorkCategory(action.name);
+    if (category && workerTargets?.[category] != null && currentHeadcounts?.[category] != null) {
+      const target = workerTargets[category]!;
+      const current = currentHeadcounts[category]!;
+      if (target > 0 && current < target) {
+        let bonus = 0.05 * (target - current) / Math.max(target, 1);
+        const skillKey = getSkillForCategory(category);
+        if (skillKey) {
+          const level = xpToLevel(goblin.skills[skillKey]);
+          bonus *= 1 + 0.1 * level;
+        }
+        bonus = Math.min(bonus, UNDERSTAFF_BONUS_CAP);
+        score = Math.min(1.0, score + bonus);
+      }
+    }
+    // Skill preference: nudge toward work this goblin is good at (forage/mine/chop)
+    const skillKey = category ? getSkillForCategory(category) : null;
+    if (skillKey) {
+      const level = xpToLevel(goblin.skills[skillKey]);
+      const skillBonus = Math.min(SKILL_PREFERENCE_PER_LEVEL * level, SKILL_PREFERENCE_CAP);
+      score = Math.min(1.0, score + skillBonus);
+    }
     // Goal-directed bonus: active colony goal nudges relevant actions higher
     score *= goalBonuses[action.name] ?? 1.0;
     // Centralized momentum: sticky bonus for the action that won last tick
@@ -524,8 +557,24 @@ export function tickAgentUtility(
     bestAction.execute(ctx);
     // Record winner for momentum bonus next tick
     goblin.lastActionName = bestAction.name;
+    const workCat = actionNameToWorkCategory(bestAction.name);
+    if (workCat != null) {
+      goblin.lastWorkCategory = workCat;
+      goblin.lastWorkCategoryTick = currentTick;
+    } else {
+      const age = currentTick - (goblin.lastWorkCategoryTick ?? 0);
+      if (age > LAST_JOB_PERSIST_TICKS) {
+        goblin.lastWorkCategory = undefined;
+        goblin.lastWorkCategoryTick = undefined;
+      }
+    }
   } else {
     goblin.lastActionName = '';
+    const age = currentTick - (goblin.lastWorkCategoryTick ?? 0);
+    if (age > LAST_JOB_PERSIST_TICKS) {
+      goblin.lastWorkCategory = undefined;
+      goblin.lastWorkCategoryTick = undefined;
+    }
   }
 
   // ── Step 7: Handle Interrupted Cooking ────────────────────────────────────────

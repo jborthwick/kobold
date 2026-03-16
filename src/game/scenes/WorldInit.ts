@@ -12,6 +12,7 @@ import * as WorldGoals from './WorldGoals';
 import { GRID_SIZE, TILE_SIZE } from '../../shared/constants';
 import { type Chapter, type OverlayMode, type LogEntry, type RoomType, type Room } from '../../shared/types';
 import { canPlaceRoom } from '../../simulation/rooms';
+import { WORK_CATEGORIES, type WorkCategoryId, type WorkerTargets } from '../../simulation/workerTargets';
 import { SPRITE_CONFIG } from '../tileConfig';
 import { drawFlag } from './WorldOverlays';
 import { drawOverlay } from './WorldRender';
@@ -59,6 +60,11 @@ export function initializeWorld(scene: WorldScene) {
       ? scene.chapters[scene.chapters.length - 1].tick : 0;
     if (scene.chapters.length > 0) bus.emit('restoreChronicle', scene.chapters);
     scene.rooms = save.rooms ?? [];
+    const validCategoryIds = new Set<string>(WORK_CATEGORIES.map(c => c.id));
+    const rawTargets = save.workerTargets ?? {};
+    scene.workerTargets = Object.fromEntries(
+      Object.entries(rawTargets).filter(([k]) => validCategoryIds.has(k))
+    ) as WorkerTargets;
   } else {
     bus.emit('clearLog', undefined);
     scene.logHistory = [];
@@ -213,6 +219,15 @@ export function initializeWorld(scene: WorldScene) {
   const chronicleModalClosedHandler = () => {
     scene.paused = false;
   };
+  const workerTargetChangeHandler = (payload: { category: WorkCategoryId; value: number }) => {
+    if (payload.value <= 0) {
+      const next = { ...scene.workerTargets };
+      delete next[payload.category];
+      scene.workerTargets = next;
+    } else {
+      scene.workerTargets = { ...scene.workerTargets, [payload.category]: payload.value };
+    }
+  };
   bus.on('controlChange', controlHandler);
   bus.on('settingsChange', settingsHandler);
   bus.on('logEntry', logCaptureHandler);
@@ -222,6 +237,7 @@ export function initializeWorld(scene: WorldScene) {
   bus.on('mealsCooked', (n: number) => { scene.mealsCooked += n; });
   bus.on('chronicleModal', chronicleModalHandler);
   bus.on('chronicleModalClosed', chronicleModalClosedHandler);
+  bus.on('workerTargetChange', workerTargetChangeHandler);
 
   // Remove bus listeners when this scene is destroyed (new-colony flow)
   scene.events.once('destroy', () => {
@@ -234,6 +250,7 @@ export function initializeWorld(scene: WorldScene) {
     bus.off('mealsCooked', () => {});
     bus.off('chronicleModal', chronicleModalHandler);
     bus.off('chronicleModalClosed', chronicleModalClosedHandler);
+    bus.off('workerTargetChange', workerTargetChangeHandler);
   });
 
   setupCamera(scene);

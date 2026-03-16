@@ -170,6 +170,8 @@ export interface Goblin {
   smithingProgress?: number;    // ticks spent smithing (ore → bars)
   smithingLastActiveTick?: number;
   lastActionName?: string;  // name of action that won last tick; drives momentum bonus
+  lastWorkCategory?: import('../simulation/workerTargets').WorkCategoryId;  // for headcount; set when doing category action
+  lastWorkCategoryTick?: number;  // when lastWorkCategory was set; used to expire persistence
 }
 
 export interface LogEntry {
@@ -311,4 +313,5 @@ export interface GameState {
   rooms: Room[];
   /** When the player has clicked a hearth, its position and current fuel (for HearthPanel). */
   selectedHearthTile?: { x: number; y: number; hearthFuel: number } | null;
+  workerTargets?: import('../simulation/workerTargets').WorkerTargets;
 }

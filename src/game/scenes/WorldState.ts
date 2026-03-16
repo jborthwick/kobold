@@ -53,6 +53,7 @@ export function buildSaveData(scene: WorldScene): SaveData {
         chapters: [...scene.chapters],
         goalStartTick: scene.goalStartTick,
         rooms: scene.rooms.map(r => ({ ...r })),
+        workerTargets: { ...scene.workerTargets },
     };
 }
 
@@ -87,6 +88,7 @@ export function emitGameState(scene: WorldScene) {
             if (!t || t.type !== TileType.Hearth) return null;
             return { x: h.x, y: h.y, hearthFuel: t.hearthFuel ?? 0 };
         })(),
+        workerTargets: { ...scene.workerTargets },
     });
 }
 

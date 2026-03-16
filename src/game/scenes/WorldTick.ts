@@ -20,6 +20,7 @@ import { getGoblinConfig } from '../../shared/goblinConfig';
 import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
 import { computeGoblinWarmth, computeWarmthOverlay, computeDanger, updateTraffic } from '../../simulation/diffusion';
 import { tickAgentUtility } from '../../simulation/utilityAI';
+import { getCurrentHeadcounts } from '../../simulation/workerTargets';
 import { SUCCESSION_DELAY, spawnSuccessor } from '../../simulation/agents';
 import { topSkill } from '../../simulation/skills';
 import { growback } from '../../simulation/world';
@@ -67,6 +68,7 @@ export function gameTick(scene: WorldScene) {
 
     const aliveBeforeTick = new Set(scene.goblins.filter(g => g.alive).map(g => g.id));
 
+    const currentHeadcounts = getCurrentHeadcounts(scene.goblins, scene.tick);
     for (const d of scene.goblins) {
         tickAgentUtility(
             d, scene.grid, scene.tick, scene.goblins,
@@ -83,7 +85,9 @@ export function gameTick(scene: WorldScene) {
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
             metabolismModifier(scene.weather), scene.dangerField,
             scene.weather.type, scene.rooms, scene.mealStockpiles,
-            scene.plankStockpiles, scene.barStockpiles
+            scene.plankStockpiles, scene.barStockpiles,
+            scene.workerTargets,
+            currentHeadcounts
         );
     }
 

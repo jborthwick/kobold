@@ -6,4 +6,5 @@ export { StockpilePanel } from './StockpilePanel';
 export { HearthPanel } from './HearthPanel';
 export { AdventurerPanel } from './AdventurerPanel';
 export { ColonyGoalPanel } from './ColonyGoalPanel';
+export { WorkTargetsPanel } from './WorkTargetsPanel';
 export { ChroniclePanel } from './ChroniclePanel';
