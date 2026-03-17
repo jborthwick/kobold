@@ -4,7 +4,55 @@ import { getTraitDisplay } from '../../simulation/agents';
 import { topSkill } from '../../simulation/skills';
 import { THOUGHT_DEFS, MEMORY_DEFS } from '../../simulation/mood';
 import { WORK_CATEGORIES, type WorkCategoryId } from '../../simulation/workerTargets';
+import { getJobPreferenceBreakdown } from '../../simulation/jobPreference';
+import { SPRITE_CONFIG } from '../../game/tileConfig';
 import type { GameState, Goblin, GoblinTrait } from '../../shared/types';
+
+const TILESHEET_URL = '/assets/kenney-1-bit/Tilesheet/colored_packed.png';
+const TILE_SIZE = 16;
+const COLS = 49;
+const ROWS = 22;
+
+/** Frame index → CSS backgroundPosition for one 16×16 tile. */
+function frameToBackgroundPosition(frame: number): string {
+  const col = frame % COLS;
+  const row = Math.floor(frame / COLS);
+  return `-${col * TILE_SIZE}px -${row * TILE_SIZE}px`;
+}
+
+const GOBLIN_JOB_SPRITE_KEYS: Record<WorkCategoryId, keyof typeof SPRITE_CONFIG> = {
+  foraging: 'goblinForaging',
+  cooking: 'goblinCooking',
+  mining: 'goblinMining',
+  woodcutting: 'goblinWoodcutting',
+  sawing: 'goblinSawing',
+  smithing: 'goblinSmithing',
+};
+
+function getFrameForJob(job: WorkCategoryId | null): number {
+  const key = job ? GOBLIN_JOB_SPRITE_KEYS[job] : 'goblin';
+  return SPRITE_CONFIG[key] ?? SPRITE_CONFIG.goblin ?? 123;
+}
+
+/** Preference magnitude below this shows neutral border. */
+const PREF_GLOW_THRESHOLD = 0.08;
+/** Max magnitude for scaling border opacity (stronger preference = more intense up to this). */
+const PREF_GLOW_MAX = 0.3;
+
+/**
+ * Returns borderColor for a green (positive) or red (negative) outline based on preference.
+ * Neutral zone near zero = null (use default gray border).
+ */
+function preferenceToOutlineColor(preference: number): string | null {
+  const mag = Math.abs(preference);
+  if (mag < PREF_GLOW_THRESHOLD) return null;
+  const intensity = Math.min(mag / PREF_GLOW_MAX, 1);
+  const alpha = 0.4 + intensity * 0.4;
+  if (preference > 0) {
+    return `rgba(86, 217, 115, ${alpha})`;
+  }
+  return `rgba(231, 76, 60, ${alpha})`;
+}
 
 function topRelation(
   goblin: Goblin,
@@ -86,22 +134,51 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
         <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {goblin.goal}</span>
       </div>
       {goblin.alive && (
-        <div style={{ ...styles.panelRow, marginBottom: 8, alignItems: 'center', display: 'flex', gap: 8 }}>
-          <span style={styles.barLabel}>Job</span>
-          <select
-            value={goblin.assignedJob ?? ''}
-            onChange={(e) => {
-              const v = e.target.value;
-              const job: WorkCategoryId | null = v === '' ? null : (v as WorkCategoryId);
-              bus.emit('goblinAssignedJob', { goblinId: goblin.id, job });
-            }}
-            style={styles.jobSelect}
-          >
-            <option value="">None</option>
-            {WORK_CATEGORIES.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
+        <div style={{ ...styles.panelRow, marginBottom: 8 }}>
+          <div style={styles.barLabel}>Job</div>
+          <div style={styles.jobRow}>
+            {[null as WorkCategoryId | null, ...WORK_CATEGORIES.map(c => c.id)].map((job) => {
+              const isNone = job === null;
+              const isSelected = (job === null && (goblin.assignedJob == null)) || goblin.assignedJob === job;
+              const frame = getFrameForJob(job);
+              const label = isNone ? 'None' : WORK_CATEGORIES.find(c => c.id === job)!.label;
+              const pref = !isNone ? getJobPreferenceBreakdown(goblin, job) : null;
+              const preference = pref?.total ?? 0;
+              const outlineColor = isNone ? null : preferenceToOutlineColor(preference);
+              const title = isNone
+                ? 'No assigned job'
+                : `Preference: ${preference >= 0 ? '+' : ''}${preference.toFixed(2)} (trait ${pref!.traitDelta >= 0 ? '+' : ''}${pref!.traitDelta.toFixed(2)}, skill +${pref!.skillBonus.toFixed(2)})`;
+              return (
+                <button
+                  key={isNone ? 'none' : job}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    bus.emit('goblinAssignedJob', { goblinId: goblin.id, job });
+                    // Prevent persistent focus outline after mouse click; keyboard focus still works via :focus-visible.
+                    e.currentTarget.blur();
+                  }}
+                  title={title}
+                  style={{
+                    ...styles.jobCell,
+                    ...(isSelected ? styles.jobCellSelected : {}),
+                    borderColor: outlineColor ?? styles.jobCell.borderColor,
+                  }}
+                >
+                  <div style={styles.jobSpriteWrap}>
+                    <div
+                      style={{
+                        ...styles.jobSprite,
+                        backgroundImage: `url(${TILESHEET_URL})`,
+                        backgroundPosition: frameToBackgroundPosition(frame),
+                      }}
+                    />
+                  </div>
+                  <span style={styles.jobLabel}>{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       <Bar label="health" value={goblin.health}  max={goblin.maxHealth} color="#e74c3c" />
@@ -225,17 +302,45 @@ const styles: Record<string, React.CSSProperties> = {
   panelRow: {
     marginTop: 4,
   },
-  jobSelect: {
-    flex: '1 1 auto',
-    minWidth: 0,
-    fontFamily: 'monospace',
-    fontSize: 11,
-    background: '#333',
-    border: '1px solid #555',
+  jobRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  jobCell: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+    padding: 4,
+    background: '#2a2a2a',
+    border: '1px solid #444',
+    borderColor: '#444',
     borderRadius: 4,
-    color: '#ccc',
-    padding: '2px 6px',
     cursor: 'pointer',
+    fontFamily: 'monospace',
+  },
+  jobCellSelected: {
+    background: '#3a3520',
+  },
+  jobSpriteWrap: {
+    position: 'relative',
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    flexShrink: 0,
+  },
+  jobSprite: {
+    width: '100%',
+    height: '100%',
+    backgroundSize: `${COLS * TILE_SIZE}px ${ROWS * TILE_SIZE}px`,
+    imageRendering: 'pixelated' as const,
+  },
+  jobLabel: {
+    fontSize: 9,
+    color: '#aaa',
+    textAlign: 'center',
+    maxWidth: 52,
   },
   task: {
     marginTop:  8,

@@ -17,3 +17,13 @@ html, body, #root {
   overflow: hidden;
   background: #1a1a2e;
 }
+
+/* Remove default focus ring that persists after click (looks like a white border). */
+button:focus {
+  outline: none;
+}
+/* Keyboard focus only: visible ring so tab navigation stays accessible. */
+button:focus-visible {
+  outline: 2px solid rgba(240, 192, 64, 0.9);
+  outline-offset: 2px;
+}

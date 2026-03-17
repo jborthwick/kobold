@@ -21,6 +21,12 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
         }
     };
 
+    const onRoomButtonClick = (e: React.MouseEvent<HTMLButtonElement>, type: RoomType) => {
+        selectRoom(type);
+        // Prevent persistent focus outline after mouse click; keyboard focus still works via :focus-visible.
+        e.currentTarget.blur();
+    };
+
     const toggleCollapse = (e: React.MouseEvent) => {
         e.stopPropagation();
         setIsCollapsed(!isCollapsed);
@@ -77,7 +83,8 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                     <div style={styles.section}>
                         <div style={styles.sectionLabel}>Storage</div>
                         <button
-                            onClick={() => selectRoom('storage')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'storage')}
                             style={{
                                 ...styles.buildBtn,
                                 ...(activeType === 'storage' ? styles.buildBtnActive : {})
@@ -94,7 +101,8 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                     <div style={styles.section}>
                         <div style={styles.sectionLabel}>Food</div>
                         <button
-                            onClick={() => selectRoom('kitchen')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'kitchen')}
                             style={{
                                 ...styles.buildBtn,
                                 ...(activeType === 'kitchen' ? styles.buildBtnActive : {})
@@ -111,7 +119,8 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                     <div style={styles.section}>
                         <div style={styles.sectionLabel}>Crafting</div>
                         <button
-                            onClick={() => selectRoom('lumber_hut')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'lumber_hut')}
                             style={{
                                 ...styles.buildBtn,
                                 ...(activeType === 'lumber_hut' ? styles.buildBtnActive : {})
@@ -124,7 +133,8 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                             </div>
                         </button>
                         <button
-                            onClick={() => selectRoom('blacksmith')}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'blacksmith')}
                             style={{
                                 ...styles.buildBtn,
                                 ...(activeType === 'blacksmith' ? styles.buildBtnActive : {})
@@ -205,11 +215,12 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '10px 12px',
         background: 'rgba(255,255,255,0.03)',
         border: '1px solid #333',
+        borderColor: '#333',
         borderRadius: 6,
         cursor: 'pointer',
         textAlign: 'left',
         color: '#ccc',
-        transition: 'all 0.1s',
+        transition: 'background-color 0.1s, border-color 0.1s, color 0.1s',
     },
     buildBtnActive: {
         background: 'rgba(0, 200, 80, 0.1)',

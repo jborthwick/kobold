@@ -71,7 +71,7 @@ const deathLog: { tick: number; name: string; cause: string }[] = [];
 const raidLog: { tick: number; count: number }[] = [];
 const goalLog: { tick: number; type: string; generation: number }[] = [];
 const warnLog: { tick: number; name: string; message: string }[] = [];
-const fireLog: { tick: number; message: string }[] = [];
+const fireLog: { tick: number; level: 'info' | 'warn' | 'error'; message: string }[] = [];
 const oscillationLog: Array<{
   tick: number;
   name: string;
@@ -278,8 +278,8 @@ function recordOscillation(tick: number): void {
 
 /** Burning goblins, growback, pooling, lightning, fire spread; accumulate fire stats for report. */
 function runFireAndEnvironment(tick: number): void {
-  const fireCb = (msg: string, level: string) => {
-    if (level === 'warn' || level === 'error') fireLog.push({ tick, message: msg });
+  const fireCb = (msg: string, level: 'info' | 'warn' | 'error') => {
+    fireLog.push({ tick, level, message: msg });
   };
   tickBurningGoblins(grid, tick, goblins, fireCb);
   growback(grid, growbackModifier(weather), tick);
@@ -484,6 +484,14 @@ function printWarnings(log: { tick: number; name: string; message: string }[]): 
   }
 }
 
+function printFireEvents(log: { tick: number; level: 'info' | 'warn' | 'error'; message: string }[]): void {
+  if (log.length === 0) return;
+  console.log(`\n Fire events:`);
+  for (const e of log) {
+    console.log(`   [${e.tick}] ${e.level.toUpperCase()} ${e.message}`);
+  }
+}
+
 function printDeaths(log: { tick: number; name: string; cause: string }[]): void {
   if (log.length === 0) return;
   console.log(`\n Deaths:`);
@@ -621,6 +629,7 @@ printResultsTable(
   fireTilesMax,
 );
 printWarnings(warnLog);
+printFireEvents(fireLog);
 printDeaths(deathLog);
 printGoalsCompleted(goalLog);
 printActionFrequencies(actionCounts);

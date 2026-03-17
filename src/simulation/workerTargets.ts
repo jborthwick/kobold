@@ -36,6 +36,16 @@ const ACTION_TO_CATEGORY: Record<string, WorkCategoryId> = {
   smith: 'smithing',
 };
 
+/** Work category → action name (for preference scoring and UI). */
+export const CATEGORY_TO_ACTION_NAME: Record<WorkCategoryId, string> = {
+  foraging: 'forage',
+  cooking: 'cook',
+  mining: 'mine',
+  woodcutting: 'chop',
+  sawing: 'saw',
+  smithing: 'smith',
+};
+
 /** Ticks to still count a goblin in their last work category when doing non-job actions (eat, rest, etc.). */
 export const LAST_JOB_PERSIST_TICKS = 45;
 
