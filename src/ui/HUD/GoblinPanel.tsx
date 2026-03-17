@@ -8,7 +8,7 @@ import { getJobPreferenceBreakdown } from '../../simulation/jobPreference';
 import { SPRITE_CONFIG } from '../../game/tileConfig';
 import type { GameState, Goblin, GoblinTrait } from '../../shared/types';
 
-const TILESHEET_URL = '/assets/kenney-1-bit/Tilesheet/colored_packed.png';
+const TILESHEET_URL = `${import.meta.env.BASE_URL}assets/kenney-1-bit/Tilesheet/colored_packed.png`;
 const TILE_SIZE = 16;
 const COLS = 49;
 const ROWS = 22;

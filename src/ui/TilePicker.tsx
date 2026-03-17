@@ -19,7 +19,7 @@ const TILE_PX     = 16;
 const SCALE       = 2;               // display scale for the tileset canvas
 const CELL        = TILE_PX * SCALE; // 32px per cell in the canvas
 
-const SHEET_URL   = '/assets/kenney-1-bit/Tilesheet/colored_packed.png';
+const SHEET_URL   = `${import.meta.env.BASE_URL}assets/kenney-1-bit/Tilesheet/colored_packed.png`;
 
 // Stable palette for type highlighting (cycles if more types than colors)
 const HIGHLIGHT_COLORS = [
