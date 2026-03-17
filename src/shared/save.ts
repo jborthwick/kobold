@@ -127,7 +127,9 @@ export function loadGame(): SaveData | null {
         d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0, cook: 0, saw: 0, smith: 0 };
       } else {
         // Migration: add cook/saw/smith to existing SkillSet (old saves had only 5 keys)
-        const s = d.skills as Record<string, number>;
+        // d.skills is typed as SkillSet, but older saves may omit newer keys. We intentionally
+        // treat it as a dynamic record during migration.
+        const s = d.skills as unknown as Record<string, number>;
         if (s.cook === undefined) s.cook = 0;
         if (s.saw === undefined) s.saw = 0;
         if (s.smith === undefined) s.smith = 0;
