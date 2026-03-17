@@ -93,10 +93,18 @@ export function findRoomStockpileSlotPreferClustering(
     occupied: Set<string>,
     sameTypeCoords: { x: number; y: number }[],
 ): { x: number; y: number } | null {
+    // Reserve room-center furniture tiles (saw/anvil) so stockpiles never overlap them.
+    const blocked = new Set(occupied);
+    if (room.type === 'lumber_hut' || room.type === 'blacksmith') {
+        const fx = room.x + Math.floor(room.w / 2);
+        const fy = room.y + Math.floor(room.h / 2);
+        blocked.add(`${fx},${fy}`);
+    }
+
     const tryTile = (tx: number, ty: number): { x: number; y: number } | null => {
         if (tx < room.x || tx >= room.x + room.w || ty < room.y || ty >= room.y + room.h) return null;
         const key = `${tx},${ty}`;
-        if (occupied.has(key)) return null;
+        if (blocked.has(key)) return null;
         if (!isWalkableInRoom(grid, tx, ty)) return null;
         return { x: tx, y: ty };
     };
@@ -110,7 +118,8 @@ export function findRoomStockpileSlotPreferClustering(
     }
 
     // Fallback: spiral from center (original behavior)
-    const cx = room.x + 2, cy = room.y + 2;
+    const cx = room.x + Math.floor(room.w / 2);
+    const cy = room.y + Math.floor(room.h / 2);
     for (let r = 0; r < 3; r++) {
         for (let dy = -r; dy <= r; dy++) {
             for (let dx = -r; dx <= r; dx++) {
