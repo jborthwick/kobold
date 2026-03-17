@@ -5,6 +5,7 @@
  */
 import type { BarStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
+import { grantXp } from '../skills';
 import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -109,6 +110,7 @@ export const smith: Action = {
       }
       goblin.smithingProgress = undefined;
       addWorkFatigue(goblin);
+      grantXp(goblin, 'smith', currentTick, onLog);
     }
   },
 };

@@ -75,11 +75,14 @@ export function getCurrentHeadcounts(goblins: Goblin[], currentTick?: number): R
 
 export type WorkerTargets = Partial<Record<WorkCategoryId, number>>;
 
-/** Forage/mine/chop only; cooking, sawing, smithing have no skill. */
+/** Work category → skill key for skill-preference scoring. */
 const CATEGORY_SKILL: Partial<Record<WorkCategoryId, keyof SkillSet>> = {
   foraging: 'forage',
+  cooking: 'cook',
   mining: 'mine',
   woodcutting: 'chop',
+  sawing: 'saw',
+  smithing: 'smith',
 };
 
 export function getSkillForCategory(category: WorkCategoryId): keyof SkillSet | null {

@@ -11,6 +11,7 @@ import { TileType, isHearthLit } from '../../shared/types';
 import type { MealStockpile } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
+import { grantXp } from '../skills';
 import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -169,6 +170,7 @@ export const cook: Action = {
             }
             goblin.cookingProgress = undefined;
             addWorkFatigue(goblin);
+            grantXp(goblin, 'cook', currentTick, onLog);
         }
     }
 };

@@ -2,10 +2,11 @@
  * Spawn and succession: spawnGoblins, spawnSuccessor, SUCCESSION_DELAY.
  */
 
-import type { Goblin, Tile, MemoryEntry } from '../../shared/types';
+import type { Goblin, GoblinTrait, Tile, MemoryEntry } from '../../shared/types';
 import { INITIAL_GOBLINS } from '../../shared/constants';
 import { getGoblinConfig } from '../../shared/goblinConfig';
 import { isWalkable } from '../world';
+import { WORK_CATEGORIES, type WorkCategoryId } from '../workerTargets';
 import {
   TRAIT_MODS,
   GOBLIN_TRAITS,
@@ -25,6 +26,14 @@ function toRoman(n: number): string {
     while (n >= vals[i]) { result += syms[i]; n -= vals[i]; }
   }
   return result;
+}
+
+/** Pick a random work category for role affinity; lazy goblins avoid cooking. */
+function pickPreferredWorkCategory(trait: GoblinTrait): WorkCategoryId {
+  const pool = trait === 'lazy'
+    ? WORK_CATEGORIES.filter(c => c.id !== 'cooking')
+    : WORK_CATEGORIES;
+  return pool[Math.floor(Math.random() * pool.length)].id;
 }
 
 export function spawnGoblins(
@@ -79,8 +88,9 @@ export function spawnGoblins(
       fatigue:         0,
       social:          0,
       lastSocialTick:  0,
-      lastLoggedTicks:  { morale_high: 0 },
-      skills:          { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 },
+      lastLoggedTicks:     { morale_high: 0 },
+      skills:             { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0, cook: 0, saw: 0, smith: 0 },
+      preferredWorkCategory: pickPreferredWorkCategory(trait),
     });
   }
   return goblins;
@@ -145,11 +155,14 @@ export function spawnSuccessor(
 
   // Inherit 25% of XP across all skills from deceased
   const inheritedSkills = {
-    forage: Math.floor(dead.skills.forage * 0.25),
-    mine:   Math.floor(dead.skills.mine * 0.25),
-    chop:   Math.floor(dead.skills.chop * 0.25),
-    combat: Math.floor(dead.skills.combat * 0.25),
-    scout:  Math.floor(dead.skills.scout * 0.25),
+    forage: Math.floor((dead.skills.forage ?? 0) * 0.25),
+    mine:   Math.floor((dead.skills.mine ?? 0) * 0.25),
+    chop:   Math.floor((dead.skills.chop ?? 0) * 0.25),
+    combat: Math.floor((dead.skills.combat ?? 0) * 0.25),
+    scout:  Math.floor((dead.skills.scout ?? 0) * 0.25),
+    cook:   Math.floor((dead.skills.cook ?? 0) * 0.25),
+    saw:    Math.floor((dead.skills.saw ?? 0) * 0.25),
+    smith:  Math.floor((dead.skills.smith ?? 0) * 0.25),
   };
 
   return {
@@ -186,7 +199,8 @@ export function spawnSuccessor(
     fatigue:         0,
     social:          0,
     lastSocialTick:  0,
-    lastLoggedTicks:  { morale_high: 0 },
-    skills:          inheritedSkills,
+    lastLoggedTicks:     { morale_high: 0 },
+    skills:              inheritedSkills,
+    preferredWorkCategory: pickPreferredWorkCategory(trait),
   };
 }

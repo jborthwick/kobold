@@ -539,8 +539,11 @@ export function tickAgentUtility(
   const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
 
   const UNDERSTAFF_BONUS_CAP = 0.12;
-  const SKILL_PREFERENCE_PER_LEVEL = 0.02;
-  const SKILL_PREFERENCE_CAP = 0.08;
+  const SKILL_PREFERENCE_PER_LEVEL = 0.04;
+  const SKILL_PREFERENCE_CAP = 0.18;
+  
+  /** Ceiling for action score so trait-boosted scores above 1.0 can win; must be >= trait module's TRAIT_SCORE_CAP. */
+  const MAX_ACTION_SCORE = 2.0;
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
@@ -557,20 +560,25 @@ export function tickAgentUtility(
         let bonus = 0.05 * (target - current) / Math.max(target, 1);
         if (skillKey) bonus *= 1 + 0.1 * level;
         bonus = Math.min(bonus, UNDERSTAFF_BONUS_CAP);
-        score = Math.min(1.0, score + bonus);
+        score = Math.min(MAX_ACTION_SCORE, score + bonus);
       }
     }
-    // Skill preference: nudge toward work this goblin is good at (forage/mine/chop)
+    // Skill preference: nudge toward work this goblin is good at (forage/mine/chop/cook/saw/smith)
     if (skillKey) {
       const skillBonus = Math.min(SKILL_PREFERENCE_PER_LEVEL * level, SKILL_PREFERENCE_CAP);
-      score = Math.min(1.0, score + skillBonus);
+      score = Math.min(MAX_ACTION_SCORE, score + skillBonus);
+    }
+    // Role affinity: small bonus for this goblin's preferred work category (assigned at spawn)
+    const PREFERRED_CATEGORY_BONUS = 0.07;
+    if (category && goblin.preferredWorkCategory === category) {
+      score = Math.min(MAX_ACTION_SCORE, score + PREFERRED_CATEGORY_BONUS);
     }
     // Goal-directed bonus: active colony goal nudges relevant actions higher
     score *= goalBonuses[action.name] ?? 1.0;
     // Centralized momentum: sticky bonus for the action that won last tick
     // (but exclude wander — it's a fallback, not a strategy to stick with)
     if (action.name === goblin.lastActionName && action.name !== 'wander') {
-      score = Math.min(1.0, score + MOMENTUM_BONUS);
+      score = Math.min(MAX_ACTION_SCORE, score + MOMENTUM_BONUS);
     }
     // Hunger crisis / starvation override: when no food and high hunger, bias toward get-food so goblins don't starve.
     if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {

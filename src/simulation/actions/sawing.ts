@@ -5,6 +5,7 @@
  */
 import type { PlankStockpile } from '../../shared/types';
 import { inverseSigmoid, ramp } from '../utilityAI';
+import { grantXp } from '../skills';
 import { moveToward, addWorkFatigue, nearestStockpile } from './helpers';
 import { addThought } from '../mood';
 import type { Action, ActionContext } from './types';
@@ -100,6 +101,7 @@ export const saw: Action = {
       }
       goblin.sawingProgress = undefined;
       addWorkFatigue(goblin);
+      grantXp(goblin, 'saw', currentTick, onLog);
     }
   },
 };

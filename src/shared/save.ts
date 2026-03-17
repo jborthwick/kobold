@@ -116,7 +116,7 @@ export function loadGame(): SaveData | null {
           forager: 'forage', miner: 'mine', lumberjack: 'chop',
           fighter: 'combat', scout: 'scout'
         };
-        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 };
+        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0, cook: 0, saw: 0, smith: 0 };
         const skillKey = roleSkillMap[role ?? ''];
         if (skillKey) d.skills[skillKey] = oldSkillXp;
         delete (d as any).role;
@@ -124,7 +124,13 @@ export function loadGame(): SaveData | null {
         delete (d as any).skillLevel;
       } else if (!d.skills) {
         // Fresh save with new format
-        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0 };
+        d.skills = { forage: 0, mine: 0, chop: 0, combat: 0, scout: 0, cook: 0, saw: 0, smith: 0 };
+      } else {
+        // Migration: add cook/saw/smith to existing SkillSet (old saves had only 5 keys)
+        const s = d.skills as Record<string, number>;
+        if (s.cook === undefined) s.cook = 0;
+        if (s.saw === undefined) s.saw = 0;
+        if (s.smith === undefined) s.smith = 0;
       }
     }
     data.rooms ??= [];

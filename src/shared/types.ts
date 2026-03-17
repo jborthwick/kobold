@@ -108,6 +108,9 @@ export interface SkillSet {
   chop: number;
   combat: number;
   scout: number;
+  cook: number;
+  saw: number;
+  smith: number;
 }
 
 // Injury system — single wound slot, heals over time
@@ -172,6 +175,8 @@ export interface Goblin {
   lastActionName?: string;  // name of action that won last tick; drives momentum bonus
   lastWorkCategory?: import('../simulation/workerTargets').WorkCategoryId;  // for headcount; set when doing category action
   lastWorkCategoryTick?: number;  // when lastWorkCategory was set; used to expire persistence
+  /** Optional role affinity assigned at spawn; small score bonus for actions in this category. */
+  preferredWorkCategory?: import('../simulation/workerTargets').WorkCategoryId;
 }
 
 export interface LogEntry {
