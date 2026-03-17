@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { peekSave, deleteSave } from '../shared/save';
+import { useEffect, useState } from 'react';
+import { peekSave, deleteSave, pruneIncompatibleSave } from '../shared/save';
 import { GOBLIN_CONFIG } from '../shared/goblinConfig';
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
 }
 
 export function StartMenu({ onStart }: Props) {
+  const [saveRemoved, setSaveRemoved] = useState(false);
   const save = peekSave();
   const [confirmNew, setConfirmNew] = useState(false);
 
@@ -27,6 +28,21 @@ export function StartMenu({ onStart }: Props) {
 
   const cfg = GOBLIN_CONFIG;
 
+  useEffect(() => {
+    const noticeKey = 'kobold_notice_save_removed';
+    const existing = localStorage.getItem(noticeKey);
+    if (existing) {
+      setSaveRemoved(true);
+      return;
+    }
+
+    const pruned = pruneIncompatibleSave();
+    if (pruned.removedKey) {
+      localStorage.setItem(noticeKey, JSON.stringify({ fromKey: pruned.removedKey, at: Date.now() }));
+      setSaveRemoved(true);
+    }
+  }, []);
+
   return (
     <div style={styles.backdrop}>
       <div style={styles.panel}>
@@ -36,6 +52,21 @@ export function StartMenu({ onStart }: Props) {
         <div style={styles.subtitle}>
           {cfg.subtitle}
         </div>
+        {saveRemoved ? (
+          <div style={styles.notice}>
+            <span>old save removed after an update (prototype saves aren’t kept across versions).</span>
+            <button
+              type="button"
+              style={styles.noticeDismiss}
+              onClick={() => {
+                localStorage.removeItem('kobold_notice_save_removed');
+                setSaveRemoved(false);
+              }}
+            >
+              dismiss
+            </button>
+          </div>
+        ) : null}
 
         <div style={styles.divider} />
 
@@ -124,6 +155,31 @@ const styles = {
     color: '#555',
     letterSpacing: '0.2em',
     marginTop: 4,
+    textTransform: 'uppercase',
+  } as React.CSSProperties,
+
+  notice: {
+    marginTop: 12,
+    maxWidth: 420,
+    fontSize: 10,
+    color: '#b18b2a',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  } as React.CSSProperties,
+
+  noticeDismiss: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: '#888',
+    background: 'transparent',
+    border: '1px solid #333',
+    borderRadius: 6,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
   } as React.CSSProperties,
 
