@@ -322,7 +322,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   jobCellSelected: {
-    background: '#3a3520',
+    background: '#8a7515',
   },
   jobSpriteWrap: {
     position: 'relative',

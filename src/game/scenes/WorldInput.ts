@@ -225,6 +225,40 @@ export function setupInput(scene: WorldScene) {
 
         // ── Snap-to-nearest helper for touch (2-tile Manhattan radius) ──
         const SNAP_RADIUS = scene.isTouchDevice ? 2 : 0;
+        const findNearest = <T extends { x: number; y: number }>(list: T[]) => {
+            if (SNAP_RADIUS === 0) return list.find(e => e.x === tx && e.y === ty);
+            let best: T | undefined, bestDist = Infinity;
+            for (const e of list) {
+                const d = Math.abs(e.x - tx) + Math.abs(e.y - ty);
+                if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; best = e; }
+            }
+            return best;
+        };
+
+        // Prefer agents over stockpiles/hearth so goblins on stockpile tiles are clickable
+        const adventurer = findNearest(scene.adventurers);
+        if (adventurer) {
+            scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
+            bus.emit('stockpileSelect', null);
+            bus.emit('hearthSelect', null);
+            bus.emit('adventurerSelect', adventurer);
+            return;
+        }
+        const aliveGoblins = scene.goblins.filter(d => d.alive);
+        const deadGoblins = scene.goblins.filter(d => !d.alive);
+        const hitAlive = findNearest(aliveGoblins);
+        const hitDead = !hitAlive ? findNearest(deadGoblins) : undefined;
+        const hitGoblin = hitAlive ?? hitDead;
+        if (hitGoblin) {
+            scene.selectedGoblinId = hitGoblin.id;
+            scene.selectedHearth = null;
+            bus.emit('stockpileSelect', null);
+            bus.emit('hearthSelect', null);
+            bus.emit('adventurerSelect', null);
+            emitGameState(scene);
+            return;
+        }
 
         // Check for stockpile click (with snap on touch)
         const findStockpile = <T extends { x: number; y: number }>(list: T[]) => {
@@ -236,7 +270,6 @@ export function setupInput(scene: WorldScene) {
             }
             return bestIdx;
         };
-
         const foodIdx = findStockpile(scene.foodStockpiles);
         if (foodIdx >= 0) {
             scene.selectedGoblinId = null;
@@ -285,38 +318,13 @@ export function setupInput(scene: WorldScene) {
             return;
         }
 
-        // Check for adventurer click (with snap on touch)
-        const findNearest = <T extends { x: number; y: number }>(list: T[]) => {
-            if (SNAP_RADIUS === 0) return list.find(e => e.x === tx && e.y === ty);
-            let best: T | undefined, bestDist = Infinity;
-            for (const e of list) {
-                const d = Math.abs(e.x - tx) + Math.abs(e.y - ty);
-                if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; best = e; }
-            }
-            return best;
-        };
-
-        const adventurer = findNearest(scene.adventurers);
-        if (adventurer) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            bus.emit('stockpileSelect', null);
-            bus.emit('hearthSelect', null);
-            bus.emit('adventurerSelect', adventurer);
-            return;
-        }
-
-        // Left tap: select goblin — prefer alive, fall back to dead ghost
-        const aliveGoblins = scene.goblins.filter(d => d.alive);
-        const deadGoblins = scene.goblins.filter(d => !d.alive);
-        const hitAlive = findNearest(aliveGoblins);
-        const hitDead = !hitAlive ? findNearest(deadGoblins) : undefined;
-        scene.selectedGoblinId = (hitAlive ?? hitDead)?.id ?? null;
+        // Nothing hit: clear selections
+        scene.selectedGoblinId = null;
         scene.selectedHearth = null;
         bus.emit('stockpileSelect', null);
         bus.emit('hearthSelect', null);
         bus.emit('adventurerSelect', null);
-        emitGameState(scene); // update panel immediately even when paused
+        emitGameState(scene);
     });
 
     // When pointer is released outside the canvas (e.g. on a native <select> option), Phaser

@@ -172,6 +172,28 @@ export const buildStoneWall: Action = {
 const HEARTH_COVERAGE_RADIUS = 8;  // matches warmth BFS radius — if a hearth covers you, don't build
 const HEARTH_BUILD_COOLDOWN = 300; // personal cooldown after placing, prevents back-to-back builds
 
+function isStockpileTile(
+  x: number,
+  y: number,
+  ctx: {
+    foodStockpiles?: { x: number; y: number }[];
+    mealStockpiles?: { x: number; y: number }[];
+    oreStockpiles?: { x: number; y: number }[];
+    woodStockpiles?: { x: number; y: number }[];
+    plankStockpiles?: { x: number; y: number }[];
+    barStockpiles?: { x: number; y: number }[];
+  },
+): boolean {
+  return (
+    (ctx.foodStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+    || (ctx.mealStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+    || (ctx.oreStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+    || (ctx.woodStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+    || (ctx.plankStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+    || (ctx.barStockpiles?.some(s => s.x === x && s.y === y) ?? false)
+  );
+}
+
 export function getUnfurnishedKitchen(rooms: Room[] | undefined, grid: Tile[][]): Room | null {
   if (!rooms) return null;
   for (const r of rooms) {
@@ -236,7 +258,19 @@ export const buildHearth: Action = {
     // Centralized momentum applied in utilityAI — no per-action bonus needed
     return Math.min(1.0, base);
   },
-  execute: ({ goblin, grid, woodStockpiles, currentTick, onLog, rooms }) => {
+  execute: ({
+    goblin,
+    grid,
+    woodStockpiles,
+    foodStockpiles,
+    mealStockpiles,
+    oreStockpiles,
+    plankStockpiles,
+    barStockpiles,
+    currentTick,
+    onLog,
+    rooms,
+  }) => {
     // Consume wood from inventory first, then pull from nearest stockpile
     const inventoryWood = goblin.inventory.wood;
     const needFromStockpile = Math.max(0, 2 - inventoryWood);
@@ -250,7 +284,24 @@ export const buildHearth: Action = {
     const unfurnishedKitchen = getUnfurnishedKitchen(rooms, grid);
 
     if (unfurnishedKitchen) {
-       buildTarget = { x: unfurnishedKitchen.x + Math.floor(unfurnishedKitchen.w / 2), y: unfurnishedKitchen.y + Math.floor(unfurnishedKitchen.h / 2) };
+      // Prefer the kitchen center, but never place a hearth on top of a stockpile.
+      const cx = unfurnishedKitchen.x + Math.floor(unfurnishedKitchen.w / 2);
+      const cy = unfurnishedKitchen.y + Math.floor(unfurnishedKitchen.h / 2);
+      let best: { x: number; y: number } | null = null;
+      let bestDist = Infinity;
+      for (let dy = 0; dy < unfurnishedKitchen.h; dy++) {
+        for (let dx = 0; dx < unfurnishedKitchen.w; dx++) {
+          const nx = unfurnishedKitchen.x + dx;
+          const ny = unfurnishedKitchen.y + dy;
+          if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+          const t = grid[ny][nx];
+          if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+          if (isStockpileTile(nx, ny, { foodStockpiles, mealStockpiles, oreStockpiles, woodStockpiles, plankStockpiles, barStockpiles })) continue;
+          const dist = Math.abs(nx - cx) + Math.abs(ny - cy);
+          if (dist < bestDist) { bestDist = dist; best = { x: nx, y: ny }; }
+        }
+      }
+      buildTarget = best;
     } else {
       // Find best buildable Dirt/Grass tile near goblin's current position.
       // Soft home bias: score = distToGoblin + 0.2 × distToHome, so tiles toward home are preferred
@@ -263,6 +314,7 @@ export const buildHearth: Action = {
           if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
           const t = grid[ny][nx];
           if (t.type !== TileType.Dirt && t.type !== TileType.Grass) continue;
+          if (isStockpileTile(nx, ny, { foodStockpiles, mealStockpiles, oreStockpiles, woodStockpiles, plankStockpiles, barStockpiles })) continue;
           const distToGoblin = Math.abs(dx) + Math.abs(dy);
           const distToHome = Math.abs(nx - goblin.homeTile.x) + Math.abs(ny - goblin.homeTile.y);
           const siteScore = distToGoblin + 0.2 * distToHome;
@@ -281,6 +333,7 @@ export const buildHearth: Action = {
     }
 
     // Place the hearth
+    if (isStockpileTile(buildTarget.x, buildTarget.y, { foodStockpiles, mealStockpiles, oreStockpiles, woodStockpiles, plankStockpiles, barStockpiles })) return;
     const t = grid[buildTarget.y][buildTarget.x];
     grid[buildTarget.y][buildTarget.x] = {
       ...t, type: TileType.Hearth,

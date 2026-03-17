@@ -17,6 +17,7 @@ import { SPRITE_CONFIG } from '../tileConfig';
 import { drawFlag } from './WorldOverlays';
 import { drawOverlay } from './WorldRender';
 import { setupInput } from './WorldInput';
+import { emitGameState } from './WorldState';
 import { setupCamera } from './WorldCamera';
 import { initWeatherFX } from './WeatherFX';
 
@@ -231,7 +232,10 @@ export function initializeWorld(scene: WorldScene) {
   };
   const goblinAssignedJobHandler = (payload: { goblinId: string; job: WorkCategoryId | null }) => {
     const goblin = scene.goblins.find(g => g.id === payload.goblinId);
-    if (goblin) goblin.assignedJob = payload.job;
+    if (goblin) {
+      goblin.assignedJob = payload.job;
+      emitGameState(scene); // update panel immediately (e.g. when paused)
+    }
   };
   bus.on('controlChange', controlHandler);
   bus.on('settingsChange', settingsHandler);
