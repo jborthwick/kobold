@@ -30,6 +30,12 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
 /** Single-frame sprite assignments for non-terrain game objects. */
 export const SPRITE_CONFIG: Record<string, number> = {
   goblin: 123,
+  goblinForaging: 129,
+  goblinCooking: 178,
+  goblinMining: 222,
+  goblinWoodcutting: 79,
+  goblinSawing: 76,
+  goblinSmithing: 173,
   adventurer: 27,
   tombstone: 686,
   foodStockpile: 439,

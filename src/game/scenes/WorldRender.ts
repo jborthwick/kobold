@@ -2,7 +2,22 @@ import { TILE_SIZE, GRID_SIZE } from '../../shared/constants';
 import { TileType, isWall } from '../../shared/types';
 import type { Season } from '../../shared/types';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
+import type { WorkCategoryId } from '../../simulation/workerTargets';
 import type { WorldScene } from './WorldScene';
+
+const GOBLIN_JOB_SPRITE_KEYS: Record<WorkCategoryId, keyof typeof SPRITE_CONFIG> = {
+  foraging: 'goblinForaging',
+  cooking: 'goblinCooking',
+  mining: 'goblinMining',
+  woodcutting: 'goblinWoodcutting',
+  sawing: 'goblinSawing',
+  smithing: 'goblinSmithing',
+};
+
+function getGoblinFrame(assignedJob: WorkCategoryId | null | undefined): number {
+  const key = assignedJob ? GOBLIN_JOB_SPRITE_KEYS[assignedJob] : 'goblin';
+  return SPRITE_CONFIG[key] ?? GOBLIN_FRAME;
+}
 
 const SEASON_TINTS: Record<Season, number> = {
     spring: 0xddffcc,
@@ -312,12 +327,14 @@ export function drawAgents(scene: WorldScene) {
         const px = d.x * TILE_SIZE + TILE_SIZE / 2;
         const py = d.y * TILE_SIZE + TILE_SIZE / 2;
 
+        const frame = getGoblinFrame(d.assignedJob);
         let spr = scene.goblinSprites.get(d.id);
         if (!spr) {
-            spr = scene.add.sprite(px, py, 'tiles', GOBLIN_FRAME).setDepth(5);
+            spr = scene.add.sprite(px, py, 'tiles', frame).setDepth(5);
             scene.goblinSprites.set(d.id, spr);
         } else {
             spr.setPosition(px, py);
+            spr.setFrame(frame);
         }
 
         if (d.onFire) {

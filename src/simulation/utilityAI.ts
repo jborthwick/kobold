@@ -27,6 +27,7 @@ import {
   UPGRADES_MIDPOINT,
   WOOD_BUFFER_PER_GOBLIN,
 } from './resourceTuning';
+import { getDanger } from './diffusion';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
 // Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
@@ -573,6 +574,11 @@ export function tickAgentUtility(
     if (category && goblin.preferredWorkCategory === category) {
       score = Math.min(MAX_ACTION_SCORE, score + PREFERRED_CATEGORY_BONUS);
     }
+    // Player-assigned job: strong bonus so goblin strongly favors this work type (urgency still overrides via floors below)
+    const ASSIGNED_JOB_BONUS = 0.6;
+    if (category && goblin.assignedJob != null && goblin.assignedJob === category) {
+      score = Math.min(MAX_ACTION_SCORE, score + ASSIGNED_JOB_BONUS);
+    }
     // Goal-directed bonus: active colony goal nudges relevant actions higher
     score *= goalBonuses[action.name] ?? 1.0;
     // Centralized momentum: sticky bonus for the action that won last tick
@@ -587,11 +593,21 @@ export function tickAgentUtility(
     if (action.name === 'wander' && (ctx.resourceBalance?.consumablesPressure ?? 0) > 0.6) {
       score += 0.03;
     }
+    // Urgency overrides: floor so eat/safety/rest beat assigned-job actions (job scores capped at MAX_ACTION_SCORE)
     if (noFood && goblin.hunger > 85 && action.name === 'withdrawFood') {
-      score = Math.max(score, 1.05);
+      score = Math.max(score, 2.0);
     }
     if (noFood && goblin.hunger > 85 && action.name === 'forage' && score > 0.2) {
-      score = Math.max(score, 1.05);
+      score = Math.max(score, 2.0);
+    }
+    if (action.name === 'seekSafety' && ctx.dangerField && getDanger(ctx.dangerField, goblin.x, goblin.y) > 85) {
+      score = Math.max(score, 2.0);
+    }
+    if (action.name === 'eat' && goblin.hunger > 90) {
+      score = Math.max(score, 2.0);
+    }
+    if (action.name === 'rest' && goblin.fatigue > 90) {
+      score = Math.max(score, 2.0);
     }
     if (score > bestScore) {
       secondScore = bestScore;

@@ -3,6 +3,7 @@ import { bus } from '../../shared/events';
 import { getTraitDisplay } from '../../simulation/agents';
 import { topSkill } from '../../simulation/skills';
 import { THOUGHT_DEFS, MEMORY_DEFS } from '../../simulation/mood';
+import { WORK_CATEGORIES, type WorkCategoryId } from '../../simulation/workerTargets';
 import type { GameState, Goblin, GoblinTrait } from '../../shared/types';
 
 function topRelation(
@@ -84,6 +85,25 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
         </span>
         <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {goblin.goal}</span>
       </div>
+      {goblin.alive && (
+        <div style={{ ...styles.panelRow, marginBottom: 8, alignItems: 'center', display: 'flex', gap: 8 }}>
+          <span style={styles.barLabel}>Job</span>
+          <select
+            value={goblin.assignedJob ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              const job: WorkCategoryId | null = v === '' ? null : (v as WorkCategoryId);
+              bus.emit('goblinAssignedJob', { goblinId: goblin.id, job });
+            }}
+            style={styles.jobSelect}
+          >
+            <option value="">None</option>
+            {WORK_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <Bar label="health" value={goblin.health}  max={goblin.maxHealth} color="#e74c3c" />
       <Bar label="hunger" value={goblin.hunger}  max={100}             color="#e67e22" />
       <Bar label="morale" value={goblin.morale}  max={100}             color="#3498db" />
@@ -204,6 +224,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   panelRow: {
     marginTop: 4,
+  },
+  jobSelect: {
+    flex: '1 1 auto',
+    minWidth: 0,
+    fontFamily: 'monospace',
+    fontSize: 11,
+    background: '#333',
+    border: '1px solid #555',
+    borderRadius: 4,
+    color: '#ccc',
+    padding: '2px 6px',
+    cursor: 'pointer',
   },
   task: {
     marginTop:  8,

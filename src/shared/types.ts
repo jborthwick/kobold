@@ -177,6 +177,8 @@ export interface Goblin {
   lastWorkCategoryTick?: number;  // when lastWorkCategory was set; used to expire persistence
   /** Optional role affinity assigned at spawn; small score bonus for actions in this category. */
   preferredWorkCategory?: import('../simulation/workerTargets').WorkCategoryId;
+  /** Player-assigned job; when set, goblin strongly favors this work type. null/undefined = no job. */
+  assignedJob?: import('../simulation/workerTargets').WorkCategoryId | null;
 }
 
 export interface LogEntry {

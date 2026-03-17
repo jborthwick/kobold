@@ -229,6 +229,10 @@ export function initializeWorld(scene: WorldScene) {
       scene.workerTargets = { ...scene.workerTargets, [payload.category]: payload.value };
     }
   };
+  const goblinAssignedJobHandler = (payload: { goblinId: string; job: WorkCategoryId | null }) => {
+    const goblin = scene.goblins.find(g => g.id === payload.goblinId);
+    if (goblin) goblin.assignedJob = payload.job;
+  };
   bus.on('controlChange', controlHandler);
   bus.on('settingsChange', settingsHandler);
   bus.on('logEntry', logCaptureHandler);
@@ -239,6 +243,7 @@ export function initializeWorld(scene: WorldScene) {
   bus.on('chronicleModal', chronicleModalHandler);
   bus.on('chronicleModalClosed', chronicleModalClosedHandler);
   bus.on('workerTargetChange', workerTargetChangeHandler);
+  bus.on('goblinAssignedJob', goblinAssignedJobHandler);
 
   // Remove bus listeners when this scene is destroyed (new-colony flow)
   scene.events.once('destroy', () => {
@@ -252,6 +257,7 @@ export function initializeWorld(scene: WorldScene) {
     bus.off('chronicleModal', chronicleModalHandler);
     bus.off('chronicleModalClosed', chronicleModalClosedHandler);
     bus.off('workerTargetChange', workerTargetChangeHandler);
+    bus.off('goblinAssignedJob', goblinAssignedJobHandler);
   });
 
   setupCamera(scene);

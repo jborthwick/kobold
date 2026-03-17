@@ -132,6 +132,8 @@ export function loadGame(): SaveData | null {
         if (s.saw === undefined) s.saw = 0;
         if (s.smith === undefined) s.smith = 0;
       }
+      // assignedJob: optional; undefined from old saves = no job (no migration required, but normalize to null if desired)
+      if (d.assignedJob === undefined) d.assignedJob = null;
     }
     data.rooms ??= [];
     data.mealStockpiles ??= [];

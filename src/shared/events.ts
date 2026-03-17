@@ -41,6 +41,8 @@ type Events = {
   mealsCooked: number;
   /** Worker target change from planning panel. */
   workerTargetChange: { category: WorkCategoryId; value: number };
+  /** Player-assigned job for a goblin (from goblin HUD). */
+  goblinAssignedJob: { goblinId: string; job: WorkCategoryId | null };
 };
 
 export const bus = mitt<Events>();

@@ -13,6 +13,8 @@ export function setupInput(scene: WorldScene) {
     let dragStartX = 0, dragStartY = 0;
     let scrollAtDragX = 0, scrollAtDragY = 0;
     let didDrag = false;
+    /** True after pointerdown on canvas; cleared on pointerup. Prevents panning when pointerup was consumed by another element (e.g. native select). */
+    let dragIntent = false;
 
     // Pinch-to-zoom state (touch devices)
     let pinchStartDist = 0;
@@ -107,6 +109,7 @@ export function setupInput(scene: WorldScene) {
         }
 
         // ── Left-click drag start ────────────────────────────────────────
+        dragIntent = true;
         dragStartX = p.x;
         dragStartY = p.y;
         scrollAtDragX = cam.scrollX;
@@ -182,7 +185,7 @@ export function setupInput(scene: WorldScene) {
             drawBuildPreview(scene.buildPreviewGfx, scene.buildMode, scene.buildPreview, scene.grid, scene.rooms);
         }
 
-        if (!p.isDown || p.rightButtonDown()) return;
+        if (!dragIntent || !p.isDown || p.rightButtonDown()) return;
         const panDx = (dragStartX - p.x) / cam.zoom;
         const panDy = (dragStartY - p.y) / cam.zoom;
         if (Math.abs(panDx) > 3 || Math.abs(panDy) > 3) didDrag = true;
@@ -190,7 +193,12 @@ export function setupInput(scene: WorldScene) {
         cam.scrollY = scrollAtDragY + panDy;
     });
 
+    const clearDragIntent = () => {
+        dragIntent = false;
+    };
+
     scene.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+        clearDragIntent();
         // Cancel long-press timer
         if (scene.longPressTimer) {
             clearTimeout(scene.longPressTimer);
@@ -309,6 +317,17 @@ export function setupInput(scene: WorldScene) {
         bus.emit('hearthSelect', null);
         bus.emit('adventurerSelect', null);
         emitGameState(scene); // update panel immediately even when paused
+    });
+
+    // When pointer is released outside the canvas (e.g. on a native <select> option), Phaser
+    // never gets pointerup, so dragIntent would stay true and the map would pan on move. Clear
+    // drag intent on any window-level pointerup/pointercancel so we don't keep panning.
+    const onWindowPointerRelease = () => clearDragIntent();
+    window.addEventListener('pointerup', onWindowPointerRelease, true);
+    window.addEventListener('pointercancel', onWindowPointerRelease, true);
+    scene.events.once('destroy', () => {
+        window.removeEventListener('pointerup', onWindowPointerRelease, true);
+        window.removeEventListener('pointercancel', onWindowPointerRelease, true);
     });
 
     scene.input.on('wheel',
