@@ -111,12 +111,14 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
 
   const toggleLLM = () => {
+    // Button not rendered in prod; keeps dev state in sync with WorldInit → storyteller.
     const next = !llmEnabled;
     setLlmEnabled(next);
     bus.emit('settingsChange', { llmEnabled: next });
   };
 
   const cycleProvider = () => {
+    // Dev-only UI; prod always Groq via setStorytellerProvider.
     const next: LLMProvider = provider === 'anthropic' ? 'groq' : 'anthropic';
     setProvider(next);
     bus.emit('settingsChange', { llmProvider: next });
@@ -134,6 +136,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   const isPhone = layout === 'phone';
   const isDesktop = layout === 'desktop';
+  // Prod: hide 🤖 LLM + ⚡ provider (storyteller.ts forces on + Groq). Dev: show both.
+  const showLlmHudToggles = !import.meta.env.PROD;
 
   const topBarStyle: React.CSSProperties = {
     ...styles.topBar,
@@ -160,8 +164,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
       {/* Build Menu (Permanent) */}
       <BuildMenu activeType={activeBuildType} />
 
-      {/* LLM toggle: desktop only (LLM disabled on mobile) */}
-      {isDesktop && (
+      {/* Dev only: turn narrator off / switch Anthropic↔Groq. Prod: controls omitted (see storyteller.ts). */}
+      {isDesktop && showLlmHudToggles && (
         <button
           onClick={toggleLLM}
           style={{ ...styles.llmToggle, ...(llmEnabled ? styles.llmToggleOn : styles.llmToggleOff) }}
@@ -169,8 +173,7 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
           {llmEnabled ? '🤖 LLM' : '💤 LLM'}
         </button>
       )}
-      {/* Provider toggle: only visible when LLM is enabled */}
-      {isDesktop && llmEnabled && (
+      {isDesktop && llmEnabled && showLlmHudToggles && (
         <button
           onClick={cycleProvider}
           style={{ ...styles.llmToggle, ...styles.providerToggle }}
@@ -179,8 +182,8 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
           {provider === 'anthropic' ? '⚡ Claude' : '⚡ Groq'}
         </button>
       )}
-      {/* Storyteller persona: only visible when LLM is enabled */}
-      {isDesktop && llmEnabled && (
+      {/* Persona still exposed in prod; LLM path is always on there so this always applies. */}
+      {isDesktop && (import.meta.env.PROD || llmEnabled) && (
         <button
           onClick={cyclePersona}
           style={{ ...styles.llmToggle, ...styles.personaToggle }}

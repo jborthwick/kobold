@@ -188,6 +188,7 @@ export function initializeWorld(scene: WorldScene) {
     if (action === 'speedDown') scene.adjustSpeed(-1);
     // 'newColony' is handled by App.tsx; WorldScene has nothing to do
   };
+  // HUD emits llmEnabled / llmProvider in dev; prod builds clamp inside storyteller.ts.
   const settingsHandler = (s: { llmEnabled?: boolean; llmProvider?: 'anthropic' | 'groq' }) => {
     if (s.llmEnabled !== undefined) setStorytellerEnabled(s.llmEnabled);
     if (s.llmProvider) setStorytellerProvider(s.llmProvider);

@@ -39,6 +39,11 @@ export function getStorytellerPersona(): StorytellerPersona {
 }
 
 // ── LLM Config ────────────────────────────────────────────────────────────────
+//
+// Production builds (import.meta.env.PROD): shipped players get Groq-only, narrator
+// always “on” from the game’s point of view. HUD hides LLM on/off + provider toggles;
+// setStorytellerEnabled / setStorytellerProvider clamp here so bus events cannot
+// override that. Dev (`npm run dev`) keeps full toggles. See HUDBar.tsx.
 
 let enabled = true;
 let provider: 'anthropic' | 'groq' = 'groq';
@@ -86,13 +91,20 @@ const PROVIDERS = {
 };
 
 export function setStorytellerEnabled(val: boolean) {
+  // Prod: ignore “off” — no HUD toggle; chapters should always attempt LLM (then fallback).
+  if (import.meta.env.PROD) {
+    enabled = true;
+    return;
+  }
   enabled = val;
 }
 export function setStorytellerProvider(p: 'anthropic' | 'groq') {
-  provider = p;
+  // Prod: never Anthropic (cost / infra); Groq only. Dev can cycle Claude vs Groq in HUD.
+  provider = import.meta.env.PROD ? 'groq' : p;
 }
 export function getStorytellerEnabled() {
-  return enabled;
+  // Prod: always true so call sites never skip LLM path; failures still use deterministic fallback.
+  return import.meta.env.PROD ? true : enabled;
 }
 
 /** @deprecated Use selectChapterEvents — alias for backwards compatibility */
