@@ -3,7 +3,7 @@
  * See: FORAGEABLE_TILES, SITE_RECORD_THRESHOLD, PATCH_MERGE_RADIUS, recordSite.
  */
 
-import { TileType, type ResourceSite } from '../../shared/types';
+import { TileType, type Goblin, type ResourceSite, type Tile } from '../../shared/types';
 
 /** Min tile value worth storing in a goblin's site memory. */
 export const SITE_RECORD_THRESHOLD = 3;
@@ -53,3 +53,11 @@ export function recordSite(sites: ResourceSite[], x: number, y: number, value: n
 export const FORAGEABLE_TILES = new Set<TileType>([
   TileType.Mushroom,
 ]);
+
+/** Drop remembered food sites that no longer have harvestable food (before scoring actions). */
+export function pruneInvalidKnownFoodSites(goblin: Goblin, grid: Tile[][]): void {
+  goblin.knownFoodSites = goblin.knownFoodSites.filter(s => {
+    const tile = grid[s.y]?.[s.x];
+    return tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
+  });
+}

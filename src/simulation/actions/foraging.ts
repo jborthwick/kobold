@@ -108,12 +108,14 @@ export const forage: Action = {
               goblin.knownFoodSites = goblin.knownFoodSites.map(
                 s => (s.x === best.x && s.y === best.y) ? better : s,
               );
+              moveToward(goblin, better, grid, currentTick);
+              goblin.task = '→ remembered patch';
             } else {
               goblin.knownFoodSites = goblin.knownFoodSites.filter(
                 s => !(s.x === best.x && s.y === best.y),
               );
+              goblin.task = 'searching for food';
             }
-            goblin.task = 'searching for food';
           } else {
             recordSite(goblin.knownFoodSites, best.x, best.y, tileHere.foodValue, currentTick);
             goblin.task = 'at patch (harvesting)';

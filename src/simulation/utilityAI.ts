@@ -9,7 +9,7 @@
 
 import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
 import { isWalkable } from './world';
-import { traitMod, pathNextStep } from './agents';
+import { traitMod, pathNextStep, pruneInvalidKnownFoodSites } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
 import { CARDINAL_DIRECTIONS } from './actions/helpers';
@@ -526,6 +526,10 @@ export function tickAgentUtility(
     workerTargets,
     currentHeadcounts,
   };
+
+  // Stale mushroom memories still made forage score high (stock-the-larder floor + hunger
+  // override) while execute only cleared them after winning — goblins looped "searching for food".
+  pruneInvalidKnownFoodSites(goblin, grid);
 
   // ── Step 4: Score all eligible actions ──────────────────────────────────────
   // Each action has two functions:

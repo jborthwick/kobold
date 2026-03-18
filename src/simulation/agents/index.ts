@@ -9,6 +9,7 @@ export {
   PATCH_MERGE_RADIUS,
   recordSite,
   FORAGEABLE_TILES,
+  pruneInvalidKnownFoodSites,
 } from './sites';
 
 export {
