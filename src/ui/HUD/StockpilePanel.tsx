@@ -95,7 +95,6 @@ export function StockpilePanel() {
   const isMealSp = sel.kind === 'meal';
   const isWoodSp = sel.kind === 'wood';
   const isPlankSp = sel.kind === 'plank';
-  const isBarSp = sel.kind === 'bar';
   const amount = isFoodSp
     ? (stockpile as FoodStockpile).food
     : isOreSp
