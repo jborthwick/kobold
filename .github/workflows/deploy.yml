@@ -29,6 +29,11 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          # Optional: full URLs to a deployed edge proxy (see workers/llm-proxy/README.md).
+          # Example: https://your-worker.workers.dev/groq
+          VITE_GROQ_PROXY_URL: ${{ secrets.VITE_GROQ_PROXY_URL }}
+          VITE_ANTHROPIC_PROXY_URL: ${{ secrets.VITE_ANTHROPIC_PROXY_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -48,9 +48,22 @@ let sessionCallCount = 0;
 let lastCallTick = 0;
 const COOLDOWN_TICKS = 300;
 
+/** Production (e.g. GitHub Pages): set VITE_* at build time to your edge worker URLs. */
+function groqProxyUrl(): string {
+  const v = import.meta.env.VITE_GROQ_PROXY_URL;
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : '/api/groq-proxy';
+}
+
+function anthropicProxyUrl(): string {
+  const v = import.meta.env.VITE_ANTHROPIC_PROXY_URL;
+  return typeof v === 'string' && v.trim() !== '' ? v.trim() : '/api/llm-proxy';
+}
+
 const PROVIDERS = {
   anthropic: {
-    url: '/api/llm-proxy',
+    get url() {
+      return anthropicProxyUrl();
+    },
     model: 'claude-haiku-4-5',
     extractText: (data: { content?: Array<{ text?: string }> }) => data.content?.[0]?.text,
     extractUsage: (data: { usage?: { input_tokens?: number; output_tokens?: number } }) => ({
@@ -59,7 +72,9 @@ const PROVIDERS = {
     }),
   },
   groq: {
-    url: '/api/groq-proxy',
+    get url() {
+      return groqProxyUrl();
+    },
     model: 'llama-3.1-8b-instant',
     extractText: (data: { choices?: Array<{ message?: { content?: string } }> }) => 
       data.choices?.[0]?.message?.content,

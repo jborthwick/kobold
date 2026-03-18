@@ -17,12 +17,25 @@ Open http://localhost:5173 — use arrow keys to pan, mouse to select goblins.
 
 ## LLM Integration
 
-**Required:** Add an API key to `.env.local`:
+**Local dev:** Add API keys to `.env.local` (used only by the Vite dev proxy — never bundled):
+
 ```
+GROQ_API_KEY=gsk_...
+# optional second provider:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-LLM is off by default. Toggle with 🤖 button in-game. The LLM is used for narrative (chapter summaries when goals complete), not as a chatbot.
+Toggle narration with the 🤖 control in-game. The LLM is used for chapter summaries when colony goals complete (not a chatbot).
+
+### GitHub Pages + chapter generation
+
+The static Pages build has no `/api/*` proxy. To get live LLM chapters on the deployed site:
+
+1. Deploy the Cloudflare Worker in [`workers/llm-proxy`](workers/llm-proxy) (dashboard or Wrangler) with `GROQ_API_KEY` / optional `ANTHROPIC_API_KEY` secrets and `ALLOWED_ORIGINS` set to your Pages origin (e.g. `https://youruser.github.io`).
+2. Add repository **Actions secrets** `VITE_GROQ_PROXY_URL` and optionally `VITE_ANTHROPIC_PROXY_URL` — full POST URLs such as `https://<worker>.workers.dev/groq`.
+3. Push to `main` so the Pages workflow rebuilds with those URLs baked in.
+
+If the secrets are unset, the game still runs; chapters fall back to deterministic text.
 
 ## Commands
 

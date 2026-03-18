@@ -1,0 +1,11 @@
+# Deploy: cd workers/llm-proxy && npx wrangler deploy
+# Secrets: npx wrangler secret put GROQ_API_KEY
+#          npx wrangler secret put ANTHROPIC_API_KEY  (optional)
+name = "kobold-llm-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Comma-separated browser origins allowed to call this worker (e.g. your GitHub Pages site).
+# Example: https://youruser.github.io
+[vars]
+ALLOWED_ORIGINS = ""
