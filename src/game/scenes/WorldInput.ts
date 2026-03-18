@@ -306,6 +306,24 @@ export function setupInput(scene: WorldScene) {
             bus.emit('hearthSelect', null);
             return;
         }
+        const plankIdx = findStockpile(scene.plankStockpiles);
+        if (plankIdx >= 0) {
+            scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
+            bus.emit('adventurerSelect', null);
+            bus.emit('stockpileSelect', { kind: 'plank', idx: plankIdx });
+            bus.emit('hearthSelect', null);
+            return;
+        }
+        const barIdx = findStockpile(scene.barStockpiles);
+        if (barIdx >= 0) {
+            scene.selectedGoblinId = null;
+            scene.selectedHearth = null;
+            bus.emit('adventurerSelect', null);
+            bus.emit('stockpileSelect', { kind: 'bar', idx: barIdx });
+            bus.emit('hearthSelect', null);
+            return;
+        }
 
         // Check for hearth click (tile-based)
         const tile = scene.grid[ty]?.[tx];

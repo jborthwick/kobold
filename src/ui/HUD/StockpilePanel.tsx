@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
 import { getGoblinConfig } from '../../shared/goblinConfig';
-import type { GameState, FoodStockpile, OreStockpile, WoodStockpile, MealStockpile } from '../../shared/types';
+import type {
+  GameState,
+  FoodStockpile,
+  OreStockpile,
+  WoodStockpile,
+  MealStockpile,
+  PlankStockpile,
+  BarStockpile,
+} from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
   panel: {
@@ -43,7 +51,10 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export function StockpilePanel() {
-  const [sel,   setSel]   = useState<{ kind: 'food' | 'ore' | 'wood' | 'meal'; idx: number } | null>(null);
+  const [sel, setSel] = useState<{
+    kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar';
+    idx: number;
+  } | null>(null);
   const [state, setState] = useState<GameState | null>(null);
 
   useEffect(() => {
@@ -57,30 +68,101 @@ export function StockpilePanel() {
 
   if (!sel || !state) return null;
 
-  const stockpile: FoodStockpile | OreStockpile | WoodStockpile | MealStockpile | undefined =
-    sel.kind === 'food' ? state.foodStockpiles[sel.idx]
-  : sel.kind === 'ore'  ? state.oreStockpiles[sel.idx]
-  : sel.kind === 'meal' ? state.mealStockpiles[sel.idx]
-  :                       state.woodStockpiles[sel.idx];
+  const stockpile:
+    | FoodStockpile
+    | OreStockpile
+    | WoodStockpile
+    | MealStockpile
+    | PlankStockpile
+    | BarStockpile
+    | undefined =
+    sel.kind === 'food'
+      ? state.foodStockpiles[sel.idx]
+      : sel.kind === 'ore'
+        ? state.oreStockpiles[sel.idx]
+        : sel.kind === 'meal'
+          ? state.mealStockpiles[sel.idx]
+          : sel.kind === 'wood'
+            ? state.woodStockpiles[sel.idx]
+            : sel.kind === 'plank'
+              ? state.plankStockpiles[sel.idx]
+              : state.barStockpiles[sel.idx];
 
   if (!stockpile) return null;
 
   const isFoodSp = sel.kind === 'food';
-  const isOreSp  = sel.kind === 'ore';
+  const isOreSp = sel.kind === 'ore';
   const isMealSp = sel.kind === 'meal';
-  const amount   = isFoodSp ? (stockpile as FoodStockpile).food
-                 : isOreSp  ? (stockpile as OreStockpile).ore
-                 : isMealSp ? (stockpile as MealStockpile).meals
-                 :             (stockpile as WoodStockpile).wood;
-  const max      = isFoodSp ? (stockpile as FoodStockpile).maxFood
-                 : isOreSp  ? (stockpile as OreStockpile).maxOre
-                 : isMealSp ? (stockpile as MealStockpile).maxMeals
-                 :             (stockpile as WoodStockpile).maxWood;
-  const pct      = max > 0 ? Math.min(1, amount / max) : 0;
-  const color    = isFoodSp ? '#f0c040' : isOreSp ? '#ff8800' : isMealSp ? '#ff9900' : '#8bc34a';
-  const icon     = isFoodSp ? '🏠' : isOreSp ? '⛏' : isMealSp ? '🍲' : '🪵';
-  const label    = isFoodSp ? 'Food Stockpile' : isOreSp ? 'Ore Stockpile' : isMealSp ? 'Meal Stockpile' : 'Wood Stockpile';
-  const resource = isFoodSp ? 'food' : isOreSp ? 'ore' : isMealSp ? 'meals' : 'wood';
+  const isWoodSp = sel.kind === 'wood';
+  const isPlankSp = sel.kind === 'plank';
+  const isBarSp = sel.kind === 'bar';
+  const amount = isFoodSp
+    ? (stockpile as FoodStockpile).food
+    : isOreSp
+      ? (stockpile as OreStockpile).ore
+      : isMealSp
+        ? (stockpile as MealStockpile).meals
+        : isWoodSp
+          ? (stockpile as WoodStockpile).wood
+          : isPlankSp
+            ? (stockpile as PlankStockpile).planks
+            : (stockpile as BarStockpile).bars;
+  const max = isFoodSp
+    ? (stockpile as FoodStockpile).maxFood
+    : isOreSp
+      ? (stockpile as OreStockpile).maxOre
+      : isMealSp
+        ? (stockpile as MealStockpile).maxMeals
+        : isWoodSp
+          ? (stockpile as WoodStockpile).maxWood
+          : isPlankSp
+            ? (stockpile as PlankStockpile).maxPlanks
+            : (stockpile as BarStockpile).maxBars;
+  const pct = max > 0 ? Math.min(1, amount / max) : 0;
+  const color = isFoodSp
+    ? '#f0c040'
+    : isOreSp
+      ? '#ff8800'
+      : isMealSp
+        ? '#ff9900'
+        : isWoodSp
+          ? '#8bc34a'
+          : isPlankSp
+            ? '#c4a574'
+            : '#b0bec5';
+  const icon = isFoodSp
+    ? '🏠'
+    : isOreSp
+      ? '⛏'
+      : isMealSp
+        ? '🍲'
+        : isWoodSp
+          ? '🪵'
+          : isPlankSp
+            ? '📐'
+            : '⚙';
+  const label = isFoodSp
+    ? 'Food Stockpile'
+    : isOreSp
+      ? 'Ore Stockpile'
+      : isMealSp
+        ? 'Meal Stockpile'
+        : isWoodSp
+          ? 'Wood Stockpile'
+          : isPlankSp
+            ? 'Plank Stockpile'
+            : 'Bar Stockpile';
+  const resource = isFoodSp
+    ? 'food'
+    : isOreSp
+      ? 'ore'
+      : isMealSp
+        ? 'meals'
+        : isWoodSp
+          ? 'wood'
+          : isPlankSp
+            ? 'planks'
+            : 'bars';
 
   const carriers = isFoodSp
     ? state.goblins.filter(d => d.alive && d.inventory.food > 0).length
@@ -88,7 +170,9 @@ export function StockpilePanel() {
       ? state.goblins.filter(d => d.alive && d.inventory.ore > 0).length
       : isMealSp
         ? state.goblins.filter(d => d.alive && d.inventory.meals > 0).length
-        : state.goblins.filter(d => d.alive && d.inventory.wood > 0).length;
+        : isWoodSp
+          ? state.goblins.filter(d => d.alive && d.inventory.wood > 0).length
+          : 0;
 
   return (
     <div style={{ ...styles.panel, borderLeft: `2px solid ${color}` }}>
@@ -101,9 +185,12 @@ export function StockpilePanel() {
         </div>
         <div style={{ fontSize: 9, color: '#999', marginTop: 2 }}>{amount.toFixed(0)} / {max}</div>
       </div>
-      <div style={{ fontSize: 9, color: '#888' }}>
-        {getGoblinConfig().unitNounPlural} carrying {resource}: <span style={{ color }}>{carriers}</span>
-      </div>
+      {(isFoodSp || isOreSp || isMealSp || isWoodSp) && (
+        <div style={{ fontSize: 9, color: '#888' }}>
+          {getGoblinConfig().unitNounPlural} carrying {resource}:{' '}
+          <span style={{ color }}>{carriers}</span>
+        </div>
+      )}
     </div>
   );
 }

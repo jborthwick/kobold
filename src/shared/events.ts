@@ -19,7 +19,7 @@ type Events = {
   tileHover:      TileInfo | null;
   miniMapUpdate:  MiniMapData;
   controlChange:  { action: 'pause' | 'speedUp' | 'speedDown' | 'newColony' };
-  stockpileSelect: { kind: 'food' | 'ore' | 'wood' | 'meal'; idx: number } | null;
+  stockpileSelect: { kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar'; idx: number } | null;
   hearthSelect: { x: number; y: number } | null;
   adventurerSelect:    Adventurer | null;
   tokenUsage:      { inputTotal: number; outputTotal: number; callCount: number; lastInput: number; lastOutput: number };
