@@ -24,6 +24,12 @@ export class WorldScene extends Phaser.Scene {
   public selectedGoblinId: string | null = null;
   /** Selected hearth tile (click-to-show fuel); cleared when selecting something else. */
   public selectedHearth: { x: number; y: number } | null = null;
+  /** Matches UI stockpile panel; used to draw selection ring on the map. */
+  public selectedStockpile: {
+    kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar';
+    idx: number;
+  } | null = null;
+  public selectedAdventurerId: string | null = null;
   public terrainDirty = true;
   public lastTickTime = 0;
   public paused = false;
@@ -263,6 +269,12 @@ export class WorldScene extends Phaser.Scene {
     const currentIdx = alive.findIndex(d => d.id === this.selectedGoblinId);
     const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
     this.selectedGoblinId = alive[nextIdx].id;
+    this.selectedHearth = null;
+    this.selectedStockpile = null;
+    this.selectedAdventurerId = null;
+    bus.emit('stockpileSelect', null);
+    bus.emit('hearthSelect', null);
+    bus.emit('adventurerSelect', null);
     emitGameState(this);
   }
 

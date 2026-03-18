@@ -29,6 +29,26 @@ const SEASON_TINTS: Record<Season, number> = {
 const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
 const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;
 
+/** Same ring as living selected goblins — tile center, world space. */
+function strokeYellowSelectionRing(gfx: Phaser.GameObjects.Graphics, tileX: number, tileY: number) {
+    const cx = tileX * TILE_SIZE + TILE_SIZE / 2;
+    const cy = tileY * TILE_SIZE + TILE_SIZE / 2;
+    gfx.lineStyle(2, 0xffff00, 1);
+    gfx.strokeCircle(cx, cy, TILE_SIZE / 2 + 3);
+}
+
+function selectedStockpileTile(scene: WorldScene): { x: number; y: number } | null {
+    const s = scene.selectedStockpile;
+    if (!s) return null;
+    const { kind, idx } = s;
+    if (kind === 'food') return scene.foodStockpiles[idx] ?? null;
+    if (kind === 'ore') return scene.oreStockpiles[idx] ?? null;
+    if (kind === 'wood') return scene.woodStockpiles[idx] ?? null;
+    if (kind === 'meal') return scene.mealStockpiles[idx] ?? null;
+    if (kind === 'plank') return scene.plankStockpiles[idx] ?? null;
+    return scene.barStockpiles[idx] ?? null;
+}
+
 export function drawFoodStockpile(scene: WorldScene) {
     for (let i = 0; i < scene.foodStockpiles.length; i++) {
         const d = scene.foodStockpiles[i];
@@ -369,5 +389,15 @@ export function drawAgents(scene: WorldScene) {
         } else {
             spr.setPosition(px, py);
         }
+    }
+
+    const pile = selectedStockpileTile(scene);
+    if (pile) strokeYellowSelectionRing(scene.selectionGfx, pile.x, pile.y);
+    const hearth = scene.selectedHearth;
+    if (hearth) strokeYellowSelectionRing(scene.selectionGfx, hearth.x, hearth.y);
+    const advId = scene.selectedAdventurerId;
+    if (advId) {
+        const adv = scene.adventurers.find(a => a.id === advId);
+        if (adv) strokeYellowSelectionRing(scene.selectionGfx, adv.x, adv.y);
     }
 }

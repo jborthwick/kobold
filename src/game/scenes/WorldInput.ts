@@ -240,6 +240,8 @@ export function setupInput(scene: WorldScene) {
         if (adventurer) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedStockpile = null;
+            scene.selectedAdventurerId = adventurer.id;
             bus.emit('stockpileSelect', null);
             bus.emit('hearthSelect', null);
             bus.emit('adventurerSelect', adventurer);
@@ -253,6 +255,8 @@ export function setupInput(scene: WorldScene) {
         if (hitGoblin) {
             scene.selectedGoblinId = hitGoblin.id;
             scene.selectedHearth = null;
+            scene.selectedStockpile = null;
+            scene.selectedAdventurerId = null;
             bus.emit('stockpileSelect', null);
             bus.emit('hearthSelect', null);
             bus.emit('adventurerSelect', null);
@@ -274,6 +278,8 @@ export function setupInput(scene: WorldScene) {
         if (foodIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'food', idx: foodIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
             bus.emit('hearthSelect', null);
@@ -283,6 +289,8 @@ export function setupInput(scene: WorldScene) {
         if (oreIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'ore', idx: oreIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
             bus.emit('hearthSelect', null);
@@ -292,6 +300,8 @@ export function setupInput(scene: WorldScene) {
         if (woodIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'wood', idx: woodIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
             bus.emit('hearthSelect', null);
@@ -301,6 +311,8 @@ export function setupInput(scene: WorldScene) {
         if (mealIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'meal', idx: mealIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'meal', idx: mealIdx });
             bus.emit('hearthSelect', null);
@@ -310,6 +322,8 @@ export function setupInput(scene: WorldScene) {
         if (plankIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'plank', idx: plankIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'plank', idx: plankIdx });
             bus.emit('hearthSelect', null);
@@ -319,6 +333,8 @@ export function setupInput(scene: WorldScene) {
         if (barIdx >= 0) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = null;
+            scene.selectedAdventurerId = null;
+            scene.selectedStockpile = { kind: 'bar', idx: barIdx };
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', { kind: 'bar', idx: barIdx });
             bus.emit('hearthSelect', null);
@@ -330,6 +346,8 @@ export function setupInput(scene: WorldScene) {
         if (tile?.type === TileType.Hearth) {
             scene.selectedGoblinId = null;
             scene.selectedHearth = { x: tx, y: ty };
+            scene.selectedStockpile = null;
+            scene.selectedAdventurerId = null;
             bus.emit('adventurerSelect', null);
             bus.emit('stockpileSelect', null);
             bus.emit('hearthSelect', { x: tx, y: ty });
@@ -339,6 +357,8 @@ export function setupInput(scene: WorldScene) {
         // Nothing hit: clear selections
         scene.selectedGoblinId = null;
         scene.selectedHearth = null;
+        scene.selectedStockpile = null;
+        scene.selectedAdventurerId = null;
         bus.emit('stockpileSelect', null);
         bus.emit('hearthSelect', null);
         bus.emit('adventurerSelect', null);
