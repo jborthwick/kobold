@@ -4,6 +4,32 @@ import type { GameState } from '../../shared/types';
 import { WORK_CATEGORIES, getCurrentHeadcounts, type WorkCategoryId } from '../../simulation/workerTargets';
 
 const styles: Record<string, React.CSSProperties> = {
+  wrapper: {
+    flexShrink: 0,
+    borderBottom: '1px solid #333',
+  },
+  collapseHeader: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 14px',
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: '#888',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase' as const,
+    background: 'rgba(0,0,0,0.85)',
+    border: 'none',
+    borderBottom: '1px solid #2a2a2a',
+    cursor: 'pointer',
+    userSelect: 'none',
+    pointerEvents: 'auto',
+  },
+  chevron: {
+    fontSize: 9,
+    color: '#666',
+  },
   panel: {
     background: 'rgba(0,0,0,0.75)',
     padding: '10px 14px',
@@ -17,15 +43,7 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'auto',
     flexShrink: 0,
     maxHeight: '40vh',
-    borderBottom: '1px solid #333',
   } as React.CSSProperties,
-  title: {
-    fontSize: 10,
-    color: '#888',
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase' as const,
-    marginBottom: 8,
-  },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -65,6 +83,7 @@ const styles: Record<string, React.CSSProperties> = {
 
 export function WorkTargetsPanel() {
   const [state, setState] = useState<GameState | null>(null);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     bus.on('gameState', setState);
@@ -81,35 +100,47 @@ export function WorkTargetsPanel() {
   };
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.title}>Labour targets</div>
-      {WORK_CATEGORIES.map(({ id, label }) => {
-        const current = currentHeadcounts[id];
-        const target = workerTargets[id] ?? 0;
-        return (
-          <div key={id} style={styles.row}>
-            <span style={styles.label}>{label}</span>
-            <span style={styles.current}>{current}</span>
-            <button
-              type="button"
-              style={styles.btn}
-              onClick={(e) => { e.stopPropagation(); setTarget(id, Math.max(0, target - 1)); }}
-              aria-label={`Decrease ${label} target`}
-            >
-              −
-            </button>
-            <span style={styles.targetValue}>{target}</span>
-            <button
-              type="button"
-              style={styles.btn}
-              onClick={(e) => { e.stopPropagation(); setTarget(id, target + 1); }}
-              aria-label={`Increase ${label} target`}
-            >
-              +
-            </button>
-          </div>
-        );
-      })}
+    <div style={styles.wrapper}>
+      <button
+        type="button"
+        style={styles.collapseHeader}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span>Labour targets</span>
+        <span style={styles.chevron}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={styles.panel}>
+          {WORK_CATEGORIES.map(({ id, label }) => {
+            const current = currentHeadcounts[id];
+            const target = workerTargets[id] ?? 0;
+            return (
+              <div key={id} style={styles.row}>
+                <span style={styles.label}>{label}</span>
+                <span style={styles.current}>{current}</span>
+                <button
+                  type="button"
+                  style={styles.btn}
+                  onClick={(e) => { e.stopPropagation(); setTarget(id, Math.max(0, target - 1)); }}
+                  aria-label={`Decrease ${label} target`}
+                >
+                  −
+                </button>
+                <span style={styles.targetValue}>{target}</span>
+                <button
+                  type="button"
+                  style={styles.btn}
+                  onClick={(e) => { e.stopPropagation(); setTarget(id, target + 1); }}
+                  aria-label={`Increase ${label} target`}
+                >
+                  +
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

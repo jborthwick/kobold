@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../../shared/events';
-import { getGoblinConfig } from '../../shared/goblinConfig';
 import { getStorytellerPersona, setStorytellerPersona, STORYTELLER_PERSONAS } from '../../ai/storyteller';
 
 type LLMProvider = 'anthropic' | 'groq';
@@ -133,7 +132,6 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   if (!state) return null;
 
-  const alive = state.goblins.filter(d => d.alive);
   const isPhone = layout === 'phone';
   const isDesktop = layout === 'desktop';
 
@@ -151,11 +149,6 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
 
   return (
     <div style={topBarStyle}>
-      <Stat label={isPhone ? 'g' : getGoblinConfig().unitNounPlural} value={`${alive.length}/${state.goblins.length}`} />
-      <Stat label={isPhone ? 'f' : 'food'} value={state.totalFood.toFixed(isPhone ? 0 : 1)} />
-      <Stat label={isPhone ? 'm' : 'meals'} value={(state.totalMeals ?? 0).toFixed(isPhone ? 0 : 1)} />
-      <Stat label={isPhone ? 'o' : 'ore'} value={state.totalOre.toFixed(isPhone ? 0 : 1)} />
-      <Stat label={isPhone ? 'w' : 'wood'} value={state.totalWood.toFixed(isPhone ? 0 : 1)} />
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
       {state.weatherSeason && state.weatherType && (
         <WeatherIndicator season={state.weatherSeason} weather={state.weatherType} />

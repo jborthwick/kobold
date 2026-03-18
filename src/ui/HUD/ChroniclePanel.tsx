@@ -3,57 +3,62 @@ import { bus } from '../../shared/events';
 import type { Chapter } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
-  chroniclePanel: {
-    background:    'rgba(30, 22, 12, 0.85)',
-    padding:       '8px 12px',
-    fontFamily:    'monospace',
-    fontSize:      11,
-    color:         '#d4c4a0',
-    userSelect:    'none',
+  wrapper: {
+    flexShrink: 0,
+    borderLeft: '2px solid #8b7355',
+    borderBottom: '1px solid #333',
+    background: 'rgba(30, 22, 12, 0.85)',
     pointerEvents: 'auto' as const,
-    cursor:        'pointer',
-    flexShrink:    0,
-    borderLeft:    '2px solid #8b7355',
-    borderBottom:  '1px solid #333',
-    maxHeight:     200,
-    overflowY:     'auto' as const,
+  },
+  chronicleHeader: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 12px',
+    fontSize: 8,
+    color: '#6b5b45',
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase' as const,
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    userSelect: 'none',
+    fontFamily: 'monospace',
+  },
+  chevron: {
+    fontSize: 8,
+    color: '#6b5b45',
+  },
+  scroll: {
+    maxHeight: 220,
+    overflowY: 'auto' as const,
+    padding: '0 12px 10px',
     scrollbarWidth: 'thin' as const,
     scrollbarColor: '#6b5b45 transparent',
   },
-  chronicleHeader: {
-    display:        'flex',
-    justifyContent: 'space-between',
-    alignItems:     'center',
-    fontSize:       8,
-    color:          '#6b5b45',
-    letterSpacing:  '0.1em',
-    textTransform:  'uppercase' as const,
-    marginBottom:   4,
-  },
-  chronicleToggle: {
-    fontSize: 8,
-    color:    '#6b5b45',
-  },
   chronicleEntry: {
-    marginBottom: 6,
+    marginBottom: 10,
   },
   chronicleLabel: {
-    fontSize:     8,
-    color:        '#6b5b45',
+    fontSize: 8,
+    color: '#6b5b45',
     marginBottom: 2,
+    fontFamily: 'monospace',
   },
   chronicleText: {
-    color:      '#d4c4a0',
-    fontStyle:  'italic',
-    fontSize:   10,
+    color: '#d4c4a0',
+    fontStyle: 'italic',
+    fontSize: 10,
     lineHeight: '1.5',
-    wordBreak:  'break-word' as const,
+    wordBreak: 'break-word' as const,
+    fontFamily: 'monospace',
   },
 };
 
 export function ChroniclePanel() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     const onChapter = (ch: Chapter) => setChapters(prev => [...prev, ch]);
@@ -68,26 +73,29 @@ export function ChroniclePanel() {
 
   if (chapters.length === 0) return null;
 
-  const latest = chapters[chapters.length - 1];
-  const shown  = expanded ? chapters : [latest];
-
   return (
-    <div
-      style={styles.chroniclePanel}
-      onClick={() => setExpanded(e => !e)}
-    >
-      <div style={styles.chronicleHeader}>
-        <span>📜 CHRONICLE</span>
-        <span style={styles.chronicleToggle}>{expanded ? '▲' : `▼ ${chapters.length} ch.`}</span>
-      </div>
-      {shown.map(ch => (
-        <div key={ch.chapterNumber} style={styles.chronicleEntry}>
-          <div style={styles.chronicleLabel}>
-            Chapter {ch.chapterNumber} · tick {ch.tick}
-          </div>
-          <div style={styles.chronicleText}>{ch.text}</div>
+    <div style={styles.wrapper}>
+      <button
+        type="button"
+        style={styles.chronicleHeader}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span>📜 Chronicle · {chapters.length} {chapters.length === 1 ? 'chapter' : 'chapters'}</span>
+        <span style={styles.chevron}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={styles.scroll}>
+          {chapters.map(ch => (
+            <div key={ch.chapterNumber} style={styles.chronicleEntry}>
+              <div style={styles.chronicleLabel}>
+                Chapter {ch.chapterNumber} · tick {ch.tick}
+              </div>
+              <div style={styles.chronicleText}>{ch.text}</div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
