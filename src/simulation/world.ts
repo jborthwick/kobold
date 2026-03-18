@@ -31,9 +31,9 @@ const WORLD_CONFIG = {
   grassMeadowFoodMax: 4,
   grassMeadowGrowback: 0.02,
 
-  mushroomFoodMin: 12,
-  mushroomFoodMax: 15,
-  mushroomGrowback: 0.08,
+  mushroomFoodMin: 2,
+  mushroomFoodMax: 5,
+  mushroomGrowback: 0, // mushrooms deplete to Dirt when empty, no regrow
 } as const;
 
 // ── Result type ──────────────────────────────────────────────────────────────
@@ -367,6 +367,23 @@ const SEEDLING_GROWTH_THRESHOLD = 6;
  */
 const YEAR_CYCLE_TICKS = 2400; // 600 ticks/season × 4 seasons
 
+// Per-tile Dirt → Mushroom (emergent regrowth; pooling bonus when tile recently dried)
+const MUSHROOM_SPROUT_CHANCE_PER_TICK   = 0.0002;
+const POOLED_MUSHROOM_BONUS_TICKS       = 300;
+const POOLED_MUSHROOM_BONUS_MULTIPLIER  = 15;
+const MUSHROOM_ISOLATION_RADIUS         = 2;
+
+function hasMushroomInRadius(grid: Tile[][], x: number, y: number, radius: number): boolean {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      if (grid[ny][nx].type === TileType.Mushroom) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Apply per-tick food and wood regrowth.
  * @param growbackMod — weather multiplier (1.0 = normal, 0.25 = drought, 1.8 = rain)
@@ -396,6 +413,34 @@ export function growback(grid: Tile[][], growbackMod: number = 1, tick: number =
           t.growbackRate = WORLD_CONFIG.forestGrowback;  // Normal forest growback
         }
       }
+    }
+  }
+
+  // Per-tile Dirt → Mushroom (emergent); bonus for tiles that recently dried from pools
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const t = grid[y][x];
+      if (t.type !== TileType.Dirt) continue;
+      // Clear stale pool bonus so save state stays bounded
+      if (t.poolDriedTick !== undefined && tick - t.poolDriedTick > POOLED_MUSHROOM_BONUS_TICKS) {
+        delete t.poolDriedTick;
+      }
+      if (hasMushroomInRadius(grid, x, y, MUSHROOM_ISOLATION_RADIUS)) continue;
+      let chance = MUSHROOM_SPROUT_CHANCE_PER_TICK * effectiveMod;
+      if (t.poolDriedTick !== undefined && tick - t.poolDriedTick <= POOLED_MUSHROOM_BONUS_TICKS) {
+        chance *= POOLED_MUSHROOM_BONUS_MULTIPLIER;
+      }
+      if (Math.random() >= chance) continue;
+      const fMax = WORLD_CONFIG.mushroomFoodMin + Math.random() * (WORLD_CONFIG.mushroomFoodMax - WORLD_CONFIG.mushroomFoodMin);
+      const foodVal = fMax * (0.7 + Math.random() * 0.3);
+      grid[y][x] = {
+        type:          TileType.Mushroom,
+        foodValue:     foodVal,
+        maxFood:       fMax,
+        materialValue: 0,
+        maxMaterial:   0,
+        growbackRate:  0,
+      };
     }
   }
 }

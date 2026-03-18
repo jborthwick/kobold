@@ -25,7 +25,7 @@ import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
 import { createDangerField, computeGoblinWarmth, computeDanger, updateTraffic } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
-import { tickWorldEvents, setNextEventTick, tickMushroomSprout } from '../src/simulation/events';
+import { tickWorldEvents, setNextEventTick } from '../src/simulation/events';
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles, clearRoomGroundToDirt } from '../src/simulation/rooms';
 import { rollWound } from '../src/simulation/wounds';
 import { getGoblinConfig } from '../src/shared/goblinConfig';
@@ -332,10 +332,9 @@ function runRaidsAndCombat(tick: number): void {
   }
 }
 
-/** World events + mushroom sprout; then process pending successions (spawn replacement goblins after SUCCESSION_DELAY). */
+/** World events; then process pending successions (spawn replacement goblins after SUCCESSION_DELAY). */
 function runWorldEventsAndSuccession(tick: number): void {
   tickWorldEvents(grid, tick, goblins, adventurers);
-  tickMushroomSprout(grid, tick);
 
   // At tick 400, add a lumber hut near storage so headless matches a mid-game GUI where the player
   // has built their first wood-processing room. This lets us observe chop/saw/wood stockpiling.

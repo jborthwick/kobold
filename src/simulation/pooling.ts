@@ -73,18 +73,19 @@ export function tickPooling(
     };
   }
 
-  // Evaporate pools back to original tile type
+  // Evaporate pools back to original tile type; mark as recently dried for mushroom growth bonus
   for (const { x, y } of evaporate) {
     const t = grid[y][x];
     const restored = t.priorType ?? TileType.Dirt;
     grid[y][x] = {
-      type:         restored,
-      foodValue:    0,
-      maxFood:      restored === TileType.Grass ? 4 : 0,
+      type:          restored,
+      foodValue:     0,
+      maxFood:       restored === TileType.Grass ? 4 : 0,
       materialValue: 0,
-      maxMaterial:  0,
-      growbackRate: restored === TileType.Grass ? 0.04 : restored === TileType.Farmland ? 0.02 : 0,
-      trafficScore: t.trafficScore,
+      maxMaterial:   0,
+      growbackRate:  restored === TileType.Grass ? 0.04 : restored === TileType.Farmland ? 0.02 : 0,
+      trafficScore:  t.trafficScore,
+      poolDriedTick: currentTick,
     };
   }
 }

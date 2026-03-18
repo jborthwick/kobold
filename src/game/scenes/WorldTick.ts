@@ -8,7 +8,7 @@
  * 3. Utility AI — each alive goblin: needs, score actions, execute highest.
  * 4. World physics — growback; burning goblins; pooling; fire; lightning.
  * 5. Raids — maybeSpawnRaid; tickAdventurers (move, attack); damage/wounds; remove dead.
- * 6. World events — blight, bounty, mushroom, ore; tickMushroomSprout.
+ * 6. World events — blight, bounty, ore.
  * 7. Succession — queue spawn for dead goblins; spawn at SUCCESSION_DELAY.
  * 8. Sync — stockpile gfx; room expansion (expandStockpilesInRooms, lumber/blacksmith);
  *    WorldGoals.updateGoalProgress; emitMiniMap; emitGameState; auto-save every 100 ticks.
@@ -30,7 +30,7 @@ import { tickLightning } from '../../simulation/lightning';
 import { maybeSpawnRaid, tickAdventurers } from '../../simulation/adventurers';
 import { addMemory } from '../../simulation/mood';
 import { rollWound, woundLabel } from '../../simulation/wounds';
-import { tickWorldEvents, tickMushroomSprout } from '../../simulation/events';
+import { tickWorldEvents } from '../../simulation/events';
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles } from '../../simulation/rooms';
 import { saveGame } from '../../shared/save';
 import * as WorldGoals from './WorldGoals';
@@ -236,10 +236,6 @@ export function gameTick(scene: WorldScene) {
             level: 'warn',
         });
     }
-
-    // Small steady mushroom sprouting — every 150 ticks, a fresh 1–4 tile patch
-    // (no log — too routine, clutters the event feed)
-    tickMushroomSprout(scene.grid, scene.tick);
 
     // ── Check for any deaths this tick to queue successions ────────────────
     for (const id of aliveBeforeTick) {

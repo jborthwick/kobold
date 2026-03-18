@@ -34,6 +34,7 @@ export interface Tile {
   fireTick?: number;      // tick when fire started; undefined means tile is not burning
   poolTick?: number;      // tick when rain pool formed; undefined means not pooled
   priorType?: TileType;   // tile type before pooling (restored on evaporation)
+  poolDriedTick?: number; // tick when pool evaporated; used for mushroom growth bonus
   trafficScore?: number;  // 0–100; goblin foot-traffic accumulation (diffusion field, not persisted)
   hearthFuel?: number;    // 0 = extinguished, >0 = lit; decay 1/tick (hearths only)
 }

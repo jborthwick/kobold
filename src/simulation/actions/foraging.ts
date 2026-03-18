@@ -20,7 +20,6 @@ import { FOOD_STOCK_LARDER_PRESSURE } from '../resourceTuning';
 /** Commitment expiry for pathing to stockpile/kitchen — prevents ping-pong with forage. */
 const DEPOSIT_WITHDRAW_COMMIT_TICKS = 15;
 import type { Action, ActionContext } from './types';
-import { isWalkable } from '../world';
 
 function getForageRadius(goblin: Goblin): number {
   const vision = effectiveVision(goblin);
@@ -78,7 +77,17 @@ export const forage: Action = {
 
     if (!foodTarget) {
       if (goblin.knownFoodSites.length > 0) {
-        const best = goblin.knownFoodSites.reduce((a, b) => b.value > a.value ? b : a);
+        // Prune invalid sites once per tick (depleted/Dirt)
+        const valid = goblin.knownFoodSites.filter(s => {
+          const tile = grid[s.y]?.[s.x];
+          return tile && FORAGEABLE_TILES.has(tile.type) && tile.foodValue >= 1;
+        });
+        goblin.knownFoodSites = valid;
+        if (valid.length === 0) {
+          goblin.task = 'searching for food';
+          return;
+        }
+        const best = valid.reduce((a, b) => b.value > a.value ? b : a);
         if (goblin.x === best.x && goblin.y === best.y) {
           const tileHere = grid[goblin.y][goblin.x];
           const stillGood = tileHere.foodValue >= 1 && FORAGEABLE_TILES.has(tileHere.type);
@@ -96,9 +105,8 @@ export const forage: Action = {
               }
             }
             if (better) {
-              const replacement = better;
               goblin.knownFoodSites = goblin.knownFoodSites.map(
-                s => (s.x === best.x && s.y === best.y) ? replacement : s,
+                s => (s.x === best.x && s.y === best.y) ? better : s,
               );
             } else {
               goblin.knownFoodSites = goblin.knownFoodSites.filter(
@@ -111,16 +119,6 @@ export const forage: Action = {
             goblin.task = 'at patch (harvesting)';
           }
         } else {
-          const tileAtBest = grid[best.y]?.[best.x];
-          const bestWalkable = tileAtBest !== undefined && isWalkable(grid, best.x, best.y);
-          const bestForageable = tileAtBest !== undefined && FORAGEABLE_TILES.has(tileAtBest.type);
-          if (!tileAtBest || !bestWalkable || !bestForageable) {
-            goblin.knownFoodSites = goblin.knownFoodSites.filter(
-              s => !(s.x === best.x && s.y === best.y),
-            );
-            goblin.task = 'searching for food';
-            return;
-          }
           moveToward(goblin, best, grid, currentTick);
           goblin.task = '→ remembered patch';
         }
@@ -182,10 +180,11 @@ export const forage: Action = {
       const hadFood = here.foodValue;
       const depleted = Math.min(hadFood, depletionRate);
       here.foodValue = Math.max(0, hadFood - depleted);
-      // Mushrooms regrow via world growback(); only non-mushroom forageables become Dirt when depleted
-      if (here.foodValue === 0 && here.type !== TileType.Mushroom) {
+      // Depleted forageables (including mushrooms) become Dirt; no growback
+      if (here.foodValue === 0) {
         here.type = TileType.Dirt;
         here.maxFood = 0;
+        here.growbackRate = 0;
       }
       const amount = Math.min(harvestYield, depleted, headroom);
       goblin.inventory.food += amount;
