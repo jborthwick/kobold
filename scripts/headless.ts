@@ -14,6 +14,16 @@
  *
  * Output: summary table + action frequency bar chart + trait bias + oscillation log.
  * Optional JSON dump: DUMP_JSON=1 npx tsx scripts/headless.ts 1000
+ *
+ * Storyteller prompt dry-run (per goal completion):
+ *   HEADLESS_STORY=1 npx tsx scripts/headless.ts 3000
+ *   npm run headless:story                    # --story + default tick count
+ *   npm run headless -- 3000 42 --story       # npm needs -- before script flags
+ *   npx tsx scripts/headless.ts 3000 --story --story-persona=chaotic
+ * Optional LLM (needs GROQ_API_KEY or ANTHROPIC_API_KEY): HEADLESS_STORY_LLM=1
+ *
+ * Story cadence: default --story-every=800 (timed beats). Use --story-every=0 for goals only.
+ * --story-real-goals: seed kitchen + wood so cook_meals can complete (authentic goal text).
  */
 
 import { generateWorld, growback } from '../src/simulation/world';
@@ -27,19 +37,76 @@ import { createDangerField, computeGoblinWarmth, computeDanger, updateTraffic } 
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
 import { tickWorldEvents, setNextEventTick } from '../src/simulation/events';
 import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmithOreStockpiles, clearRoomGroundToDirt } from '../src/simulation/rooms';
-import { rollWound } from '../src/simulation/wounds';
+import { rollWound, woundLabel } from '../src/simulation/wounds';
+import { topSkill } from '../src/simulation/skills';
 import { getGoblinConfig } from '../src/shared/goblinConfig';
+import {
+  STORYTELLER_SYSTEM_PROMPT,
+  buildStorytellerUserPrompt,
+  selectChapterEvents,
+} from '../src/ai/storytellerPrompt';
 import { GRID_SIZE, HEARTH_FUEL_MAX } from '../src/shared/constants';
-import type { Goblin, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, Adventurer, Room } from '../src/shared/types';
+import type {
+  Goblin,
+  FoodStockpile,
+  MealStockpile,
+  OreStockpile,
+  WoodStockpile,
+  PlankStockpile,
+  BarStockpile,
+  ColonyGoal,
+  Adventurer,
+  Room,
+  LogEntry,
+} from '../src/shared/types';
 import { TileType } from '../src/shared/types';
 import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
-// argv[2] = tick count (default 2000), argv[3] = optional seed for reproducible worlds.
+// Numeric args (any order vs flags): first number = ticks (default 2000), second = optional seed.
+// e.g. headless.ts --story | headless.ts 4000 --story | headless.ts --story 4000 42
 
-const TICKS = parseInt(process.argv[2] ?? '2000', 10);
-const SEED_ARG = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;
+const argvRest = process.argv.slice(2);
+const numericArgs = argvRest.filter(a => /^\d+$/.test(a)).map(n => parseInt(n, 10));
+let TICKS = numericArgs[0] ?? 2000;
+if (!Number.isFinite(TICKS) || TICKS < 1) TICKS = 2000;
+const SEED_ARG = numericArgs.length > 1 ? numericArgs[1] : undefined;
+
 const DUMP_JSON = process.env['DUMP_JSON'] === '1';
+
+let headlessStory = process.env['HEADLESS_STORY'] === '1';
+let headlessStoryPersona = 'balanced';
+let storyEveryFromCli: number | undefined;
+let headlessStoryRealGoals = process.env['HEADLESS_STORY_REAL_GOALS'] === '1';
+for (const a of argvRest) {
+  if (a === '--story') headlessStory = true;
+  if (a.startsWith('--story-persona=')) {
+    headlessStoryPersona = a.slice('--story-persona='.length).trim() || 'balanced';
+  }
+  if (a.startsWith('--story-every=')) {
+    const n = parseInt(a.slice('--story-every='.length), 10);
+    if (Number.isFinite(n) && n >= 0) storyEveryFromCli = n;
+  }
+  if (a === '--story-real-goals') headlessStoryRealGoals = true;
+}
+const headlessStoryLlm = process.env['HEADLESS_STORY_LLM'] === '1';
+const storyLlmPrompts: { system: string; user: string }[] = [];
+
+/** Timed story beats: 0 = off (goal completions only). Default 800 when --story. */
+let storyEveryTicks = 0;
+if (headlessStory) {
+  if (storyEveryFromCli !== undefined) {
+    storyEveryTicks = storyEveryFromCli;
+  } else {
+    const envN = process.env['HEADLESS_STORY_EVERY'];
+    if (envN !== undefined && envN !== '') {
+      const n = parseInt(envN, 10);
+      storyEveryTicks = Number.isFinite(n) && n >= 0 ? n : 800;
+    } else {
+      storyEveryTicks = 800;
+    }
+  }
+}
 
 // Headless reporting constants (tuning / output shape)
 const SNAPSHOT_INTERVAL = 10;
@@ -75,14 +142,28 @@ const fireLog: { tick: number; level: 'info' | 'warn' | 'error'; message: string
 const oscillationLog: Array<{
   tick: number;
   name: string;
-  role: string;
+  trait: string;
   task: string;
   positions: string[];
   tasks: string[];  // unique tasks during oscillation
 }> = [];
+/** Chronicle-shaped log for storyteller prompt (mirrors game logHistory windows). */
+const logHistory: LogEntry[] = [];
+let lastChapterTick = 0;
+let headlessStoryBeatIndex = 0;
 let fireTilesMax = 0;  // peak simultaneous fire tile count
 let fireTilesTotal = 0;  // cumulative tiles that burned or were extinguished
 let fireTilesRainedOut = 0;  // tiles extinguished by rain
+
+/** Rough input size for storyteller system+user (~4 chars/token; proxy body cap 48k). */
+function formatStoryPromptSize(system: string, user: string): string {
+  const chars = system.length + user.length;
+  const tok = Math.ceil(chars / 4);
+  const cap = 48_000;
+  const limitNote =
+    chars <= cap ? `under ${cap.toLocaleString()} char proxy limit` : `over ${cap.toLocaleString()} char limit (may 413)`;
+  return `~${tok.toLocaleString()} tokens (est.) · ${chars.toLocaleString()} chars · ${limitNote}`;
+}
 
 /** Normalize raw task string to a short bucket label for the action frequency table (e.g. "→ kitchen" → "traveling to kitchen"). */
 function normalizeTaskLabel(task: string): string {
@@ -128,7 +209,11 @@ function makeGoal(type: GoalType, generation: number): ColonyGoal {
   const scale = 1 + generation * 0.6;
   const desc = getGoblinConfig().goalDescriptions;
   switch (type) {
-    case 'cook_meals': return { type, description: desc.cook_meals(Math.round(20 * scale)), progress: 0, target: Math.round(20 * scale), generation };
+    case 'cook_meals': {
+      let target = Math.round(20 * scale);
+      if (headlessStoryRealGoals && generation === 0) target = Math.min(8, target);
+      return { type, description: desc.cook_meals(target), progress: 0, target, generation };
+    }
     case 'survive_ticks': return { type, description: desc.survive_ticks(Math.round(400 * scale)), progress: 0, target: Math.round(400 * scale), generation };
     case 'defeat_adventurers': return { type, description: desc.defeat_adventurers(Math.round(5 * scale)), progress: 0, target: Math.round(5 * scale), generation };
   }
@@ -158,6 +243,18 @@ for (let y = 0; y < GRID_SIZE; y++) {
   }
 }
 logHeadlessInit(seed, forageableNearSpawn, totalForageable);
+if (headlessStory) {
+  if (storyEveryTicks > 0) {
+    console.log(
+      `   Story prompts: every ${storyEveryTicks} ticks + on goal complete (use --story-every=0 for goals only)`,
+    );
+  } else {
+    console.log(`   Story prompts: on goal complete only (--story-every=0)`);
+  }
+}
+if (headlessStoryRealGoals) {
+  console.log(`   Story real goals: kitchen + wood seeded; first cook_meals target ≤8`);
+}
 
 const goblins: Goblin[] = spawnGoblins(grid, spawnZone);
 let adventurers: Adventurer[] = spawnInitialAdventurers(grid, 3);
@@ -181,6 +278,22 @@ const oreStockpiles: OreStockpile[] = [];
 const woodStockpiles: WoodStockpile[] = [];
 const plankStockpiles: PlankStockpile[] = [];
 const barStockpiles: BarStockpile[] = [];
+
+if (headlessStoryRealGoals) {
+  const hx = depotX + 8;
+  const hy = depotY + 8;
+  const kx = hx - 4;
+  const ky = hy - 2;
+  clearRoomGroundToDirt(grid, kx, ky, 5, 5);
+  rooms.push({ id: 'room-kitchen-headless', type: 'kitchen', x: kx, y: ky, w: 5, h: 5 });
+  mealStockpiles.push({ x: kx + 1, y: ky + 1, meals: 0, maxMeals: 200 });
+  woodStockpiles.push({
+    x: storageRoom.x + 2,
+    y: storageRoom.y + 2,
+    wood: 80,
+    maxWood: 200,
+  });
+}
 
 for (const g of goblins) {
   g.homeTile = { x: depotX, y: depotY };
@@ -209,7 +322,16 @@ const MAX_UNIQUE_POSITIONS = 3;  // flag if cycling among ≤ this many tiles
 // Each function runs one part of the tick. Order matches game logic: weather → diffusion → agents → fire/env → raids → events → succession → stockpiles → goal/snapshot.
 
 function runWeatherTick(tick: number): void {
-  tickWeather(weather, tick);
+  const wmsg = tickWeather(weather, tick);
+  if (wmsg) {
+    logHistory.push({
+      tick,
+      goblinId: 'system',
+      goblinName: 'WEATHER',
+      message: wmsg,
+      level: 'info',
+    });
+  }
 }
 
 /** Per-goblin warmth (shelter-style); danger from adventurers; traffic. */
@@ -234,6 +356,13 @@ function runAgentTicks(tick: number): void {
       (message, level) => {
         if (level === 'warn' || level === 'error') {
           warnLog.push({ tick, name: g.name, message });
+          logHistory.push({
+            tick,
+            goblinId: g.id,
+            goblinName: g.name,
+            message,
+            level,
+          });
         }
       },
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
@@ -266,7 +395,7 @@ function recordOscillation(tick: number): void {
         oscillationLog.push({
           tick,
           name: g.name,
-          role: g.role,
+          trait: g.trait,
           task: g.task,
           positions: [...uniquePos],
           tasks: [...uniqueTasks],
@@ -278,14 +407,19 @@ function recordOscillation(tick: number): void {
 
 /** Burning goblins, growback, pooling, lightning, fire spread; accumulate fire stats for report. */
 function runFireAndEnvironment(tick: number): void {
-  const fireCb = (msg: string, level: 'info' | 'warn' | 'error') => {
+  const fireStory = (msg: string, level: 'info' | 'warn' | 'error') => {
     fireLog.push({ tick, level, message: msg });
+    logHistory.push({ tick, goblinId: 'world', goblinName: 'FIRE', message: msg, level });
   };
-  tickBurningGoblins(grid, tick, goblins, fireCb);
+  const stormStory = (msg: string, level: 'info' | 'warn' | 'error') => {
+    fireLog.push({ tick, level, message: msg });
+    logHistory.push({ tick, goblinId: 'world', goblinName: 'STORM', message: msg, level });
+  };
+  tickBurningGoblins(grid, tick, goblins, fireStory);
   growback(grid, growbackModifier(weather), tick);
   tickPooling(grid, tick, weather.type);
-  tickLightning(grid, tick, weather.type, fireCb);
-  const fireResult = tickFire(grid, tick, goblins, weather.type, fireCb);
+  tickLightning(grid, tick, weather.type, stormStory);
+  const fireResult = tickFire(grid, tick, goblins, weather.type, fireStory);
   fireTilesTotal += fireResult.burnouts;
   fireTilesRainedOut += fireResult.extinguished;
 
@@ -298,10 +432,21 @@ function runFireAndEnvironment(tick: number): void {
 
 /** Maybe spawn a raid (log to raidLog); tick adventurers, apply damage/wounds, log deaths and schedule succession. */
 function runRaidsAndCombat(tick: number): void {
+  const gcfg = getGoblinConfig();
+  const enemyNoun = gcfg.enemyNounPlural;
+  const enemySing = enemyNoun.replace(/s$/, '');
+
   const raid = maybeSpawnRaid(grid, goblins, tick);
   if (raid) {
     adventurers.push(...raid.adventurers);
     raidLog.push({ tick, count: raid.count });
+    logHistory.push({
+      tick,
+      goblinId: 'adventurer',
+      goblinName: 'RAID',
+      message: `⚔ ${raid.count} ${enemyNoun} storm from the ${raid.edge} !${gcfg.raidSuffix} `,
+      level: 'error',
+    });
   }
 
   if (adventurers.length > 0) {
@@ -314,27 +459,99 @@ function runRaidsAndCombat(tick: number): void {
         if (g.health <= 0) {
           g.alive = false;
           g.task = 'dead';
-          g.causeOfDeath = 'killed by adventurers';
+          g.causeOfDeath = `killed by ${enemyNoun}`;
           deathLog.push({ tick, name: g.name, cause: g.causeOfDeath });
+          logHistory.push({
+            tick,
+            goblinId: g.id,
+            goblinName: g.name,
+            message: `killed by ${enemyNoun}!`,
+            level: 'error',
+          });
           pendingSuccessions.push({ deadGoblinId: g.id, spawnAtTick: tick + SUCCESSION_DELAY });
         } else {
           const hits = (combatHits.get(g.id) ?? 0) + 1;
           combatHits.set(g.id, hits);
+          if (hits % 3 === 1) {
+            logHistory.push({
+              tick,
+              goblinId: g.id,
+              goblinName: g.name,
+              message:
+                hits === 1
+                  ? `⚔ hit by ${enemySing} !(${g.health.toFixed(0)} hp)`
+                  : `⚔ fighting ${enemySing} (${hits} hits taken, ${g.health.toFixed(0)} hp)`,
+              level: 'warn',
+            });
+          }
           const w = rollWound(g, tick);
-          if (w) g.wound = w;
+          if (w) {
+            g.wound = w;
+            logHistory.push({
+              tick,
+              goblinId: g.id,
+              goblinName: g.name,
+              message: `🩹 suffered a ${woundLabel(w.type)} !`,
+              level: 'warn',
+            });
+          }
         }
       }
     }
+
+    for (const { message, level } of gr.logs) {
+      logHistory.push({
+        tick,
+        goblinId: 'adventurer',
+        goblinName: 'GOBLIN',
+        message,
+        level,
+      });
+    }
+
+    if (gr.adventurerDeaths.length > 0) {
+      const article = /^[aeiou]/i.test(enemySing) ? 'an' : 'a';
+      for (const { goblinId } of gr.kills) {
+        const killer = goblins.find(dw => dw.id === goblinId && dw.alive);
+        if (killer) {
+          killer.adventurerKills += 1;
+          const hitsTaken = combatHits.get(killer.id) ?? 0;
+          combatHits.delete(killer.id);
+          logHistory.push({
+            tick,
+            goblinId: killer.id,
+            goblinName: killer.name,
+            message:
+              hitsTaken > 0
+                ? `⚔ ${gcfg.killVerb} ${article} ${enemySing} !(took ${hitsTaken} hits, ${killer.health.toFixed(0)} hp)`
+                : `⚔ ${gcfg.killVerb} ${article} ${enemySing} !`,
+            level: 'warn',
+          });
+        }
+      }
+    }
+
     adventurerKills += gr.adventurerDeaths.length;
     const deadIds = new Set(gr.adventurerDeaths);
     adventurers = adventurers.filter(a => !deadIds.has(a.id));
-    combatHits.forEach((_, id) => { if (deadIds.has(id)) combatHits.delete(id); });
+    combatHits.forEach((_, id) => {
+      if (deadIds.has(id)) combatHits.delete(id);
+    });
   }
 }
 
 /** World events; then process pending successions (spawn replacement goblins after SUCCESSION_DELAY). */
 function runWorldEventsAndSuccession(tick: number): void {
-  tickWorldEvents(grid, tick, goblins, adventurers);
+  const ev = tickWorldEvents(grid, tick, goblins, adventurers);
+  if (ev.fired) {
+    logHistory.push({
+      tick,
+      goblinId: 'world',
+      goblinName: 'WORLD',
+      message: ev.message,
+      level: 'warn',
+    });
+  }
 
   // At tick 400, add a lumber hut near storage so headless matches a mid-game GUI where the player
   // has built their first wood-processing room. This lets us observe chop/saw/wood stockpiling.
@@ -366,6 +583,15 @@ function runWorldEventsAndSuccession(tick: number): void {
     successor.homeTile = { x: home.x, y: home.y };
     goblins.push(successor);
     successor.memory.push({ tick, crisis: 'arrival', action: `arrived to replace ${dead.name}` });
+    const skill = topSkill(successor);
+    const skillLabel = skill ? `[${skill.skill.toUpperCase()} Lv.${skill.level}]` : '';
+    logHistory.push({
+      tick,
+      goblinId: successor.id,
+      goblinName: successor.name,
+      message: `arrives to take ${dead.name}'s place. ${skillLabel}`,
+      level: 'info',
+    });
   }
 }
 
@@ -383,19 +609,83 @@ function runStockpileExpansion(): void {
 /** Update goal progress from stockpiles/tick/kills; on completion bump morale, cycle to next goal, push to goalLog. Every SNAPSHOT_INTERVAL ticks push a snapshot for need drift / final report. */
 function runGoalProgressAndSnapshot(tick: number): void {
   const aliveNow = goblins.filter(g => g.alive);
+  let goalCompletedThisTick = false;
   switch (colonyGoal.type) {
     case 'cook_meals': colonyGoal.progress = mealStockpiles.reduce((s, d) => s + d.meals, 0); break;
     case 'survive_ticks': colonyGoal.progress = tick - goalStartTick; break;
     case 'defeat_adventurers': colonyGoal.progress = adventurerKills; break;
   }
   if (colonyGoal.progress >= colonyGoal.target) {
+    goalCompletedThisTick = true;
+    const completedGoal: ColonyGoal = {
+      type: colonyGoal.type,
+      description: colonyGoal.description,
+      progress: colonyGoal.progress,
+      target: colonyGoal.target,
+      generation: colonyGoal.generation,
+    };
     for (const g of aliveNow) g.morale = Math.min(100, g.morale + 15);
     goalLog.push({ tick, type: colonyGoal.type, generation: colonyGoal.generation });
+    logHistory.push({
+      tick,
+      goblinId: 'world',
+      goblinName: 'COLONY',
+      message: `✓ Goal complete: ${colonyGoal.description}! Morale boost for all!`,
+      level: 'info',
+    });
+
+    if (headlessStory) {
+      const eventLines = selectChapterEvents(logHistory, lastChapterTick);
+      const user = buildStorytellerUserPrompt({
+        completedGoal,
+        goblins,
+        adventurers,
+        eventLines,
+        personaId: headlessStoryPersona,
+      });
+      console.log(
+        `\n${'═'.repeat(60)}\nHEADLESS STORY PROMPT (goal: ${completedGoal.type} gen ${completedGoal.generation})\n${formatStoryPromptSize(STORYTELLER_SYSTEM_PROMPT, user)}\n${'═'.repeat(60)}\n--- system ---\n${STORYTELLER_SYSTEM_PROMPT}\n\n--- user ---\n${user}\n`,
+      );
+      if (headlessStoryLlm) storyLlmPrompts.push({ system: STORYTELLER_SYSTEM_PROMPT, user });
+    }
+    lastChapterTick = tick; // chapter window for next goal (matches game lastChapterTick)
+
     const curr = GOAL_CYCLE.indexOf(colonyGoal.type);
     const next = GOAL_CYCLE[(curr + 1) % GOAL_CYCLE.length];
     if (next === 'defeat_adventurers') adventurerKills = 0;
     goalStartTick = tick;
     colonyGoal = makeGoal(next, colonyGoal.generation + 1);
+  }
+
+  if (
+    headlessStory &&
+    storyEveryTicks > 0 &&
+    tick > 0 &&
+    tick % storyEveryTicks === 0 &&
+    !goalCompletedThisTick
+  ) {
+    const beatStart = lastChapterTick + 1;
+    const syntheticGoal: ColonyGoal = {
+      type: 'survive_ticks',
+      description: `Headless story beat: ticks ${beatStart}–${tick} (beat ${headlessStoryBeatIndex + 1})`,
+      progress: storyEveryTicks,
+      target: storyEveryTicks,
+      generation: headlessStoryBeatIndex,
+    };
+    headlessStoryBeatIndex += 1;
+    const eventLines = selectChapterEvents(logHistory, lastChapterTick);
+    const user = buildStorytellerUserPrompt({
+      completedGoal: syntheticGoal,
+      goblins,
+      adventurers,
+      eventLines,
+      personaId: headlessStoryPersona,
+    });
+    console.log(
+      `\n${'═'.repeat(60)}\nHEADLESS STORY PROMPT (timed beat ${syntheticGoal.generation + 1}, ticks ${beatStart}–${tick})\n${formatStoryPromptSize(STORYTELLER_SYSTEM_PROMPT, user)}\n${'═'.repeat(60)}\n--- system ---\n${STORYTELLER_SYSTEM_PROMPT}\n\n--- user ---\n${user}\n`,
+    );
+    if (headlessStoryLlm) storyLlmPrompts.push({ system: STORYTELLER_SYSTEM_PROMPT, user });
+    lastChapterTick = tick;
   }
 
   if (tick % SNAPSHOT_INTERVAL === 0) {
@@ -428,6 +718,69 @@ function runSimulationTick(tick: number): void {
 
 /** Reserved for any recording that must run after the full tick (currently unused). */
 function recordTickResults(_tick: number): void {}
+
+async function runHeadlessStoryLlms(prompts: { system: string; user: string }[]): Promise<void> {
+  const provider = (process.env['HEADLESS_LLM_PROVIDER'] ?? 'groq').toLowerCase();
+  const groqKey = process.env['GROQ_API_KEY'];
+  const anthropicKey = process.env['ANTHROPIC_API_KEY'];
+  const temperature = 0.88;
+  for (let i = 0; i < prompts.length; i++) {
+    const { system, user } = prompts[i]!;
+    console.log(`\n--- HEADLESS STORY LLM ${i + 1}/${prompts.length} ---\n`);
+    try {
+      if (provider === 'anthropic') {
+        if (!anthropicKey) {
+          console.warn('ANTHROPIC_API_KEY missing; skip LLM call');
+          continue;
+        }
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': anthropicKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 256,
+            temperature,
+            system,
+            messages: [{ role: 'user', content: user }],
+          }),
+        });
+        const data = (await res.json()) as { content?: Array<{ text?: string }> };
+        console.log(data.content?.[0]?.text ?? JSON.stringify(data));
+      } else {
+        if (!groqKey) {
+          console.warn('GROQ_API_KEY missing; skip LLM call');
+          continue;
+        }
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${groqKey}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'llama-3.1-8b-instant',
+            max_tokens: 256,
+            temperature,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+          }),
+        });
+        const data = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        console.log(data.choices?.[0]?.message?.content ?? JSON.stringify(data));
+      }
+    } catch (e) {
+      console.warn('LLM call failed:', e);
+    }
+  }
+}
 
 // ── Tick loop ─────────────────────────────────────────────────────────────────
 // Run TICKS simulation ticks; recording (actionCounts, logs, snapshots) happens inside runSimulationTick.
@@ -582,7 +935,7 @@ function printTraitBias(
 
 /** Group oscillation log by goblin name, dedupe to first occurrence per goblin, print one line per oscillator. */
 function printOscillation(
-  log: Array<{ tick: number; name: string; role: string; task: string; positions: string[]; tasks: string[] }>,
+  log: Array<{ tick: number; name: string; trait: string; task: string; positions: string[]; tasks: string[] }>,
 ): void {
   const groups = new Map<string, number>();
   for (const e of log) {
@@ -601,7 +954,7 @@ function printOscillation(
     const first = seen.get(name)!;
     const taskStr = first.tasks.length > 1 ? `tasks=[${first.tasks.join(' ↔ ')}]` : `task="${first.task}"`;
     console.log(
-      `  ${name} (${first.role}): oscillated ${count} ticks | ${taskStr} | tiles=[${first.positions.join(', ')}]`
+      `  ${name} (${first.trait}): oscillated ${count} ticks | ${taskStr} | tiles=[${first.positions.join(', ')}]`
     );
   }
 }
@@ -638,8 +991,34 @@ printOscillation(oscillationLog);
 if (DUMP_JSON) {
   const outPath = `headless-${seed}-${TICKS}.json`;
   const fs = await import('node:fs/promises');
-  await fs.writeFile(outPath, JSON.stringify({ seed, ticks: TICKS, snapshots, deathLog, raidLog, goalLog, actionCounts, actionCountsByTrait, warnLog, fireLog, fireTilesMax, fireTilesTotal, fireTilesRainedOut, oscillationLog }, null, 2));
+  await fs.writeFile(
+    outPath,
+    JSON.stringify(
+      {
+        seed,
+        ticks: TICKS,
+        snapshots,
+        deathLog,
+        raidLog,
+        goalLog,
+        actionCounts,
+        actionCountsByTrait,
+        warnLog,
+        fireLog,
+        fireTilesMax,
+        fireTilesTotal,
+        fireTilesRainedOut,
+        oscillationLog,
+      },
+      null,
+      2,
+    ),
+  );
   console.log(`\n JSON dumped → ${outPath}`);
+}
+
+if (headlessStoryLlm && storyLlmPrompts.length > 0) {
+  await runHeadlessStoryLlms(storyLlmPrompts);
 }
 
 console.log();

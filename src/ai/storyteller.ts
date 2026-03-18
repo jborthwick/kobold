@@ -8,25 +8,25 @@
 import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
 import { getGoblinConfig } from '../shared/goblinConfig';
+import {
+  STORYTELLER_SYSTEM_PROMPT,
+  buildStorytellerUserPrompt,
+  selectChapterEvents,
+} from './storytellerPrompt';
+
+const STORYTELLER_TEMPERATURE = 0.88;
 
 // ── Personas ──────────────────────────────────────────────────────────────────
-// Optional narrator tone override per persona; fallback is goblin config narratorTone.
-// Enables future UI to switch e.g. balanced vs chaotic storyteller.
+// Modifier text lives in storytellerPrompt (STORYTELLER_PERSONA_MODIFIERS).
 
 export interface StorytellerPersona {
   id: string;
   name: string;
-  /** Override for "You are the narrator... — {tone}". Omit to use goblin config narratorTone. */
-  narratorToneOverride?: string;
 }
 
 export const STORYTELLER_PERSONAS: StorytellerPersona[] = [
-  { id: 'balanced', name: 'Balanced', narratorToneOverride: undefined },
-  {
-    id: 'chaotic',
-    name: 'Chaotic',
-    narratorToneOverride: 'swing chaotically between benevolence and malice; surprise the reader with sudden shifts in tone',
-  },
+  { id: 'balanced', name: 'Balanced' },
+  { id: 'chaotic', name: 'Chaotic' },
 ];
 
 let currentPersonaId: string = 'balanced';
@@ -76,7 +76,7 @@ const PROVIDERS = {
       return groqProxyUrl();
     },
     model: 'llama-3.1-8b-instant',
-    extractText: (data: { choices?: Array<{ message?: { content?: string } }> }) => 
+    extractText: (data: { choices?: Array<{ message?: { content?: string } }> }) =>
       data.choices?.[0]?.message?.content,
     extractUsage: (data: { usage?: { prompt_tokens?: number; completion_tokens?: number } }) => ({
       input: data.usage?.prompt_tokens ?? 0,
@@ -85,34 +85,29 @@ const PROVIDERS = {
   },
 };
 
-export function setStorytellerEnabled(val: boolean) { enabled = val; }
-export function setStorytellerProvider(p: 'anthropic' | 'groq') { provider = p; }
-export function getStorytellerEnabled() { return enabled; }
+export function setStorytellerEnabled(val: boolean) {
+  enabled = val;
+}
+export function setStorytellerProvider(p: 'anthropic' | 'groq') {
+  provider = p;
+}
+export function getStorytellerEnabled() {
+  return enabled;
+}
 
-// ── Event filtering ──────────────────────────────────────────────────────────
-
-const SIG_NAMES = new Set(['WEATHER', 'world', 'COLONY', 'RAID']);
-
+/** @deprecated Use selectChapterEvents — alias for backwards compatibility */
 export function filterSignificantEvents(
   logHistory: LogEntry[],
   lastChapterTick: number,
 ): string[] {
-  const recent = logHistory.filter(e => e.tick > lastChapterTick);
-  const significant: LogEntry[] = [];
-  let warnCount = 0;
-
-  for (const e of recent) {
-    if (e.level === 'error') { significant.push(e); continue; }
-    if (SIG_NAMES.has(e.goblinName)) { significant.push(e); continue; }
-    if (e.message.includes(getGoblinConfig().killVerb)) { significant.push(e); continue; }
-    if (e.level === 'warn' && e.goblinId !== 'verify' && warnCount < 3) {
-      significant.push(e);
-      warnCount++;
-    }
-  }
-
-  return significant.slice(0, 15).map(e => `[tick ${e.tick}] ${e.goblinName}: ${e.message}`);
+  return selectChapterEvents(logHistory, lastChapterTick);
 }
+
+export {
+  STORYTELLER_SYSTEM_PROMPT,
+  selectChapterEvents,
+  buildStorytellerUserPrompt,
+} from './storytellerPrompt';
 
 // ── Storyteller LLM call ─────────────────────────────────────────────────────
 
@@ -120,46 +115,40 @@ export async function callStorytellerLLM(
   completedGoal: ColonyGoal,
   goblins: Goblin[],
   adventurers: Adventurer[],
-  significantEvents: string[],
+  eventLines: string[],
   currentTick?: number,
 ): Promise<string | null> {
   if (!enabled) return null;
-  
-  // Cooldown check if tick provided
+
   if (currentTick !== undefined && currentTick - lastCallTick < COOLDOWN_TICKS) return null;
 
   const cfg = PROVIDERS[provider];
-  const alive = goblins.filter(d => d.alive);
-  const dead = goblins.filter(d => !d.alive);
+  const userContent = buildStorytellerUserPrompt({
+    completedGoal,
+    goblins,
+    adventurers,
+    eventLines,
+    personaId: getStorytellerPersona().id,
+  });
 
-  const avgHunger = alive.length > 0
-    ? alive.reduce((s, d) => s + d.hunger, 0) / alive.length : 100;
-  const avgMorale = alive.length > 0
-    ? alive.reduce((s, d) => s + d.morale, 0) / alive.length : 0;
-  const tension = Math.min(100,
-    avgHunger + (100 - avgMorale) * 0.5 + adventurers.length * 15 + dead.length * 20,
-  );
-
-  const tone = tension > 70 ? 'grim, tense, survival-focused'
-    : tension < 30 ? 'hopeful, triumphant, warm'
-      : 'neutral, matter-of-fact';
-
-  const roster = alive.map(d => `${d.name} (${d.trait})`).join(', ');
-  const eventBlock = significantEvents.length > 0
-    ? `\nKey events this chapter:\n${significantEvents.join('\n')}`
-    : '\nA quiet chapter with no major events.';
-
-  const goblinCfg = getGoblinConfig();
-  const persona = getStorytellerPersona();
-  const narratorTone = persona.narratorToneOverride ?? goblinCfg.narratorTone;
-  const chapterNum = completedGoal.generation + 1;
-  const prompt =
-    `You are the narrator of a ${goblinCfg.unitNoun} colony survival story — ${narratorTone}. Write a brief chapter summary (2-4 sentences, max 60 words) for Chapter ${chapterNum}.\n\n` +
-    `The colony just completed: ${completedGoal.description}\n` +
-    `Colony: ${alive.length} ${goblinCfg.unitNounPlural} alive, ${dead.length} fallen. Roster: ${roster}\n` +
-    `Tone: ${tone} (tension ${tension.toFixed(0)}/100)\n` +
-    `${eventBlock}\n\n` +
-    `Write in past tense, third person. Be specific — name ${goblinCfg.unitNounPlural}, reference actual events. No dialogue.`;
+  const body =
+    provider === 'anthropic'
+      ? {
+          model: cfg.model,
+          max_tokens: 256,
+          temperature: STORYTELLER_TEMPERATURE,
+          system: STORYTELLER_SYSTEM_PROMPT,
+          messages: [{ role: 'user' as const, content: userContent }],
+        }
+      : {
+          model: cfg.model,
+          max_tokens: 256,
+          temperature: STORYTELLER_TEMPERATURE,
+          messages: [
+            { role: 'system' as const, content: STORYTELLER_SYSTEM_PROMPT },
+            { role: 'user' as const, content: userContent },
+          ],
+        };
 
   try {
     lastCallTick = currentTick ?? lastCallTick;
@@ -167,11 +156,7 @@ export async function callStorytellerLLM(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal: AbortSignal.timeout(8_000),
-      body: JSON.stringify({
-        model: cfg.model,
-        max_tokens: 256,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+      body: JSON.stringify(body),
     });
     if (res.status === 429) return null;
     if (!res.ok) return null;
@@ -208,14 +193,21 @@ export function buildFallbackChapter(
   alive: Goblin[],
   events: string[],
 ): string {
-  const deathCount = events.filter(e => e.includes('killed') || e.includes('dead') || e.includes('died')).length;
+  const deathCount = events.filter(
+    e =>
+      e.toLowerCase().includes('killed') ||
+      e.toLowerCase().includes('dead') ||
+      e.toLowerCase().includes('died'),
+  ).length;
   const raidCount = events.filter(e => e.includes('storm') || e.includes('RAID')).length;
   const names = alive.slice(0, 3).map(d => d.name).join(', ');
 
   const cfg = getGoblinConfig();
   let text = `The colony completed "${goal.description}" after ${goal.generation + 1} cycle${goal.generation > 0 ? 's' : ''}.`;
-  if (deathCount > 0) text += ` ${deathCount} ${cfg.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
-  if (raidCount > 0) text += ` The colony endured ${raidCount} ${cfg.enemyNounPlural.slice(0, 1).toUpperCase() + cfg.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
+  if (deathCount > 0)
+    text += ` ${deathCount} ${cfg.unitNoun}${deathCount > 1 ? 's' : ''} fell along the way.`;
+  if (raidCount > 0)
+    text += ` The colony endured ${raidCount} ${cfg.enemyNounPlural.slice(0, 1).toUpperCase() + cfg.enemyNounPlural.slice(1)} raid${raidCount > 1 ? 's' : ''}.`;
   if (names) text += ` ${names} and the others press on.`;
   return text;
 }

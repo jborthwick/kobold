@@ -12,20 +12,30 @@ npm run build        # tsc -b && vite build
 npx tsc --noEmit     # type-check only (preferred before commits)
 npm run lint         # eslint
 npm run headless     # headless sim (2000 ticks, random seed) — see below
+npm run headless:story   # --story: prompts every 800 ticks + on goals (see below)
 python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame index
 ```
 
 ## Headless simulation (`scripts/headless.ts`)
 
 Runs the full simulation (world gen, utility AI, weather, raids, diffusion, events) without
-Phaser or React, many times faster than real-time. No LLM calls (deterministic only).
+Phaser or React, many times faster than real-time. By default **no** LLM calls (deterministic only).
 **Use this whenever tuning action scores, eligibility thresholds, or resource balance modifiers.**
+
+**Storyteller prompt dry-run (`--story`):** timed beat every **800** ticks by default (synthetic tick-range goal) **plus** real goal completions. **`--story-every=0`** = goals only. **`--story-real-goals`** = kitchen + wood + easier first cook goal.
 
 ```bash
 npm run headless                      # 2000 ticks, random seed
 npx tsx scripts/headless.ts 5000      # 5000 ticks
 npx tsx scripts/headless.ts 3000 42   # reproducible run (same seed = same world)
 DUMP_JSON=1 npx tsx scripts/headless.ts 1000   # full per-tick JSON to stdout
+npm run headless -- 2000 --story
+npm run headless -- 2000 --story --story-every=500
+npm run headless -- 5000 --story --story-every=0 --story-real-goals
+HEADLESS_STORY_EVERY=600 npx tsx scripts/headless.ts 2000 --story
+npm run headless:story
+npm run headless -- 4000 --story --story-persona=chaotic
+HEADLESS_STORY_LLM=1 HEADLESS_LLM_PROVIDER=anthropic npx tsx scripts/headless.ts 2000 --story
 ```
 
 Output includes a **summary table** (survivors, deaths, goals, stockpile levels, avg needs)

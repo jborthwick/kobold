@@ -11,7 +11,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "headless": "npx tsx scripts/headless.ts"
+    "headless": "npx tsx scripts/headless.ts",
+    "headless:story": "npx tsx scripts/headless.ts --story",
+    "test": "vitest run"
   },
   "dependencies": {
     "comlink": "^4.4.2",
@@ -38,6 +40,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1",
+    "vitest": "^4.1.0",
     "wrangler": "^4.68.0"
   }
 }
