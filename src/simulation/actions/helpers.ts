@@ -12,6 +12,7 @@
 
 import type { Goblin, Tile, GoblinTrait } from '../../shared/types';
 import { pathNextStep, traitMod } from '../agents';
+import { getTerrainMoveCost } from '../movementCost';
 import { isLegWoundSkip } from '../wounds';
 import { isWalkable } from '../world';
 
@@ -77,6 +78,11 @@ export function getOrSetMoveTarget(
 
 /** One step toward target. Leg wound may skip movement (wounds.ts). */
 export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: Tile[][]): void {
+  // Tough terrain: movement can take multiple ticks. Cooldown counts down each tick.
+  if ((goblin.moveCooldownTicks ?? 0) > 0) {
+    goblin.moveCooldownTicks = (goblin.moveCooldownTicks ?? 0) - 1;
+    return;
+  }
   // Leg wound: 40% chance to skip this tick's movement (limp)
   if (isLegWoundSkip(goblin)) return;
   const next = pathNextStep({ x: goblin.x, y: goblin.y }, target, grid);
@@ -87,6 +93,8 @@ export function moveTo(goblin: Goblin, target: { x: number; y: number }, grid: T
   }
   goblin.x = next.x;
   goblin.y = next.y;
+  const moveCost = getTerrainMoveCost(grid[next.y][next.x].type);
+  goblin.moveCooldownTicks = Math.max(0, moveCost - 1);
   goblin.fatigue = Math.min(100, goblin.fatigue + 0.2 * fatigueRate(goblin));
 }
 

@@ -71,6 +71,8 @@ export interface Adventurer {
   maxHealth: number;
   targetId: string | null;  // id of the goblin currently being chased
   staggeredUntil?: number;         // tick until which the adventurer cannot move (post-hit stagger)
+  /** Movement delay ticks remaining before the adventurer may step again. */
+  moveCooldownTicks?: number;
 }
 
 // Permanent personality trait assigned at spawn
@@ -146,6 +148,8 @@ export interface Goblin {
   wanderExpiry: number;           // tick at which to repick a new wander waypoint
   moveTarget?: { x: number; y: number } | null;  // committed nav waypoint (cooking, flee, firefighting)
   moveExpiry?: number;                             // tick at which to re-pick a new target
+  /** Movement delay ticks remaining before the goblin may step again. */
+  moveCooldownTicks?: number;
   knownFoodSites: ResourceSite[];   // remembered food patches (cap: 5)
   knownOreSites: ResourceSite[];   // remembered ore veins (cap: 5)
   knownWoodSites: ResourceSite[];   // remembered forest wood sites (cap: 5)

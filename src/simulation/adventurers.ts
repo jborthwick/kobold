@@ -9,6 +9,7 @@ import type { Adventurer, Goblin, Tile } from '../shared/types';
 import { GRID_SIZE } from '../shared/constants';
 import { isWalkable } from './world';
 import { pathNextStep } from './agents';
+import { getTerrainMoveCost } from './movementCost';
 import { skillDamageBonus } from './skills';
 import { woundDamageMultiplier } from './wounds';
 
@@ -170,6 +171,9 @@ export function tickAdventurers(
         result.adventurerDeaths.push(g.id);
         result.kills.push({ goblinId: target.id });
       }
+    } else if ((g.moveCooldownTicks ?? 0) > 0) {
+      // Tough terrain: movement can take multiple ticks.
+      g.moveCooldownTicks = (g.moveCooldownTicks ?? 0) - 1;
     } else if (dist > WANDER_RANGE) {
       // ── Wander — random step when no goblin is close ──────────────────
       const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
@@ -181,13 +185,21 @@ export function tickAdventurers(
       for (const dir of dirs) {
         const nx = g.x + dir.x;
         const ny = g.y + dir.y;
-        if (isWalkable(grid, nx, ny)) { g.x = nx; g.y = ny; break; }
+        if (isWalkable(grid, nx, ny)) {
+          g.x = nx;
+          g.y = ny;
+          const moveCost = getTerrainMoveCost(grid[ny][nx].type);
+          g.moveCooldownTicks = Math.max(0, moveCost - 1);
+          break;
+        }
       }
     } else {
       // ── Move toward target using A* ──────────────────────────────────
       const next = pathNextStep({ x: g.x, y: g.y }, { x: target.x, y: target.y }, grid);
       g.x = next.x;
       g.y = next.y;
+      const moveCost = getTerrainMoveCost(grid[next.y][next.x].type);
+      g.moveCooldownTicks = Math.max(0, moveCost - 1);
     }
   }
 
