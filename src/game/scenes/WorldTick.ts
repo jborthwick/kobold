@@ -19,7 +19,7 @@ import { getGoblinConfig } from '../../shared/goblinConfig';
 
 import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
 import { computeGoblinWarmth, computeWarmthOverlay, computeDanger, updateTraffic } from '../../simulation/diffusion';
-import { tickAgentUtility } from '../../simulation/utilityAI';
+import { tickAgentUtility, computeResourceBalanceModifier } from '../../simulation/utilityAI';
 import { getCurrentHeadcounts } from '../../simulation/workerTargets';
 import { SUCCESSION_DELAY, spawnSuccessor } from '../../simulation/agents';
 import { topSkill } from '../../simulation/skills';
@@ -69,6 +69,16 @@ export function gameTick(scene: WorldScene) {
     const aliveBeforeTick = new Set(scene.goblins.filter(g => g.alive).map(g => g.id));
 
     const currentHeadcounts = getCurrentHeadcounts(scene.goblins, scene.tick);
+    const livingGoblinCount = scene.goblins.reduce((n, g) => n + (g.alive ? 1 : 0), 0);
+    scene.resourceBalanceSnapshot = computeResourceBalanceModifier(
+        scene.foodStockpiles,
+        scene.oreStockpiles,
+        scene.woodStockpiles,
+        scene.mealStockpiles,
+        scene.barStockpiles,
+        scene.plankStockpiles,
+        livingGoblinCount,
+    );
     for (const d of scene.goblins) {
         tickAgentUtility(
             d, scene.grid, scene.tick, scene.goblins,

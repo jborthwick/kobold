@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PhaserGame } from './game/PhaserGame';
-import { HUD, SelectedGoblinPanel, ColonyGoalPanel, WorkTargetsPanel, ChroniclePanel, StockpilePanel, HearthPanel, AdventurerPanel, TokenDebugPanel } from './ui/HUD';
+import { HUD, SelectedGoblinPanel, ColonyGoalPanel, WorkTargetsPanel, ChroniclePanel, StockpilePanel, HearthPanel, AdventurerPanel, TokenDebugPanel, TileTooltip } from './ui/HUD';
 import { ChronicleModal } from './ui/ChronicleModal';
 import { EventLog } from './ui/EventLog';
 import { MiniMap } from './ui/MiniMap';
@@ -48,7 +48,7 @@ export default function App() {
       <PhaserGame startMode={startMode} />
       <HUD layout={layout} />
       <ChronicleModal />
-      {/* <TileTooltip /> — disabled; re-add import from './ui/HUD' to re-enable */}
+      <TileTooltip />
 
       {/* MiniMap: hide on phone (too small to be useful) */}
       {!isPhone && <MiniMap />}

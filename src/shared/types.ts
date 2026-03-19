@@ -266,6 +266,16 @@ export interface TileInfo {
   maxFood: number;
   materialValue: number;
   maxMaterial: number;
+  danger: number;
+  warmth: number;
+  trafficScore: number;
+  moveCost: number;
+  foodPriority: number;
+  materialPriority: number;
+  consumablesPressure: number;
+  orePressure: number;
+  woodPressure: number;
+  upgradesPressure: number;
 }
 
 export interface MiniMapData {

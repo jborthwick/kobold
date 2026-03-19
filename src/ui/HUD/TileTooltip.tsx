@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { bus } from '../../shared/events';
 import type { TileInfo } from '../../shared/types';
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   tileTooltip: {
     position:   'absolute',
     top:        48,
@@ -16,33 +16,81 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none',
     pointerEvents: 'none',
     display:    'flex',
-    gap:        8,
+    flexDirection: 'column',
+    gap: 2,
+  },
+  row: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  section: {
+    color: '#9aa0a6',
+    fontWeight: 600,
   },
 };
 
+function fmt(value: number): string {
+  return value.toFixed(1);
+}
+
 export function TileTooltip() {
   const [info, setInfo] = useState<TileInfo | null>(null);
+  const [isInspectHeld, setIsInspectHeld] = useState(false);
 
   useEffect(() => {
     bus.on('tileHover', setInfo);
     return () => bus.off('tileHover', setInfo);
   }, []);
 
-  if (!info) return null;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.key.toLowerCase() !== 'q') return;
+      setIsInspectHeld(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'q') return;
+      setIsInspectHeld(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
 
-  const foodPct = info.maxFood > 0
-    ? ` food ${info.foodValue.toFixed(1)}/${info.maxFood}`
-    : '';
-  const matPct  = info.maxMaterial > 0
-    ? ` ore ${info.materialValue.toFixed(1)}/${info.maxMaterial}`
-    : '';
+  if (!isInspectHeld || !info) return null;
 
   return (
     <div style={styles.tileTooltip}>
-      <span style={{ color: '#f0c040', fontWeight: 'bold' }}>{info.type}</span>
-      <span style={{ color: '#888' }}> ({info.x},{info.y})</span>
-      {foodPct && <span style={{ color: '#56d973' }}>{foodPct}</span>}
-      {matPct  && <span style={{ color: '#ff8800' }}>{matPct}</span>}
+      <div style={styles.row}>
+        <span style={styles.section}>terrain</span>
+        <span style={{ color: '#f0c040', fontWeight: 'bold' }}>{info.type}</span>
+        <span style={{ color: '#888' }}>({info.x},{info.y})</span>
+      </div>
+      <div style={styles.row}>
+        <span style={styles.section}>resources</span>
+        <span style={{ color: '#56d973' }}>food {fmt(info.foodValue)}/{fmt(info.maxFood)}</span>
+        <span style={{ color: '#ff8800' }}>material {fmt(info.materialValue)}/{fmt(info.maxMaterial)}</span>
+      </div>
+      <div style={styles.row}>
+        <span style={styles.section}>tile</span>
+        <span>warmth {fmt(info.warmth)}</span>
+        <span>danger {fmt(info.danger)}</span>
+        <span>traffic {fmt(info.trafficScore)}</span>
+        <span>moveCost {fmt(info.moveCost)}</span>
+      </div>
+      <div style={styles.row}>
+        <span style={styles.section}>weights</span>
+        <span>foodPri {fmt(info.foodPriority)}</span>
+        <span>matPri {fmt(info.materialPriority)}</span>
+        <span>cons {fmt(info.consumablesPressure)}</span>
+        <span>ore {fmt(info.orePressure)}</span>
+        <span>wood {fmt(info.woodPressure)}</span>
+        <span>upg {fmt(info.upgradesPressure)}</span>
+      </div>
     </div>
   );
 }

@@ -73,6 +73,14 @@ export class WorldScene extends Phaser.Scene {
   public warmthField = createWarmthField();
   public dangerField = createDangerField();
   public dangerFieldPrev = createDangerField(); // double-buffer for decay
+  public resourceBalanceSnapshot = {
+    foodPriority: 0,
+    materialPriority: 1,
+    consumablesPressure: 0,
+    orePressure: 0,
+    woodPressure: 0,
+    upgradesPressure: 0,
+  };
 
   // Event log noise reduction
   public combatHits = new Map<string, number>();  // goblin id → hit count this encounter

@@ -8,6 +8,8 @@ import { getRoomDims } from '../../shared/roomConfig';
 import type { WorldScene } from './WorldScene';
 import { drawFlag, drawBuildPreview } from './WorldOverlays';
 import { emitGameState } from './WorldState';
+import { getDanger, getWarmth } from '../../simulation/diffusion';
+import { getTerrainMoveCost } from '../../simulation/movementCost';
 
 export function setupInput(scene: WorldScene) {
     const cam = scene.cameras.main;
@@ -174,6 +176,16 @@ export function setupInput(scene: WorldScene) {
                 type: ht.type,
                 foodValue: ht.foodValue, maxFood: ht.maxFood,
                 materialValue: ht.materialValue, maxMaterial: ht.maxMaterial,
+                danger: getDanger(scene.dangerField, hx, hy),
+                warmth: getWarmth(scene.warmthField, hx, hy),
+                trafficScore: ht.trafficScore ?? 0,
+                moveCost: getTerrainMoveCost(ht.type),
+                foodPriority: scene.resourceBalanceSnapshot.foodPriority,
+                materialPriority: scene.resourceBalanceSnapshot.materialPriority,
+                consumablesPressure: scene.resourceBalanceSnapshot.consumablesPressure,
+                orePressure: scene.resourceBalanceSnapshot.orePressure,
+                woodPressure: scene.resourceBalanceSnapshot.woodPressure,
+                upgradesPressure: scene.resourceBalanceSnapshot.upgradesPressure,
             };
             bus.emit('tileHover', info);
         }
