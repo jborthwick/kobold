@@ -2,6 +2,7 @@
  * commandMove (player override), eat, rest. Survival actions run when needs are critical;
  * eat/rest use sigmoid curves so urgency rises as hunger/fatigue worsen.
  */
+import { TileType } from '../../shared/types';
 import { sigmoid } from '../utilityAI';
 import { traitMod, FORAGEABLE_TILES } from '../agents';
 import { accelerateHealing } from '../wounds';
@@ -75,6 +76,15 @@ export const eat: Action = {
       if (!tile || tile.foodValue < 1) return;
       const bite = Math.min(tile.foodValue, 2);
       tile.foodValue -= bite;
+      // Avoid leaving "fractional mushrooms" that never get harvested to Dirt.
+      if (FORAGEABLE_TILES.has(tile.type) && tile.foodValue > 0 && tile.foodValue < 1) {
+        tile.foodValue = 0;
+      }
+      if (FORAGEABLE_TILES.has(tile.type) && tile.foodValue === 0) {
+        tile.type = TileType.Dirt;
+        tile.maxFood = 0;
+        tile.growbackRate = 0;
+      }
       goblin.hunger = Math.max(0, goblin.hunger - bite * 20);
       addThought(goblin, 'ate_raw_food', currentTick);
       goblin.task = 'grazing';

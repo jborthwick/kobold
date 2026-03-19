@@ -171,6 +171,18 @@ export const forage: Action = {
     }
 
     const headroom = MAX_INVENTORY_CAPACITY - totalLoad(goblin.inventory);
+    // Mushrooms/forageables can end up with fractional foodValue (worldgen uses floats).
+    // Previously we only harvested at >= 1, which could strand tiles at e.g. 0.3 forever
+    // (tinted but never converted to Dirt). Treat sub-1 as depleted.
+    if (FORAGEABLE_TILES.has(here.type) && here.foodValue > 0 && here.foodValue < 1) {
+      here.foodValue = 0;
+      here.type = TileType.Dirt;
+      here.maxFood = 0;
+      here.growbackRate = 0;
+      goblin.task = 'cleared depleted patch';
+      return;
+    }
+
     if (FORAGEABLE_TILES.has(here.type) && here.foodValue >= 1) {
       const gatherBonus = traitMod(goblin, 'gatheringPower', 0);
       const depletionRate = 5 + gatherBonus;
@@ -183,7 +195,8 @@ export const forage: Action = {
       const depleted = Math.min(hadFood, depletionRate);
       here.foodValue = Math.max(0, hadFood - depleted);
       // Depleted forageables (including mushrooms) become Dirt; no growback
-      if (here.foodValue === 0) {
+      if (here.foodValue === 0 || here.foodValue < 1) {
+        here.foodValue = 0;
         here.type = TileType.Dirt;
         here.maxFood = 0;
         here.growbackRate = 0;
