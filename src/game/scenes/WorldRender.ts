@@ -260,7 +260,11 @@ export function drawOverlay(scene: WorldScene) {
                 if (d > 0) { tacticalAlpha = (d / 100) * 0.5; tacticalColor = 0xff2222; }
             } else if (scene.overlayMode === 'traffic') {
                 const tr = tile.trafficScore ?? 0;
-                if (tr > 0) { tacticalAlpha = (tr / 100) * 0.6; tacticalColor = 0xffee00; }
+                if (tr > 0) {
+                    const normalized = Phaser.Math.Clamp(tr / 100, 0, 1);
+                    tacticalAlpha = 0.05 + 0.7 * Math.pow(normalized, 0.6);
+                    tacticalColor = 0xffee00;
+                }
             }
 
             if (tacticalAlpha > 0.02) {
