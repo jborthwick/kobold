@@ -176,9 +176,13 @@ export const forage: Action = {
     // (tinted but never converted to Dirt). Treat sub-1 as depleted.
     if (FORAGEABLE_TILES.has(here.type) && here.foodValue > 0 && here.foodValue < 1) {
       here.foodValue = 0;
-      here.type = TileType.Dirt;
-      here.maxFood = 0;
-      here.growbackRate = 0;
+      if (here.type === TileType.CropRipe) {
+        here.type = TileType.CropGrowing;
+      } else {
+        here.type = TileType.Dirt;
+        here.maxFood = 0;
+        here.growbackRate = 0;
+      }
       goblin.task = 'cleared depleted patch';
       return;
     }
@@ -197,9 +201,13 @@ export const forage: Action = {
       // Depleted forageables (including mushrooms) become Dirt; no growback
       if (here.foodValue === 0 || here.foodValue < 1) {
         here.foodValue = 0;
-        here.type = TileType.Dirt;
-        here.maxFood = 0;
-        here.growbackRate = 0;
+        if (here.type === TileType.CropRipe) {
+          here.type = TileType.CropGrowing;
+        } else {
+          here.type = TileType.Dirt;
+          here.maxFood = 0;
+          here.growbackRate = 0;
+        }
       }
       const amount = Math.min(harvestYield, depleted, headroom);
       goblin.inventory.food += amount;

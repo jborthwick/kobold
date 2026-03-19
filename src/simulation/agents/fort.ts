@@ -7,6 +7,7 @@
 
 import { TileType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
 import { GRID_SIZE } from '../../shared/constants';
+import { isOutdoorRoomType } from '../../shared/roomConfig';
 
 /** Tile types that are valid for placing a wall (whitelist). */
 const WALLABLE_TILES = new Set<TileType>([
@@ -50,6 +51,7 @@ export function roomWallSlots(
   };
 
   for (const room of rooms) {
+    if (isOutdoorRoomType(room.type)) continue;
     // Doorway positions (center of each side, in perimeter ring)
     const doorTop = { x: room.x + 2, y: room.y - 1 };
     const doorBottom = { x: room.x + 2, y: room.y + room.h };

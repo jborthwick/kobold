@@ -52,6 +52,7 @@ export function recordSite(sites: ResourceSite[], x: number, y: number, value: n
 /** Tile types goblins can harvest food from. Add entries here to unlock new food sources. */
 export const FORAGEABLE_TILES = new Set<TileType>([
   TileType.Mushroom,
+  TileType.CropRipe,
 ]);
 
 /** Drop remembered food sites that no longer have harvestable food (before scoring actions). */

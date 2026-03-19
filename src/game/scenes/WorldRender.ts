@@ -124,6 +124,7 @@ export function drawBarStockpile(scene: WorldScene) {
 export function drawTerrain(scene: WorldScene) {
     const OBJECT_TILES = new Set([
         TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
+        TileType.CropGrowing, TileType.CropRipe,
     ]);
 
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -161,7 +162,7 @@ export function drawTerrain(scene: WorldScene) {
 
             const seasonTint = scene.weather?.season ? SEASON_TINTS[scene.weather.season] : 0xffffff;
 
-            const isVegetation = tile.type === TileType.Dirt || tile.type === TileType.Grass || tile.type === TileType.Forest || tile.type === TileType.Farmland || tile.type === TileType.TreeStump;
+            const isVegetation = tile.type === TileType.Dirt || tile.type === TileType.Grass || tile.type === TileType.Forest || tile.type === TileType.Farmland || tile.type === TileType.TreeStump || tile.type === TileType.CropGrowing || tile.type === TileType.CropRipe;
             if (isVegetation && seasonTint !== 0xffffff) {
                 const br = (baseTint >> 16) & 0xff, bg = (baseTint >> 8) & 0xff, bb = baseTint & 0xff;
                 const sr = (seasonTint >> 16) & 0xff, sg = (seasonTint >> 8) & 0xff, sb = seasonTint & 0xff;
@@ -183,6 +184,8 @@ export function drawTerrain(scene: WorldScene) {
                     let roomTint: number;
                     if (room.type === 'kitchen') {
                         roomTint = 0xffbb88;
+                    } else if (room.type === 'farm') {
+                        roomTint = 0xccff99;
                     } else if (room.type === 'lumber_hut') {
                         roomTint = 0xddffcc;
                     } else if (room.type === 'blacksmith') {

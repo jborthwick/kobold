@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { canPlaceRoom } from '../../simulation/rooms';
 import type { Tile, Room, RoomType } from '../../shared/types';
 import { TILE_SIZE } from '../../shared/constants';
+import { getRoomDims } from '../../shared/roomConfig';
 
 export function drawBuildPreview(
     gfx: Phaser.GameObjects.Graphics,
@@ -13,7 +14,7 @@ export function drawBuildPreview(
     gfx.clear();
     if (!buildMode || !buildPreview) return;
     const { x, y } = buildPreview;
-    const w = 5, h = 5;
+    const { w, h } = getRoomDims(buildMode);
     const valid = canPlaceRoom(grid, rooms, x, y, w, h);
     const color = valid ? 0x00ff00 : 0xff0000;
     const alpha = 0.3;

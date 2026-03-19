@@ -28,6 +28,7 @@ import {
   WOOD_BUFFER_PER_GOBLIN,
 } from './resourceTuning';
 import { getDanger } from './diffusion';
+import { isOutdoorRoomType } from '../shared/roomConfig';
 
 // Response curves: sigmoid (low→0, high→1), inverseSigmoid (low→1, high→0), ramp (linear).
 // Traits shift the midpoint argument so e.g. lazy goblins hit rest urgency sooner.
@@ -163,6 +164,9 @@ function updateNeeds(
       r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
     );
     if (currentRoom) {
+      if (isOutdoorRoomType(currentRoom.type)) {
+        shelterScore = 0.1;
+      } else {
       let perimeter = 0;
       let walled = 0;
       const { x, y, w, h } = currentRoom;
@@ -177,6 +181,7 @@ function updateNeeds(
       }
       const wallFraction = perimeter > 0 ? walled / perimeter : 0;
       shelterScore = 0.4 + 0.6 * wallFraction;
+      }
     } else {
       shelterScore = 0.1;
     }

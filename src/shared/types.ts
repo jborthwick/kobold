@@ -13,6 +13,8 @@ export enum TileType {
   Water = 'water',
   Forest = 'forest',
   Farmland = 'farmland',
+  CropGrowing = 'crop_growing',
+  CropRipe = 'crop_ripe',
   Ore = 'ore',
   Mushroom = 'mushroom',
   Wall = 'wall',       // legacy; new builds use WoodWall/StoneWall
@@ -286,15 +288,15 @@ export interface Chapter {
   tick: number;
 }
 
-export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith';
+export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm';
 
 export interface Room {
   id: string;
   type: RoomType;
-  x: number;          // top-left tile X of the 5×5 zone
+  x: number;          // top-left tile X of the room rectangle
   y: number;          // top-left tile Y
-  w: number;          // always 5
-  h: number;          // always 5
+  w: number;          // width in tiles
+  h: number;          // height in tiles
 }
 
 export interface GameState {

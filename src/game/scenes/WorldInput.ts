@@ -4,6 +4,7 @@ import { isWalkable } from '../../simulation/world';
 import { bus } from '../../shared/events';
 import type { TileInfo, OverlayMode } from '../../shared/types';
 import { TileType } from '../../shared/types';
+import { getRoomDims } from '../../shared/roomConfig';
 import type { WorldScene } from './WorldScene';
 import { drawFlag, drawBuildPreview } from './WorldOverlays';
 import { emitGameState } from './WorldState';
@@ -179,8 +180,9 @@ export function setupInput(scene: WorldScene) {
 
         // Update build preview when in build mode
         if (scene.buildMode) {
-            const bx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE) - 2, 0, GRID_SIZE - 5);
-            const by = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE) - 2, 0, GRID_SIZE - 5);
+            const { w, h } = getRoomDims(scene.buildMode);
+            const bx = Phaser.Math.Clamp(Math.floor(p.worldX / TILE_SIZE) - Math.floor(w / 2), 0, GRID_SIZE - w);
+            const by = Phaser.Math.Clamp(Math.floor(p.worldY / TILE_SIZE) - Math.floor(h / 2), 0, GRID_SIZE - h);
             scene.buildPreview = { x: bx, y: by };
             drawBuildPreview(scene.buildPreviewGfx, scene.buildMode, scene.buildPreview, scene.grid, scene.rooms);
         }

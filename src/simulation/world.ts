@@ -364,6 +364,10 @@ export function growback(grid: Tile[][], growbackMod: number = 1, tick: number =
       if (t.growbackRate > 0 && t.maxFood > 0 && t.foodValue < t.maxFood) {
         t.foodValue = Math.min(t.maxFood, t.foodValue + t.growbackRate * effectiveMod);
       }
+      // Crops ripen when they reach maxFood.
+      if (t.type === TileType.CropGrowing && t.maxFood > 0 && t.foodValue >= t.maxFood) {
+        t.type = TileType.CropRipe;
+      }
       if (t.type === TileType.Forest && t.maxMaterial > 0 && t.materialValue < t.maxMaterial) {
         t.materialValue = Math.min(t.maxMaterial, t.materialValue + WOOD_GROWBACK_RATE * effectiveMod);
       }

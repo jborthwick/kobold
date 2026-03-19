@@ -13,6 +13,7 @@ import * as WorldGoals from './WorldGoals';
 import { bus } from '../../shared/events';
 import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
+import { getRoomDims } from '../../shared/roomConfig';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -182,7 +183,7 @@ export class WorldScene extends Phaser.Scene {
   public placeRoom() {
     if (!this.buildMode || !this.buildPreview) return;
     const { x, y } = this.buildPreview;
-    const w = 5, h = 5;
+    const { w, h } = getRoomDims(this.buildMode);
     if (!canPlaceRoom(this.grid, this.rooms, x, y, w, h)) return;
     clearRoomGroundToDirt(this.grid, x, y, w, h);
 
@@ -192,6 +193,38 @@ export class WorldScene extends Phaser.Scene {
       x, y, w, h,
     };
     this.rooms.push(room);
+
+    if (this.buildMode === 'farm') {
+      // Crops need enough "value" to overcome the AI's distance penalty (bestFoodTile uses foodValue - dist),
+      // otherwise goblins only harvest when standing right next to them.
+      const cropMaxFood = 10;
+      const cropGrowbackRate = 0.10;
+      // Base ground: farmland across the whole room
+      for (let dy = 0; dy < h; dy++) {
+        for (let dx = 0; dx < w; dx++) {
+          const tx = x + dx, ty = y + dy;
+          const t = this.grid[ty][tx];
+          this.grid[ty][tx] = { ...t, type: TileType.Farmland, materialValue: 0, maxMaterial: 0 };
+        }
+      }
+      // Two horizontal crop rows, each 8 tiles long, centered with 1-tile margins.
+      const cropStartX = x + 1;
+      const cropRowsY = [y + 1, y + 3];
+      for (const cy of cropRowsY) {
+        for (let tx = cropStartX; tx < cropStartX + 8; tx++) {
+          const t = this.grid[cy][tx];
+          this.grid[cy][tx] = {
+            ...t,
+            type: TileType.CropGrowing,
+            foodValue: 0,
+            maxFood: cropMaxFood,
+            materialValue: 0,
+            maxMaterial: 0,
+            growbackRate: cropGrowbackRate,
+          };
+        }
+      }
+    }
 
     if (this.buildMode === 'lumber_hut') {
       const wx = x + 1, wy = y + 1;
@@ -203,8 +236,8 @@ export class WorldScene extends Phaser.Scene {
       this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpiles.length - 1]);
     } else if (this.buildMode === 'kitchen') {
       // Auto-place Hearth at kitchen center so cooking is immediately eligible
-      const cx = x + Math.floor(5 / 2);
-      const cy = y + Math.floor(5 / 2);
+      const cx = x + Math.floor(w / 2);
+      const cy = y + Math.floor(h / 2);
       const t = this.grid[cy][cx];
       this.grid[cy][cx] = { ...t, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0, hearthFuel: HEARTH_FUEL_MAX };
       // Update tilemap visual for the hearth tile
@@ -228,7 +261,7 @@ export class WorldScene extends Phaser.Scene {
     const roomName = this.buildMode === 'storage' ? 'Storage zone'
       : this.buildMode === 'kitchen' ? 'Kitchen'
         : this.buildMode === 'lumber_hut' ? 'Lumber Hut'
-          : 'Blacksmith';
+          : this.buildMode === 'farm' ? 'Farm' : 'Blacksmith';
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',

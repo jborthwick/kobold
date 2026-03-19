@@ -114,6 +114,20 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                                 <div style={styles.btnDesc}>5×5 zone where meals are cooked</div>
                             </div>
                         </button>
+                        <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'farm')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'farm' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>🌾</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Farm</div>
+                                <div style={styles.btnDesc}>10×5 crop rows (no walls)</div>
+                            </div>
+                        </button>
                     </div>
 
                     <div style={styles.section}>
