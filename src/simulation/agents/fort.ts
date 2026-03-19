@@ -2,7 +2,8 @@
  * Room-based wall building: generates wall positions on the perimeter ring
  * around player-placed rooms. Leaves doorway gaps at center of each side.
  *
- * Legacy fortWallSlots/fortEnclosureSlots replaced by roomWallSlots.
+ * Outdoor rooms (e.g. farm) are never fortified — use fortifiableRoomWallSlots for wall intent.
+ * roomWallSlots is an alias of fortifiableRoomWallSlots for backward compatibility.
  */
 
 import { TileType, type Goblin, type Tile, type Adventurer, type Room } from '../../shared/types';
@@ -19,11 +20,17 @@ const WALLABLE_TILES = new Set<TileType>([
   TileType.TreeStump,
 ]);
 
-/**
- * Generate wall positions for all rooms. Walls go on the perimeter ring around each room interior.
- * 4 doorways (center of each side) are excluded. Only tiles in WALLABLE_TILES are valid slots.
- */
-export function roomWallSlots(
+/** True if a tile type can accept a built wall segment (before it becomes WoodWall/StoneWall). */
+export function isWallSlotTerrain(type: TileType): boolean {
+  return WALLABLE_TILES.has(type);
+}
+
+/** Rooms that should get perimeter walls (excludes outdoor zones like farm). */
+export function fortifiableRooms(rooms: Room[]): Room[] {
+  return rooms.filter(r => !isOutdoorRoomType(r.type));
+}
+
+function collectPerimeterWallSlots(
   rooms: Room[],
   grid: Tile[][],
   goblins: Goblin[] | undefined,
@@ -51,8 +58,6 @@ export function roomWallSlots(
   };
 
   for (const room of rooms) {
-    if (isOutdoorRoomType(room.type)) continue;
-    // Doorway positions (center of each side, in perimeter ring)
     const doorTop = { x: room.x + 2, y: room.y - 1 };
     const doorBottom = { x: room.x + 2, y: room.y + room.h };
     const doorLeft = { x: room.x - 1, y: room.y + 2 };
@@ -63,25 +68,48 @@ export function roomWallSlots(
       (x === doorLeft.x && y === doorLeft.y) ||
       (x === doorRight.x && y === doorRight.y);
 
-    // Top row: y = room.y - 1, x from room.x - 1 to room.x + room.w
     for (let x = room.x - 1; x <= room.x + room.w; x++) {
       if (!isDoor(x, room.y - 1)) tryAdd(x, room.y - 1);
     }
-    // Bottom row: y = room.y + room.h
     for (let x = room.x - 1; x <= room.x + room.w; x++) {
       if (!isDoor(x, room.y + room.h)) tryAdd(x, room.y + room.h);
     }
-    // Left column: x = room.x - 1 (excluding corners already done)
     for (let y = room.y; y < room.y + room.h; y++) {
       if (!isDoor(room.x - 1, y)) tryAdd(room.x - 1, y);
     }
-    // Right column: x = room.x + room.w
     for (let y = room.y; y < room.y + room.h; y++) {
       if (!isDoor(room.x + room.w, y)) tryAdd(room.x + room.w, y);
     }
   }
 
   return slots;
+}
+
+/**
+ * Wall slots for fortifiable rooms only (kitchen, storage, lumber hut, blacksmith).
+ * Outdoor rooms such as farm are excluded — no wall-building intent there.
+ */
+export function fortifiableRoomWallSlots(
+  rooms: Room[],
+  grid: Tile[][],
+  goblins: Goblin[] | undefined,
+  selfId: string,
+  adventurers?: Adventurer[],
+): Array<{ x: number; y: number }> {
+  return collectPerimeterWallSlots(fortifiableRooms(rooms), grid, goblins, selfId, adventurers);
+}
+
+/**
+ * Same as fortifiableRoomWallSlots. Kept for call sites that predate the explicit name.
+ */
+export function roomWallSlots(
+  rooms: Room[],
+  grid: Tile[][],
+  goblins: Goblin[] | undefined,
+  selfId: string,
+  adventurers?: Adventurer[],
+): Array<{ x: number; y: number }> {
+  return fortifiableRoomWallSlots(rooms, grid, goblins, selfId, adventurers);
 }
 
 // Keep old exports as aliases for backward compat (headless sim, goal progress)

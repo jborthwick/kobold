@@ -1,14 +1,14 @@
 /**
- * buildWoodWall, buildStoneWall, buildHearth. Walls are built on room perimeters (roomWallSlots)
- * from planks or bars; hearths go in kitchen centers. Room-aware so goblins fortify where the
- * player placed zones.
+ * buildWoodWall, buildStoneWall, buildHearth. Walls use fortifiable room perimeters only
+ * (outdoor farm zones excluded). Shared reachable-slot pipeline in wallJobs.ts.
  */
 import { TileType, isWallType, isHearthLit } from '../../shared/types';
 import type { Tile, Room } from '../../shared/types';
 import { GRID_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
 import { inverseSigmoid, ramp } from '../utilityAI';
-import { roomWallSlots, recordSite, pathNextStep } from '../agents';
+import { fortifiableRoomWallSlots, recordSite, pathNextStep, isWallSlotTerrain } from '../agents';
 import { moveTo, addWorkFatigue, shouldLog, fatigueRate, nearestStockpile, getOrSetMoveTarget } from './helpers';
+import { pickReachableWallSlot, wallCompletionFraction, markWallSlotBlocked } from './wallJobs';
 import { addThought } from '../mood';
 import type { Action } from './types';
 
@@ -24,26 +24,23 @@ const WALL_BASE_SCALE = 0.55;
 export const buildWoodWall: Action = {
   name: 'buildWoodWall',
   tags: ['work'],
-  eligible: ({ rooms, plankStockpiles, grid, goblins, goblin, adventurers }) => {
+  eligible: ({ rooms, plankStockpiles, grid, goblins, goblin, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return false;
     const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
     if (totalPlanks < WOOD_WALL_PLANKS) return false;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const emptyInRange = wallSlots.filter(
-      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
-    );
-    return emptyInRange.length > 0;
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    if (wallSlots.length === 0) return false;
+    const job = pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick);
+    return job !== null;
   },
-  score: ({ goblin, plankStockpiles, rooms, grid, goblins, adventurers }) => {
+  score: ({ goblin, plankStockpiles, rooms, grid, goblins, adventurers, currentTick }) => {
     const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
     if (totalPlanks < WOOD_WALL_PLANKS) return 0;
     if (!rooms || rooms.length === 0) return 0;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
-    // Wall completeness: fraction of candidate wall slots that are already walls.
-    const totalSlots = wallSlots.length;
-    const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
-    const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
+    if (!pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick)) return 0;
+    const wallFraction = wallCompletionFraction(grid, wallSlots);
     let base = ramp(totalPlanks, WOOD_WALL_PLANKS, 20) * inverseSigmoid(goblin.hunger, 50) * WALL_BASE_SCALE;
     if (wallFraction < WALL_COMPLETE_THRESHOLD) {
       const scaledBoost = 1 + WALL_INCOMPLETE_BOOST * (1 - wallFraction);
@@ -56,24 +53,32 @@ export const buildWoodWall: Action = {
     const buildStockpile = nearestStockpile(goblin, plankStockpiles ?? [], s => s.planks >= WOOD_WALL_PLANKS);
     if (!buildStockpile) return;
 
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const emptyInRange = wallSlots.filter(
-      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
-    );
-    let nearestSlot: { x: number; y: number } | null = null;
-    let nearestDist = Infinity;
-    for (const s of emptyInRange) {
-      const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const job = pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick);
+    if (!job) {
+      const mt = goblin.moveTarget;
+      if (mt && wallSlots.some(s => s.x === mt.x && s.y === mt.y)) {
+        goblin.moveTarget = null;
+      }
+      return;
     }
 
-    if (nearestSlot) {
-      const committedSlot = getOrSetMoveTarget(goblin, nearestSlot, currentTick, 15);
+    {
+      const committedSlot = getOrSetMoveTarget(goblin, job, currentTick, 15);
       if (isWallType(grid[committedSlot.y][committedSlot.x].type)) {
         goblin.moveTarget = null;
         return;
       }
+      if (!isWallSlotTerrain(grid[committedSlot.y][committedSlot.x].type)) {
+        goblin.moveTarget = null;
+        return;
+      }
       const next = pathNextStep({ x: goblin.x, y: goblin.y }, committedSlot, grid);
+      if (next.x === goblin.x && next.y === goblin.y) {
+        markWallSlotBlocked(goblin, committedSlot.x, committedSlot.y, currentTick);
+        goblin.moveTarget = null;
+        return;
+      }
       if (next.x === committedSlot.x && next.y === committedSlot.y) {
         const t = grid[committedSlot.y][committedSlot.x];
         grid[committedSlot.y][committedSlot.x] = {
@@ -97,25 +102,23 @@ export const buildWoodWall: Action = {
 export const buildStoneWall: Action = {
   name: 'buildStoneWall',
   tags: ['work'],
-  eligible: ({ rooms, barStockpiles, grid, goblins, goblin, adventurers }) => {
+  eligible: ({ rooms, barStockpiles, grid, goblins, goblin, adventurers, currentTick }) => {
     if (!rooms || rooms.length === 0) return false;
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     if (totalBars < STONE_WALL_BARS) return false;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const emptyInRange = wallSlots.filter(
-      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
-    );
-    return emptyInRange.length > 0;
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    if (wallSlots.length === 0) return false;
+    const job = pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick);
+    return job !== null;
   },
-  score: ({ goblin, barStockpiles, rooms, grid, goblins, adventurers }) => {
+  score: ({ goblin, barStockpiles, rooms, grid, goblins, adventurers, currentTick }) => {
     const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
     if (totalBars < STONE_WALL_BARS) return 0;
     if (!rooms || rooms.length === 0) return 0;
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
     if (wallSlots.length === 0) return 0;
-    const totalSlots = wallSlots.length;
-    const walledSlots = wallSlots.filter(s => isWallType(grid[s.y][s.x].type)).length;
-    const wallFraction = totalSlots > 0 ? walledSlots / totalSlots : 1;
+    if (!pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick)) return 0;
+    const wallFraction = wallCompletionFraction(grid, wallSlots);
     let base = ramp(totalBars, STONE_WALL_BARS, 20) * inverseSigmoid(goblin.hunger, 50) * WALL_BASE_SCALE;
     if (wallFraction < WALL_COMPLETE_THRESHOLD) {
       const scaledBoost = 1 + WALL_INCOMPLETE_BOOST * (1 - wallFraction);
@@ -128,24 +131,32 @@ export const buildStoneWall: Action = {
     const buildStockpile = nearestStockpile(goblin, barStockpiles ?? [], s => s.bars >= STONE_WALL_BARS);
     if (!buildStockpile) return;
 
-    const wallSlots = roomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
-    const emptyInRange = wallSlots.filter(
-      s => !isWallType(grid[s.y][s.x].type) && Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y) <= MAX_WALL_BUILD_DISTANCE,
-    );
-    let nearestSlot: { x: number; y: number } | null = null;
-    let nearestDist = Infinity;
-    for (const s of emptyInRange) {
-      const dist = Math.abs(s.x - goblin.x) + Math.abs(s.y - goblin.y);
-      if (dist < nearestDist) { nearestDist = dist; nearestSlot = s; }
+    const wallSlots = fortifiableRoomWallSlots(rooms, grid, goblins, goblin.id, adventurers);
+    const job = pickReachableWallSlot(goblin, grid, wallSlots, MAX_WALL_BUILD_DISTANCE, currentTick);
+    if (!job) {
+      const mt = goblin.moveTarget;
+      if (mt && wallSlots.some(s => s.x === mt.x && s.y === mt.y)) {
+        goblin.moveTarget = null;
+      }
+      return;
     }
 
-    if (nearestSlot) {
-      const committedSlot = getOrSetMoveTarget(goblin, nearestSlot, currentTick, 15);
+    {
+      const committedSlot = getOrSetMoveTarget(goblin, job, currentTick, 15);
       if (isWallType(grid[committedSlot.y][committedSlot.x].type)) {
         goblin.moveTarget = null;
         return;
       }
+      if (!isWallSlotTerrain(grid[committedSlot.y][committedSlot.x].type)) {
+        goblin.moveTarget = null;
+        return;
+      }
       const next = pathNextStep({ x: goblin.x, y: goblin.y }, committedSlot, grid);
+      if (next.x === goblin.x && next.y === goblin.y) {
+        markWallSlotBlocked(goblin, committedSlot.x, committedSlot.y, currentTick);
+        goblin.moveTarget = null;
+        return;
+      }
       if (next.x === committedSlot.x && next.y === committedSlot.y) {
         const t = grid[committedSlot.y][committedSlot.x];
         grid[committedSlot.y][committedSlot.x] = {
