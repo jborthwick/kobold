@@ -2,7 +2,7 @@
  * Pure storyteller prompt construction + chapter event selection (testable, headless-safe).
  */
 
-import type { Adventurer, ColonyGoal, Goblin, LogEntry } from '../shared/types';
+import type { Adventurer, Chapter, ColonyGoal, Goblin, LogEntry } from '../shared/types';
 import { getGoblinConfig } from '../shared/goblinConfig';
 
 /**
@@ -26,6 +26,7 @@ const STORYTELLER_PROSE_RULES =
   '- Stick to what events suggest. Do not add scenic filler (breeze, blue sky, birds, "proudly surveyed", scribbling on rocks) unless the event list clearly implies it.\n' +
   '- Open with one concrete beat from the events, then stay with that thread or one tight pivot—no camera-pan across the whole colony.\n' +
   '- 2–4 short sentences; past tense, third person, no dialogue. One sentence may be a punchy fragment.\n' +
+  '- If the user message includes "Chronicle so far", use those excerpts only for voice continuity; write this chapter about the current milestone and key events—do not retell prior chapters.\n' +
   'Length: about 50–85 words total.';
 
 /**
@@ -44,6 +45,26 @@ export const STORYTELLER_PERSONA_MODIFIERS: Record<string, string> = {
 const MAX_EVENT_LINES = 18;
 const MAX_DETAILED_GOBLINS = 6;
 const BIO_TRUNCATE = 110;
+const MAX_PRIOR_CHAPTERS = 5;
+const MAX_PRIOR_CHAPTER_TEXT_CHARS = 320;
+
+/** Bounded prior-chapter excerpts for the user message (game + headless). */
+export function formatPriorChaptersBlock(priorChapters: Chapter[]): string {
+  if (priorChapters.length === 0) return '';
+  const slice = priorChapters.slice(-MAX_PRIOR_CHAPTERS);
+  const lines = slice.map(ch => {
+    const t = ch.text.replace(/\s+/g, ' ').trim();
+    const excerpt =
+      t.length <= MAX_PRIOR_CHAPTER_TEXT_CHARS
+        ? t
+        : `${t.slice(0, MAX_PRIOR_CHAPTER_TEXT_CHARS - 1)}…`;
+    return `- Chapter ${ch.chapterNumber}: ${excerpt}`;
+  });
+  return (
+    `Chronicle so far (continuity only—do not retell; write this chapter from the milestone and key events below):\n` +
+    `${lines.join('\n')}\n\n`
+  );
+}
 
 const SYSTEM_ERROR_NAMES = new Set(['RAID', 'FIRE', 'STORM', 'WEATHER', 'WORLD', 'world', 'COLONY']);
 
@@ -163,6 +184,8 @@ export interface BuildStorytellerPromptArgs {
    * Game and normal headless use system + user separately—leave false.
    */
   legacySingleBlock?: boolean;
+  /** Completed chronicle chapters before this one (game: scene.chapters at goal completion). */
+  priorChapters?: Chapter[];
 }
 
 function truncate(s: string, max: number): string {
@@ -185,7 +208,8 @@ function tensionGuidance(tension: number): string {
  * User message: facts + persona + task (system prompt carries voice and global rules).
  */
 export function buildStorytellerUserPrompt(args: BuildStorytellerPromptArgs): string {
-  const { completedGoal, goblins, adventurers, eventLines, personaId, legacySingleBlock } = args;
+  const { completedGoal, goblins, adventurers, eventLines, personaId, legacySingleBlock, priorChapters } =
+    args;
   const cfg = getGoblinConfig();
   const alive = goblins.filter(d => d.alive);
   const dead = goblins.filter(d => !d.alive);
@@ -229,8 +253,11 @@ export function buildStorytellerUserPrompt(args: BuildStorytellerPromptArgs): st
       ? `\nKey events this chapter:\n${eventLines.join('\n')}`
       : '\nA quiet chapter with no major events logged.';
 
+  const priorBlock = formatPriorChaptersBlock(priorChapters ?? []);
+
   const core =
     `Narrator mode: ${personaMod}\n\n` +
+    priorBlock +
     `Write the chapter summary for Chapter ${chapterNum}. ` +
     `Use at most three colonist names; prioritize goblins who actually appear in the key events.\n\n` +
     `Milestone just completed: ${completedGoal.description}\n` +

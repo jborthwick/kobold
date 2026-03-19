@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { ColonyGoal, Goblin, LogEntry } from '../shared/types';
+import type { Chapter, ColonyGoal, Goblin, LogEntry } from '../shared/types';
 import {
   STORYTELLER_SYSTEM_PROMPT,
   buildStorytellerUserPrompt,
+  formatPriorChaptersBlock,
   humanizeEventSpeaker,
   sanitizeLogMessageForStoryteller,
   selectChapterEvents,
@@ -135,10 +136,68 @@ describe('buildStorytellerUserPrompt', () => {
     expect(user).toContain('Murg');
   });
 
-  it('system prompt bans stats, robotic patterns, and clarifies colonists vs raiders', () => {
+  it('system prompt bans stats, continuity rule, and clarifies colonists', () => {
     expect(STORYTELLER_SYSTEM_PROMPT).toMatch(/hitpoints|Lv\./i);
-    expect(STORYTELLER_SYSTEM_PROMPT).toMatch(/Meanwhile|camera-pan|invented scenery/i);
-    expect(STORYTELLER_SYSTEM_PROMPT).toMatch(/colonists are goblins|Never call colonists outsiders/i);
+    expect(STORYTELLER_SYSTEM_PROMPT).toMatch(/camera-pan|Chronicle so far/i);
+    expect(STORYTELLER_SYSTEM_PROMPT).toMatch(/colonists are goblins/i);
     expect(STORYTELLER_SYSTEM_PROMPT).toContain('colonist goblins total');
+  });
+
+  it('embeds prior chapter excerpts for chapter 2+', () => {
+    const prior: Chapter[] = [
+      {
+        chapterNumber: 1,
+        goalType: 'build_rooms',
+        goalGeneration: 0,
+        text: 'First chapter about mud and hope.',
+        tick: 100,
+      },
+    ];
+    const goal: ColonyGoal = {
+      type: 'cook_meals',
+      description: 'Cook meals',
+      progress: 1,
+      target: 1,
+      generation: 1,
+    };
+    const user = buildStorytellerUserPrompt({
+      completedGoal: goal,
+      goblins: [],
+      adventurers: [],
+      eventLines: [],
+      personaId: 'balanced',
+      priorChapters: prior,
+    });
+    expect(user).toContain('Chronicle so far');
+    expect(user).toContain('Chapter 1:');
+    expect(user).toContain('mud and hope');
+    expect(user).toContain('Chapter 2');
+  });
+});
+
+describe('formatPriorChaptersBlock', () => {
+  const ch = (n: number, text: string): Chapter => ({
+    chapterNumber: n,
+    goalType: 'survive_ticks',
+    goalGeneration: n - 1,
+    text,
+    tick: n * 10,
+  });
+
+  it('truncates long chapter text', () => {
+    const long = 'x'.repeat(400);
+    const block = formatPriorChaptersBlock([ch(1, long)]);
+    expect(block.length).toBeLessThan(long.length + 100);
+    expect(block).toContain('…');
+    expect(block).not.toContain('x'.repeat(350));
+  });
+
+  it('keeps only the last five chapters', () => {
+    const chapters = Array.from({ length: 7 }, (_, i) => ch(i + 1, `Part ${i + 1}`));
+    const block = formatPriorChaptersBlock(chapters);
+    expect(block).toContain('Part 3');
+    expect(block).toContain('Part 7');
+    expect(block).not.toContain('Part 1');
+    expect(block).not.toContain('Part 2');
   });
 });

@@ -40,6 +40,7 @@ import { expandStockpilesInRooms, expandLumberHutWoodStockpiles, expandBlacksmit
 import { rollWound, woundLabel } from '../src/simulation/wounds';
 import { topSkill } from '../src/simulation/skills';
 import { getGoblinConfig } from '../src/shared/goblinConfig';
+import { buildFallbackChapter } from '../src/ai/storyteller';
 import {
   STORYTELLER_SYSTEM_PROMPT,
   buildStorytellerUserPrompt,
@@ -55,6 +56,7 @@ import type {
   PlankStockpile,
   BarStockpile,
   ColonyGoal,
+  Chapter,
   Adventurer,
   Room,
   LogEntry,
@@ -91,6 +93,8 @@ for (const a of argvRest) {
 }
 const headlessStoryLlm = process.env['HEADLESS_STORY_LLM'] === '1';
 const storyLlmPrompts: { system: string; user: string }[] = [];
+/** Synthetic chronicle entries so storyteller prompts match in-game continuity (prior chapters). */
+const headlessChapters: Chapter[] = [];
 
 /** Timed story beats: 0 = off (goal completions only). Default 800 when --story. */
 let storyEveryTicks = 0;
@@ -642,11 +646,20 @@ function runGoalProgressAndSnapshot(tick: number): void {
         adventurers,
         eventLines,
         personaId: headlessStoryPersona,
+        priorChapters: [...headlessChapters],
       });
       console.log(
         `\n${'═'.repeat(60)}\nHEADLESS STORY PROMPT (goal: ${completedGoal.type} gen ${completedGoal.generation})\n${formatStoryPromptSize(STORYTELLER_SYSTEM_PROMPT, user)}\n${'═'.repeat(60)}\n--- system ---\n${STORYTELLER_SYSTEM_PROMPT}\n\n--- user ---\n${user}\n`,
       );
       if (headlessStoryLlm) storyLlmPrompts.push({ system: STORYTELLER_SYSTEM_PROMPT, user });
+      const chNum = headlessChapters.length + 1;
+      headlessChapters.push({
+        chapterNumber: chNum,
+        goalType: completedGoal.type,
+        goalGeneration: completedGoal.generation,
+        text: buildFallbackChapter(completedGoal, aliveNow, eventLines),
+        tick,
+      });
     }
     lastChapterTick = tick; // chapter window for next goal (matches game lastChapterTick)
 
@@ -680,11 +693,20 @@ function runGoalProgressAndSnapshot(tick: number): void {
       adventurers,
       eventLines,
       personaId: headlessStoryPersona,
+      priorChapters: [...headlessChapters],
     });
     console.log(
       `\n${'═'.repeat(60)}\nHEADLESS STORY PROMPT (timed beat ${syntheticGoal.generation + 1}, ticks ${beatStart}–${tick})\n${formatStoryPromptSize(STORYTELLER_SYSTEM_PROMPT, user)}\n${'═'.repeat(60)}\n--- system ---\n${STORYTELLER_SYSTEM_PROMPT}\n\n--- user ---\n${user}\n`,
     );
     if (headlessStoryLlm) storyLlmPrompts.push({ system: STORYTELLER_SYSTEM_PROMPT, user });
+    const chNum = headlessChapters.length + 1;
+    headlessChapters.push({
+      chapterNumber: chNum,
+      goalType: syntheticGoal.type,
+      goalGeneration: syntheticGoal.generation,
+      text: buildFallbackChapter(syntheticGoal, aliveNow, eventLines),
+      tick,
+    });
     lastChapterTick = tick;
   }
 

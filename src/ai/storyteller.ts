@@ -5,7 +5,7 @@
  * disabled or fails.
  */
 
-import type { Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
+import type { Chapter, Goblin, Adventurer, ColonyGoal, LogEntry } from '../shared/types';
 import { bus } from '../shared/events';
 import { getGoblinConfig } from '../shared/goblinConfig';
 import {
@@ -129,6 +129,7 @@ export async function callStorytellerLLM(
   adventurers: Adventurer[],
   eventLines: string[],
   currentTick?: number,
+  priorChapters?: Chapter[],
 ): Promise<string | null> {
   if (!enabled) return null;
 
@@ -141,6 +142,7 @@ export async function callStorytellerLLM(
     adventurers,
     eventLines,
     personaId: getStorytellerPersona().id,
+    priorChapters,
   });
 
   const body =

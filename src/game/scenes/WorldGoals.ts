@@ -73,7 +73,14 @@ export function completeGoal(scene: WorldScene, alive: Goblin[]) {
     const significantEvents = filterSignificantEvents(scene.logHistory, scene.lastChapterTick);
     const chapterNum = scene.chapters.length + 1;
     const snapshotTick = scene.tick;
-    callStorytellerLLM(completedGoal, scene.goblins, scene.adventurers, significantEvents)
+    callStorytellerLLM(
+      completedGoal,
+      scene.goblins,
+      scene.adventurers,
+      significantEvents,
+      undefined,
+      [...scene.chapters],
+    )
         .then(text => {
             const chapter: Chapter = {
                 chapterNumber: chapterNum,
