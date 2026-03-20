@@ -564,7 +564,7 @@ function applyActionScoreAdjustments(
   score: number,
   action: Action,
   ctx: ActionContext,
-  goalBonuses: Record<string, number>,
+  goalBonuses: Partial<Record<string, number>>,
   noFood: boolean,
 ): number {
   const goblin = ctx.goblin;

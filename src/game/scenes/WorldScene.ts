@@ -5,7 +5,7 @@ import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpi
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type Chicken, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, type SceneSelection, TileType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type Chicken, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, type SceneSelection, type StockpileKind, TileType } from '../../shared/types';
 import type { WorkerTargets } from '../../simulation/workerTargets';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';

@@ -297,9 +297,10 @@ export function drawOverlay(scene: WorldScene) {
 
 export function drawOffScreenIndicator(scene: WorldScene) {
     scene.offScreenGfx.clear();
-    if (scene.selection.kind !== 'goblin') return;
+    const selection = scene.selection;
+    if (selection.kind !== 'goblin') return;
 
-    const d = scene.goblins.find(dw => dw.id === scene.selection.goblinId && dw.alive);
+    const d = scene.goblins.find(dw => dw.id === selection.goblinId && dw.alive);
     if (!d) return;
 
     const cam = scene.cameras.main;
@@ -441,8 +442,8 @@ export function drawAgents(scene: WorldScene) {
     if (scene.selection.kind === 'hearth') {
         strokeYellowSelectionRing(scene.selectionGfx, scene.selection.x, scene.selection.y);
     }
-    if (scene.selection.kind === 'adventurer') {
-        const adv = scene.adventurers.find(a => a.id === scene.selection.adventurerId);
+    if (selection.kind === 'adventurer') {
+        const adv = scene.adventurers.find(a => a.id === selection.adventurerId);
         if (adv) strokeYellowSelectionRing(scene.selectionGfx, adv.x, adv.y);
     }
 }
