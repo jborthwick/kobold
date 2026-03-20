@@ -21,6 +21,7 @@ import { setupInput } from './WorldInput';
 import { emitGameState } from './WorldState';
 import { setupCamera } from './WorldCamera';
 import { initWeatherFX } from './WeatherFX';
+import * as Phaser from 'phaser';
 
 export function initializeWorld(scene: WorldScene) {
   const mode = (scene.game.registry.get('startMode') as string) ?? 'new';
@@ -154,9 +155,11 @@ export function initializeWorld(scene: WorldScene) {
   scene.floorLayer = scene.map.createBlankLayer('floor', tileset)!.setDepth(0);
   scene.objectLayer = scene.map.createBlankLayer('objects', tileset)!.setDepth(2);
 
-  // Warmth/danger tint: between floor (0) and objects (2) so hearths, fire, trees draw on top;
-  // goblins/sprites stay above at depth 4+.
-  scene.ambientGfx = scene.add.graphics().setDepth(1);
+  // Warmth/danger: above tilemaps so halos read on trees/objects; additive blend keeps tiles readable.
+  // Goblins/agents use depth 5+ so they still draw on top.
+  scene.ambientGfx = scene.add.graphics()
+    .setDepth(3)
+    .setBlendMode(Phaser.BlendModes.ADD);
   scene.overlayGfx = scene.add.graphics().setDepth(10);
   scene.flagGfx = scene.add.graphics().setDepth(11);
   scene.selectionGfx = scene.add.graphics().setDepth(12);

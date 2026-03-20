@@ -141,11 +141,12 @@ function computeOverlayColors(
 ): OverlayColors {
     let ambientAlpha = 0;
     let ambientColor = 0;
+    // Alphas tuned for ambientGfx using Phaser BlendModes.ADD (additive reads brighter than same alpha in NORMAL).
     if (warmth > 0) {
-        ambientAlpha = Math.pow(warmth / 100, 2) * 0.5;
+        ambientAlpha = Math.pow(warmth / 100, 1.85) * 0.32;
         ambientColor = 0xff6600;
     } else if (danger > 0) {
-        ambientAlpha = Math.pow(danger / 100, 2) * 0.5;
+        ambientAlpha = Math.pow(danger / 100, 1.85) * 0.28;
         ambientColor = 0xff2222;
     }
 
@@ -291,9 +292,9 @@ export function drawOverlay(scene: WorldScene) {
                 scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
 
-            // Extra pixelated warmth at night (layer is below object tiles so fire/hearth art stays crisp).
+            // Night warmth punch (additive blend on ambientGfx — strong glow without opaque wash).
             if (nightStrength > 0.2 && w > 0) {
-                const boosted = Math.pow(w / 100, 1.45) * (0.22 + 0.35 * nightStrength);
+                const boosted = Math.pow(w / 100, 1.45) * (0.14 + 0.26 * nightStrength);
                 if (boosted > 0.02) {
                     scene.ambientGfx.fillStyle(0xffa547, boosted);
                     scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
