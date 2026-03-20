@@ -159,14 +159,17 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xffbbdd,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, _h) => ({
-            x: Math.random() * w,
-            y: -10,
-            speed: randRange(15, 30),
-            alpha: randRange(0.4, 0.7),
-            drift: randRange(-15, 15),
-            size: randRange(2, 4),
-        }),
+        spawn: (w, h) => {
+            void h;
+            return {
+                x: Math.random() * w,
+                y: -10,
+                speed: randRange(15, 30),
+                alpha: randRange(0.4, 0.7),
+                drift: randRange(-15, 15),
+                size: randRange(2, 4),
+            };
+        },
         draw: () => { },
         step: (p, w, h, dt) => {
             p.y += p.speed * dt;
@@ -200,14 +203,17 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xdd8822,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, _h) => ({
-            x: Math.random() * w,
-            y: -10,
-            speed: randRange(30, 60),
-            alpha: randRange(0.5, 0.9),
-            drift: randRange(10, 30),
-            size: randRange(2.5, 4.5),
-        }),
+        spawn: (w, h) => {
+            void h;
+            return {
+                x: Math.random() * w,
+                y: -10,
+                speed: randRange(30, 60),
+                alpha: randRange(0.5, 0.9),
+                drift: randRange(10, 30),
+                size: randRange(2.5, 4.5),
+            };
+        },
         draw: () => { },
         step: (p, w, h, dt) => {
             p.y += p.speed * dt;
@@ -220,14 +226,17 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
         color: 0xffffff,
         tintColor: 0x000000,
         tintAlpha: 0,
-        spawn: (w, _h) => ({
-            x: Math.random() * w,
-            y: -10,
-            speed: randRange(10, 25),
-            alpha: randRange(0.2, 0.4),
-            drift: randRange(-10, 10),
-            size: randRange(1, 2),
-        }),
+        spawn: (w, h) => {
+            void h;
+            return {
+                x: Math.random() * w,
+                y: -10,
+                speed: randRange(10, 25),
+                alpha: randRange(0.2, 0.4),
+                drift: randRange(-10, 10),
+                size: randRange(1, 2),
+            };
+        },
         draw: () => { },
         step: (p, w, h, dt) => {
             p.y += p.speed * dt;
@@ -256,9 +265,15 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     const w = cam.width;
     const h = cam.height;
     const dt = scene.paused ? 0 : delta / 1000; // freeze particles when paused
-
-    // scrollFactor(0) objects still get zoomed — divide by zoom to stay viewport-sized
     const z = cam.zoom;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+
+    // Camera-fixed graphics still pass through camera zoom centered on viewport.
+    // Convert viewport pixel coordinates into pre-zoom draw-space.
+    const toDrawX = (x: number) => (x - cx) / z + cx;
+    const toDrawY = (y: number) => (y - cy) / z + cy;
+    const toDrawSize = (n: number) => n / z;
 
     // ── Weather changed — rebuild particle pool ─────────────────────────
     if (weather !== currentWeather) {
@@ -281,7 +296,12 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     scene.weatherTintGfx.clear();
     if (cfg) {
         scene.weatherTintGfx.fillStyle(cfg.tintColor, cfg.tintAlpha);
-        scene.weatherTintGfx.fillRect(0, 0, w / z, h / z);
+        scene.weatherTintGfx.fillRect(
+            toDrawX(0),
+            toDrawY(0),
+            toDrawSize(w),
+            toDrawSize(h),
+        );
     }
 
     // ── Lightning flash (storm only) ────────────────────────────────────
@@ -293,7 +313,12 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
         }
         if (flashAlpha > 0) {
             scene.weatherTintGfx.fillStyle(0xffffff, flashAlpha);
-            scene.weatherTintGfx.fillRect(0, 0, w / z, h / z);
+            scene.weatherTintGfx.fillRect(
+                toDrawX(0),
+                toDrawY(0),
+                toDrawSize(w),
+                toDrawSize(h),
+            );
             flashAlpha *= 0.85; // rapid decay
             if (flashAlpha < 0.02) flashAlpha = 0;
         }
@@ -320,11 +345,13 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
                     fresh.x = Math.random() * (w + 60) - 30;
                 }
             }
-            // Draw at zoom-compensated coordinates so particles stay pixel-sized
+            // Draw in camera-compensated space so screen-space motion/size is stable.
             const pp = particles[i];
-            const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
+            const sx = toDrawX(pp.x);
+            const sy = toDrawY(pp.y);
+            const ss = toDrawSize(pp.size);
             if (cfg === CONFIGS.rain || cfg === CONFIGS.storm) {
-                const lw = cfg === CONFIGS.storm ? 1.5 / z : 1 / z;
+                const lw = (cfg === CONFIGS.storm ? 1.5 : 1) / z;
                 scene.weatherGfx.lineStyle(lw, cfg.color, pp.alpha);
                 scene.weatherGfx.lineBetween(sx, sy, sx - ss * 0.3, sy + ss);
             } else if (cfg === CONFIGS.cold) {
@@ -363,7 +390,9 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
                 seasonParticles[i] = sCfg.spawn(w, h);
             }
             const pp = seasonParticles[i];
-            const sx = pp.x / z, sy = pp.y / z, ss = pp.size / z;
+            const sx = toDrawX(pp.x);
+            const sy = toDrawY(pp.y);
+            const ss = toDrawSize(pp.size);
 
             if (season === 'spring') {
                 scene.weatherGfx.fillStyle(sCfg.color, pp.alpha);
