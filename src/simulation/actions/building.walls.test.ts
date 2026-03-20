@@ -32,12 +32,12 @@ function emptyDirtGrid(): Tile[][] {
 
 function minimalGoblin(overrides: Partial<Goblin> & Pick<Goblin, 'x' | 'y' | 'id'>): Goblin {
   return {
-    id: overrides.id,
+    id: '',
     name: 'Test',
     baseName: 'Test',
     generation: 1,
-    x: overrides.x,
-    y: overrides.y,
+    x: 0,
+    y: 0,
     health: 100,
     maxHealth: 100,
     hunger: 20,
