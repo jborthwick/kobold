@@ -5,7 +5,7 @@ import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpi
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type Chicken, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, TileType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type Chicken, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, type SceneSelection, TileType } from '../../shared/types';
 import type { WorkerTargets } from '../../simulation/workerTargets';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
@@ -15,7 +15,7 @@ import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 import { getRoomDims } from '../../shared/roomConfig';
 import { spawnChickensInRoom } from '../../simulation/chickens';
-import { selectGoblin, type StockpileKind } from './WorldSelection';
+import { getSelectedGoblinId, selectGoblin, type StockpileKind } from './WorldSelection';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -33,6 +33,8 @@ export class WorldScene extends Phaser.Scene {
   public grid: Tile[][] = [];
   public goblins: Goblin[] = [];
   public tick = 0;
+  public selection: SceneSelection = { kind: 'none' };
+  // Legacy mirrored selection fields (kept for compatibility during migration).
   public selectedGoblinId: string | null = null;
   /** Selected hearth tile (click-to-show fuel); cleared when selecting something else. */
   public selectedHearth: { x: number; y: number } | null = null;
@@ -178,21 +180,22 @@ export class WorldScene extends Phaser.Scene {
 
   /** Send commandTarget to selected goblin (or all if none selected). */
   public applyCommand(tx: number, ty: number) {
-    const targets = this.selectedGoblinId
-      ? this.goblins.filter(d => d.alive && d.id === this.selectedGoblinId)
+    const selectedGoblinId = getSelectedGoblinId(this);
+    const targets = selectedGoblinId
+      ? this.goblins.filter(d => d.alive && d.id === selectedGoblinId)
       : this.goblins.filter(d => d.alive);
 
     for (const d of targets) {
       d.commandTarget = { x: tx, y: ty };
     }
 
-    const who = this.selectedGoblinId
-      ? (this.goblins.find(d => d.id === this.selectedGoblinId)?.name ?? '?')
+    const who = selectedGoblinId
+      ? (this.goblins.find(d => d.id === selectedGoblinId)?.name ?? '?')
       : `${targets.length} goblins`;
 
     bus.emit('logEntry', {
       tick: this.tick,
-      goblinId: this.selectedGoblinId ?? 'all',
+      goblinId: selectedGoblinId ?? 'all',
       goblinName: who,
       message: `ordered to(${tx}, ${ty})`,
       level: 'info',
@@ -357,7 +360,8 @@ export class WorldScene extends Phaser.Scene {
   public cycleSelected(direction: 1 | -1) {
     const alive = this.goblins.filter(d => d.alive);
     if (alive.length === 0) return;
-    const currentIdx = alive.findIndex(d => d.id === this.selectedGoblinId);
+    const selectedGoblinId = getSelectedGoblinId(this);
+    const currentIdx = alive.findIndex(d => d.id === selectedGoblinId);
     const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
     selectGoblin(this, alive[nextIdx].id);
   }

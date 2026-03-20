@@ -326,6 +326,15 @@ export interface Room {
   h: number;          // height in tiles
 }
 
+export type StockpileKind = 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar';
+
+export type SceneSelection =
+  | { kind: 'none' }
+  | { kind: 'goblin'; goblinId: string }
+  | { kind: 'adventurer'; adventurerId: string }
+  | { kind: 'stockpile'; stockpileKind: StockpileKind; idx: number }
+  | { kind: 'hearth'; x: number; y: number };
+
 export interface GameState {
   tick: number;
   goblins: Goblin[];
@@ -335,6 +344,7 @@ export interface GameState {
   totalOre: number;
   totalWood: number;
   selectedGoblinId: string | null;
+  selection?: SceneSelection;
   overlayMode: OverlayMode;
   paused: boolean;
   speed: number;  // multiplier: 0.25 | 0.5 | 1 | 2 | 4

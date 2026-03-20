@@ -324,8 +324,11 @@ export function SelectedGoblinPanel() {
     return () => bus.off('gameState', setState);
   }, []);
 
-  if (!state?.selectedGoblinId) return null;
-  const selected = state.goblins.find(d => d.id === state.selectedGoblinId);
+  const selectedGoblinId = state?.selection?.kind === 'goblin'
+    ? state.selection.goblinId
+    : state?.selectedGoblinId ?? null;
+  if (!selectedGoblinId || !state) return null;
+  const selected = state.goblins.find(d => d.id === selectedGoblinId);
   if (!selected) return null;
 
   return <GoblinPanelInner goblin={selected} allGoblins={state.goblins} />;

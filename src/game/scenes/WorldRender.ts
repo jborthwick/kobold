@@ -189,9 +189,8 @@ function strokeYellowSelectionRing(gfx: Phaser.GameObjects.Graphics, tileX: numb
 }
 
 function selectedStockpileTile(scene: WorldScene): { x: number; y: number } | null {
-    const s = scene.selectedStockpile;
-    if (!s) return null;
-    const { kind, idx } = s;
+    if (scene.selection.kind !== 'stockpile') return null;
+    const { stockpileKind: kind, idx } = scene.selection;
     if (kind === 'food') return scene.foodStockpiles[idx] ?? null;
     if (kind === 'ore') return scene.oreStockpiles[idx] ?? null;
     if (kind === 'wood') return scene.woodStockpiles[idx] ?? null;
@@ -298,9 +297,9 @@ export function drawOverlay(scene: WorldScene) {
 
 export function drawOffScreenIndicator(scene: WorldScene) {
     scene.offScreenGfx.clear();
-    if (!scene.selectedGoblinId) return;
+    if (scene.selection.kind !== 'goblin') return;
 
-    const d = scene.goblins.find(dw => dw.id === scene.selectedGoblinId && dw.alive);
+    const d = scene.goblins.find(dw => dw.id === scene.selection.goblinId && dw.alive);
     if (!d) return;
 
     const cam = scene.cameras.main;
@@ -363,7 +362,7 @@ export function drawAgents(scene: WorldScene) {
     }
 
     for (const [id, spr] of scene.goblinGhostSprites) {
-        if (id === scene.selectedGoblinId) {
+        if (scene.selection.kind === 'goblin' && id === scene.selection.goblinId) {
             scene.selectionGfx.lineStyle(2, 0xff4444, 0.85);
             scene.selectionGfx.strokeCircle(spr.x, spr.y, TILE_SIZE / 2 + 3);
         }
@@ -395,7 +394,7 @@ export function drawAgents(scene: WorldScene) {
             spr.setTint((r << 16) | (g << 8) | 60);
         }
 
-        if (d.id === scene.selectedGoblinId) {
+        if (scene.selection.kind === 'goblin' && d.id === scene.selection.goblinId) {
             scene.selectionGfx.lineStyle(2, 0xffff00, 1);
             scene.selectionGfx.strokeCircle(px, py, TILE_SIZE / 2 + 3);
         }
@@ -439,11 +438,11 @@ export function drawAgents(scene: WorldScene) {
 
     const pile = selectedStockpileTile(scene);
     if (pile) strokeYellowSelectionRing(scene.selectionGfx, pile.x, pile.y);
-    const hearth = scene.selectedHearth;
-    if (hearth) strokeYellowSelectionRing(scene.selectionGfx, hearth.x, hearth.y);
-    const advId = scene.selectedAdventurerId;
-    if (advId) {
-        const adv = scene.adventurers.find(a => a.id === advId);
+    if (scene.selection.kind === 'hearth') {
+        strokeYellowSelectionRing(scene.selectionGfx, scene.selection.x, scene.selection.y);
+    }
+    if (scene.selection.kind === 'adventurer') {
+        const adv = scene.adventurers.find(a => a.id === scene.selection.adventurerId);
         if (adv) strokeYellowSelectionRing(scene.selectionGfx, adv.x, adv.y);
     }
 }

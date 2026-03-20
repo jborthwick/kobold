@@ -70,6 +70,7 @@ export function emitGameState(scene: WorldScene) {
         totalOre: alive.reduce((s, d) => s + d.inventory.ore, 0),
         totalWood: alive.reduce((s, d) => s + d.inventory.wood, 0),
         selectedGoblinId: scene.selectedGoblinId,
+        selection: scene.selection,
         overlayMode: scene.overlayMode,
         paused: scene.paused,
         speed: scene.speedMultiplier,
@@ -84,8 +85,8 @@ export function emitGameState(scene: WorldScene) {
         weatherType: scene.weather.type,
         rooms: scene.rooms.map(r => ({ ...r })),
         selectedHearthTile: (() => {
-            const h = scene.selectedHearth;
-            if (!h) return null;
+            if (scene.selection.kind !== 'hearth') return null;
+            const h = scene.selection;
             const t = scene.grid[h.y]?.[h.x];
             if (!t || t.type !== TileType.Hearth) return null;
             return { x: h.x, y: h.y, hearthFuel: t.hearthFuel ?? 0 };
