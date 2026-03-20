@@ -107,6 +107,175 @@ function Bar({
   );
 }
 
+type JobOption = {
+  key: string;
+  job: WorkCategoryId | null;
+  label: string;
+  frame: number;
+  isSelected: boolean;
+  outlineColor: string | null;
+  title: string;
+};
+
+function getJobOptions(goblin: Goblin): JobOption[] {
+  return [null as WorkCategoryId | null, ...WORK_CATEGORIES.map(c => c.id)].map((job) => {
+    const isNone = job === null;
+    const isSelected = (job === null && goblin.assignedJob == null) || goblin.assignedJob === job;
+    const frame = getFrameForJob(job);
+    const label = isNone ? 'None' : WORK_CATEGORIES.find(c => c.id === job)!.label;
+    const pref = !isNone ? getJobPreferenceBreakdown(goblin, job) : null;
+    const preference = pref?.total ?? 0;
+    const outlineColor = isNone ? null : preferenceToOutlineColor(preference);
+    const title = isNone
+      ? 'No assigned job'
+      : `Preference: ${preference >= 0 ? '+' : ''}${preference.toFixed(2)} (trait ${pref!.traitDelta >= 0 ? '+' : ''}${pref!.traitDelta.toFixed(2)}, skill +${pref!.skillBonus.toFixed(2)})`;
+    return {
+      key: isNone ? 'none' : job,
+      job,
+      label,
+      frame,
+      isSelected,
+      outlineColor,
+      title,
+    };
+  });
+}
+
+function GoblinStatus({ goblin }: { goblin: Goblin }) {
+  if (goblin.alive) {
+    const top = topSkill(goblin);
+    const skillDisplay = top ? `[${top.skill.toUpperCase()} Lv.${top.level}]` : '[no skills]';
+    return <div style={{ color: '#ffd700', fontSize: 10, marginBottom: 4 }}>{skillDisplay}</div>;
+  }
+  return (
+    <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>
+      [DECEASED{goblin.causeOfDeath ? ` — ${goblin.causeOfDeath}` : ''}]
+    </div>
+  );
+}
+
+function GoblinJobPicker({ goblin }: { goblin: Goblin }) {
+  const options = getJobOptions(goblin);
+  return (
+    <div style={{ ...styles.panelRow, marginBottom: 8 }}>
+      <div style={styles.barLabel}>Job</div>
+      <div style={styles.jobRow}>
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              bus.emit('goblinAssignedJob', { goblinId: goblin.id, job: option.job });
+              e.currentTarget.blur();
+            }}
+            title={option.title}
+            style={{
+              ...styles.jobCell,
+              ...(option.isSelected ? styles.jobCellSelected : {}),
+              borderColor: option.outlineColor ?? styles.jobCell.borderColor,
+            }}
+          >
+            <div style={styles.jobSpriteWrap}>
+              <div
+                style={{
+                  ...styles.jobSprite,
+                  backgroundImage: `url(${TILESHEET_URL})`,
+                  backgroundPosition: frameToBackgroundPosition(option.frame),
+                }}
+              />
+            </div>
+            <span style={styles.jobLabel}>{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GoblinVitals({ goblin }: { goblin: Goblin }) {
+  return (
+    <>
+      <Bar label="health" value={goblin.health} max={goblin.maxHealth} color="#e74c3c" />
+      <Bar label="hunger" value={goblin.hunger} max={100} color="#e67e22" />
+      <Bar label="morale" value={goblin.morale} max={100} color="#3498db" />
+      <Bar label="fatigue" value={goblin.fatigue} max={100} showValue color="#9b59b6" />
+      <Bar label="social" value={goblin.social} max={100} showValue color="#f39c12" />
+      <Bar label="warmth" value={goblin.warmth ?? 0} max={100} color="#ff7733" />
+    </>
+  );
+}
+
+function GoblinInventoryRow({ goblin }: { goblin: Goblin }) {
+  return (
+    <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
+      <span>🍄 {goblin.inventory.food.toFixed(1)}</span>
+      {goblin.inventory.ore > 0 && (
+        <span style={{ color: '#ff8800' }}>⛏ {goblin.inventory.ore.toFixed(1)}</span>
+      )}
+      {goblin.inventory.wood > 0 && (
+        <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.wood.toFixed(1)}</span>
+      )}
+      {goblin.inventory.meals > 0 && (
+        <span style={{ color: '#ffbb88' }}>🍽 {goblin.inventory.meals.toFixed(1)}</span>
+      )}
+      {goblin.adventurerKills > 0 && (
+        <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
+      )}
+    </div>
+  );
+}
+
+function GoblinMoodFactors({ goblin }: { goblin: Goblin }) {
+  if ((goblin.thoughts?.length ?? 0) === 0 && (goblin.memories?.length ?? 0) === 0) return null;
+  return (
+    <div style={styles.memorySection}>
+      <div style={styles.memoryHeader}>MOOD FACTORS</div>
+      {[...(goblin.thoughts || []), ...(goblin.memories || [])].map((item, i) => {
+        const isMemory = 'stage' in item;
+        const def = isMemory ? MEMORY_DEFS[item.defId] : THOUGHT_DEFS[item.defId];
+        if (!def) return null;
+        const label = typeof def.label === 'function' && isMemory
+          ? def.label(item.stage)
+          : (typeof def.label === 'string' ? def.label : '');
+        const delta = isMemory ? (def as any).deltas[item.stage] ?? 0 : (def as any).delta;
+        return (
+          <div key={i} style={styles.memoryEntry}>
+            <span style={{ color: delta >= 0 ? '#56d973' : '#e74c3c' }}>
+              [{delta > 0 ? '+' : ''}{delta}]
+            </span>{' '}
+            {label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function GoblinHistory({ goblin }: { goblin: Goblin }) {
+  if (goblin.memory.length === 0) return null;
+  return (
+    <div style={styles.memorySection}>
+      <div style={styles.memoryHeader}>HISTORY</div>
+      {[...goblin.memory].reverse().map((m, i) => (
+        <div key={i} style={styles.memoryEntry}>
+          <div>
+            <span style={styles.memoryTick}>[{m.tick}]</span>
+            <span style={styles.memoryCrisis}>{m.crisis}</span>
+            {m.outcome
+              ? <span style={styles.memoryBad}> ✗ {m.outcome}</span>
+              : <span style={styles.memoryAction}> {m.action}</span>
+            }
+          </div>
+          {m.reasoning && (
+            <div style={styles.memoryReasoning}>💭 "{m.reasoning}"</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: Goblin[] }) {
   const ally  = topRelation(goblin, allGoblins, 'ally');
   const rival = topRelation(goblin, allGoblins, 'rival');
@@ -114,16 +283,7 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
   return (
     <div style={{ ...styles.panel, ...(!goblin.alive ? styles.panelDead : {}) }}>
       <div style={styles.panelName}>{goblin.name}</div>
-      {goblin.alive
-        ? (() => {
-            const top = topSkill(goblin);
-            const skillDisplay = top ? `[${top.skill.toUpperCase()} Lv.${top.level}]` : '[no skills]';
-            return <div style={{ color: '#ffd700', fontSize: 10, marginBottom: 4 }}>{skillDisplay}</div>;
-          })()
-        : <div style={{ color: '#e74c3c', fontSize: 10, marginBottom: 4 }}>
-            [DECEASED{goblin.causeOfDeath ? ` — ${goblin.causeOfDeath}` : ''}]
-          </div>
-      }
+      <GoblinStatus goblin={goblin} />
       <div style={{ fontSize: 9, color: '#a08060', fontStyle: 'italic', marginBottom: 4 }}>
         {goblin.bio}
       </div>
@@ -134,74 +294,10 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
         <span style={{ color: '#5a8fa8', fontSize: 9 }}>⚑ {goblin.goal}</span>
       </div>
       {goblin.alive && (
-        <div style={{ ...styles.panelRow, marginBottom: 8 }}>
-          <div style={styles.barLabel}>Job</div>
-          <div style={styles.jobRow}>
-            {[null as WorkCategoryId | null, ...WORK_CATEGORIES.map(c => c.id)].map((job) => {
-              const isNone = job === null;
-              const isSelected = (job === null && (goblin.assignedJob == null)) || goblin.assignedJob === job;
-              const frame = getFrameForJob(job);
-              const label = isNone ? 'None' : WORK_CATEGORIES.find(c => c.id === job)!.label;
-              const pref = !isNone ? getJobPreferenceBreakdown(goblin, job) : null;
-              const preference = pref?.total ?? 0;
-              const outlineColor = isNone ? null : preferenceToOutlineColor(preference);
-              const title = isNone
-                ? 'No assigned job'
-                : `Preference: ${preference >= 0 ? '+' : ''}${preference.toFixed(2)} (trait ${pref!.traitDelta >= 0 ? '+' : ''}${pref!.traitDelta.toFixed(2)}, skill +${pref!.skillBonus.toFixed(2)})`;
-              return (
-                <button
-                  key={isNone ? 'none' : job}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    bus.emit('goblinAssignedJob', { goblinId: goblin.id, job });
-                    // Prevent persistent focus outline after mouse click; keyboard focus still works via :focus-visible.
-                    e.currentTarget.blur();
-                  }}
-                  title={title}
-                  style={{
-                    ...styles.jobCell,
-                    ...(isSelected ? styles.jobCellSelected : {}),
-                    borderColor: outlineColor ?? styles.jobCell.borderColor,
-                  }}
-                >
-                  <div style={styles.jobSpriteWrap}>
-                    <div
-                      style={{
-                        ...styles.jobSprite,
-                        backgroundImage: `url(${TILESHEET_URL})`,
-                        backgroundPosition: frameToBackgroundPosition(frame),
-                      }}
-                    />
-                  </div>
-                  <span style={styles.jobLabel}>{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <GoblinJobPicker goblin={goblin} />
       )}
-      <Bar label="health" value={goblin.health}  max={goblin.maxHealth} color="#e74c3c" />
-      <Bar label="hunger" value={goblin.hunger}  max={100}             color="#e67e22" />
-      <Bar label="morale" value={goblin.morale}  max={100}             color="#3498db" />
-      <Bar label="fatigue" value={goblin.fatigue} max={100} showValue color="#9b59b6" />
-      <Bar label="social"  value={goblin.social}  max={100} showValue color="#f39c12" />
-      <Bar label="warmth" value={goblin.warmth ?? 0} max={100}         color="#ff7733" />
-      <div style={{ ...styles.panelRow, display: 'flex', gap: 10 }}>
-        <span>🍄 {goblin.inventory.food.toFixed(1)}</span>
-        {goblin.inventory.ore > 0 && (
-          <span style={{ color: '#ff8800' }}>⛏ {goblin.inventory.ore.toFixed(1)}</span>
-        )}
-        {goblin.inventory.wood > 0 && (
-          <span style={{ color: '#8bc34a' }}>🪵 {goblin.inventory.wood.toFixed(1)}</span>
-        )}
-        {goblin.inventory.meals > 0 && (
-          <span style={{ color: '#ffbb88' }}>🍽 {goblin.inventory.meals.toFixed(1)}</span>
-        )}
-        {goblin.adventurerKills > 0 && (
-          <span style={{ color: '#e74c3c' }}>⚔ {goblin.adventurerKills} kill{goblin.adventurerKills !== 1 ? 's' : ''}</span>
-        )}
-      </div>
+      <GoblinVitals goblin={goblin} />
+      <GoblinInventoryRow goblin={goblin} />
       {goblin.wound && (
         <div style={{ ...styles.panelRow, color: '#ff6b6b', fontSize: 10 }}>
           🩹 {goblin.wound.type} wound
@@ -214,47 +310,8 @@ function GoblinPanelInner({ goblin, allGoblins }: { goblin: Goblin; allGoblins: 
           {rival && <div style={styles.relRival}>⚔ {rival.name} ({100 - rival.score})</div>}
         </div>
       )}
-      {(goblin.thoughts?.length > 0 || goblin.memories?.length > 0) && (
-        <div style={styles.memorySection}>
-          <div style={styles.memoryHeader}>MOOD FACTORS</div>
-          {[...(goblin.thoughts || []), ...(goblin.memories || [])].map((item, i) => {
-            const isMemory = 'stage' in item;
-            const def = isMemory ? MEMORY_DEFS[item.defId] : THOUGHT_DEFS[item.defId];
-            if (!def) return null;
-            const label = typeof def.label === 'function' && isMemory
-               ? def.label(item.stage) : (typeof def.label === 'string' ? def.label : '');
-            const delta = isMemory ? (def as any).deltas[item.stage] ?? 0 : (def as any).delta;
-            return (
-              <div key={i} style={styles.memoryEntry}>
-                <span style={{ color: delta >= 0 ? '#56d973' : '#e74c3c' }}>
-                  [{delta > 0 ? '+' : ''}{delta}]
-                </span>{' '}
-                {label}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {goblin.memory.length > 0 && (
-        <div style={styles.memorySection}>
-          <div style={styles.memoryHeader}>HISTORY</div>
-          {[...goblin.memory].reverse().map((m, i) => (
-            <div key={i} style={styles.memoryEntry}>
-              <div>
-                <span style={styles.memoryTick}>[{m.tick}]</span>
-                <span style={styles.memoryCrisis}>{m.crisis}</span>
-                {m.outcome
-                  ? <span style={styles.memoryBad}> ✗ {m.outcome}</span>
-                  : <span style={styles.memoryAction}> {m.action}</span>
-                }
-              </div>
-              {m.reasoning && (
-                <div style={styles.memoryReasoning}>💭 "{m.reasoning}"</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <GoblinMoodFactors goblin={goblin} />
+      <GoblinHistory goblin={goblin} />
     </div>
   );
 }

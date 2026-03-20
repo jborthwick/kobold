@@ -11,6 +11,138 @@ import { emitGameState } from './WorldState';
 import { getDanger, getWarmth } from '../../simulation/diffusion';
 import { getTerrainMoveCost } from '../../simulation/movementCost';
 
+const OVERLAY_MODES: OverlayMode[] = ['off', 'food', 'material', 'wood', 'warmth', 'danger', 'traffic'];
+const MAX_ZOOM = 5;
+const SPEED_UP_KEY_CODES = [187, 107];
+const SPEED_DOWN_KEY_CODES = [189, 109];
+
+type SelectablePoint = { x: number; y: number };
+
+function clearBuildMode(scene: WorldScene) {
+    if (!scene.buildMode) return;
+    scene.buildMode = null;
+    scene.buildPreview = null;
+    scene.buildPreviewGfx.clear();
+    bus.emit('buildMode', null);
+}
+
+function bindKeyboardControls(scene: WorldScene) {
+    const keyboard = scene.input.keyboard;
+    if (!keyboard) return;
+
+    scene.wasd = {
+        W: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+        A: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+        S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+        D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
+
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.O).on('down', () => {
+        const next = OVERLAY_MODES[(OVERLAY_MODES.indexOf(scene.overlayMode) + 1) % OVERLAY_MODES.length];
+        scene.overlayMode = next;
+    });
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET).on('down', () => scene.cycleSelected(-1));
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET).on('down', () => scene.cycleSelected(1));
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on('down', () => scene.togglePause());
+    for (const code of SPEED_UP_KEY_CODES) keyboard.addKey(code).on('down', () => scene.adjustSpeed(1));
+    for (const code of SPEED_DOWN_KEY_CODES) keyboard.addKey(code).on('down', () => scene.adjustSpeed(-1));
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => clearBuildMode(scene));
+    keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T, false);
+}
+
+function findNearestPoint<T extends SelectablePoint>(
+    list: T[],
+    tx: number,
+    ty: number,
+    snapRadius: number,
+): T | undefined {
+    if (snapRadius === 0) return list.find(e => e.x === tx && e.y === ty);
+    let best: T | undefined;
+    let bestDist = Infinity;
+    for (const e of list) {
+        const d = Math.abs(e.x - tx) + Math.abs(e.y - ty);
+        if (d <= snapRadius && d < bestDist) {
+            bestDist = d;
+            best = e;
+        }
+    }
+    return best;
+}
+
+function findNearestIndex<T extends SelectablePoint>(
+    list: T[],
+    tx: number,
+    ty: number,
+    snapRadius: number,
+): number {
+    if (snapRadius === 0) return list.findIndex(s => s.x === tx && s.y === ty);
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < list.length; i++) {
+        const d = Math.abs(list[i].x - tx) + Math.abs(list[i].y - ty);
+        if (d <= snapRadius && d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+        }
+    }
+    return bestIdx;
+}
+
+function clearSelections(scene: WorldScene, emitState: boolean) {
+    scene.selectedGoblinId = null;
+    scene.selectedHearth = null;
+    scene.selectedStockpile = null;
+    scene.selectedAdventurerId = null;
+    bus.emit('stockpileSelect', null);
+    bus.emit('hearthSelect', null);
+    bus.emit('adventurerSelect', null);
+    if (emitState) emitGameState(scene);
+}
+
+function selectAdventurer(scene: WorldScene, adventurer: { id: string }) {
+    scene.selectedGoblinId = null;
+    scene.selectedHearth = null;
+    scene.selectedStockpile = null;
+    scene.selectedAdventurerId = adventurer.id;
+    bus.emit('stockpileSelect', null);
+    bus.emit('hearthSelect', null);
+    bus.emit('adventurerSelect', adventurer);
+}
+
+function selectGoblin(scene: WorldScene, goblinId: string) {
+    scene.selectedGoblinId = goblinId;
+    scene.selectedHearth = null;
+    scene.selectedStockpile = null;
+    scene.selectedAdventurerId = null;
+    bus.emit('stockpileSelect', null);
+    bus.emit('hearthSelect', null);
+    bus.emit('adventurerSelect', null);
+    emitGameState(scene);
+}
+
+function selectStockpile(
+    scene: WorldScene,
+    selection: { kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar'; idx: number },
+) {
+    scene.selectedGoblinId = null;
+    scene.selectedHearth = null;
+    scene.selectedAdventurerId = null;
+    scene.selectedStockpile = selection;
+    bus.emit('adventurerSelect', null);
+    bus.emit('stockpileSelect', selection);
+    bus.emit('hearthSelect', null);
+}
+
+function selectHearth(scene: WorldScene, x: number, y: number) {
+    scene.selectedGoblinId = null;
+    scene.selectedHearth = { x, y };
+    scene.selectedStockpile = null;
+    scene.selectedAdventurerId = null;
+    bus.emit('adventurerSelect', null);
+    bus.emit('stockpileSelect', null);
+    bus.emit('hearthSelect', { x, y });
+}
+
 export function setupInput(scene: WorldScene) {
     const cam = scene.cameras.main;
     let dragStartX = 0, dragStartY = 0;
@@ -28,61 +160,7 @@ export function setupInput(scene: WorldScene) {
     scene.isTouchDevice = scene.sys.game.device.input.touch;
 
     // ── Keyboard (only when available) ──────────────────────────────────
-    if (scene.input.keyboard) {
-        scene.wasd = {
-            W: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-            A: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-            S: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-            D: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-        };
-
-        // ── O key: cycle resource overlay
-        scene.input.keyboard
-            .addKey(Phaser.Input.Keyboard.KeyCodes.O)
-            .on('down', () => {
-                const modes: OverlayMode[] = ['off', 'food', 'material', 'wood', 'warmth', 'danger', 'traffic'];
-                const next = modes[(modes.indexOf(scene.overlayMode) + 1) % modes.length];
-                scene.overlayMode = next;
-            });
-
-        // ── [ / ] keys: cycle selected goblin
-        scene.input.keyboard
-            .addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET)
-            .on('down', () => scene.cycleSelected(-1));
-        scene.input.keyboard
-            .addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET)
-            .on('down', () => scene.cycleSelected(1));
-
-        // ── SPACE: pause / unpause
-        scene.input.keyboard
-            .addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
-            .on('down', () => scene.togglePause());
-
-        // ── Speed keys: = (187) and numpad + (107) for faster; - (189) and numpad - (109) for slower
-        for (const code of [187, 107]) {
-            scene.input.keyboard.addKey(code).on('down', () => scene.adjustSpeed(1));
-        }
-        for (const code of [189, 109]) {
-            scene.input.keyboard.addKey(code).on('down', () => scene.adjustSpeed(-1));
-        }
-
-        // ── ESC: cancel build mode
-        scene.input.keyboard
-            .addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-            .on('down', () => {
-                if (scene.buildMode) {
-                    scene.buildMode = null;
-                    scene.buildPreview = null;
-                    scene.buildPreviewGfx.clear();
-                    bus.emit('buildMode', null);
-                }
-            });
-
-        // ── T: tile picker
-        // The TilePicker React component handles its own toggle via a window-level
-        // keydown listener. We just need to make sure Phaser doesn't capture it.
-        scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T, false);
-    }
+    bindKeyboardControls(scene);
 
     // Suppress browser right-click context menu over the canvas
     scene.input.mouse?.disableContextMenu();
@@ -151,7 +229,7 @@ export function setupInput(scene: WorldScene) {
             if (pinchStartDist === 0) return;
 
             const scale = dist / pinchStartDist;
-            const newZoom = Phaser.Math.Clamp(pinchStartZoom * scale, scene.minZoom, 5);
+            const newZoom = Phaser.Math.Clamp(pinchStartZoom * scale, scene.minZoom, MAX_ZOOM);
 
             // Anchor zoom to midpoint between fingers
             const midX = (scene.input.pointer1.x + scene.input.pointer2.x) / 2;
@@ -238,145 +316,65 @@ export function setupInput(scene: WorldScene) {
         const ty = Math.floor(p.worldY / TILE_SIZE);
 
         // ── Snap-to-nearest helper for touch (2-tile Manhattan radius) ──
-        const SNAP_RADIUS = scene.isTouchDevice ? 2 : 0;
-        const findNearest = <T extends { x: number; y: number }>(list: T[]) => {
-            if (SNAP_RADIUS === 0) return list.find(e => e.x === tx && e.y === ty);
-            let best: T | undefined, bestDist = Infinity;
-            for (const e of list) {
-                const d = Math.abs(e.x - tx) + Math.abs(e.y - ty);
-                if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; best = e; }
-            }
-            return best;
-        };
+        const snapRadius = scene.isTouchDevice ? 2 : 0;
 
         // Prefer agents over stockpiles/hearth so goblins on stockpile tiles are clickable
-        const adventurer = findNearest(scene.adventurers);
+        const adventurer = findNearestPoint(scene.adventurers, tx, ty, snapRadius);
         if (adventurer) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedStockpile = null;
-            scene.selectedAdventurerId = adventurer.id;
-            bus.emit('stockpileSelect', null);
-            bus.emit('hearthSelect', null);
-            bus.emit('adventurerSelect', adventurer);
+            selectAdventurer(scene, adventurer);
             return;
         }
         const aliveGoblins = scene.goblins.filter(d => d.alive);
         const deadGoblins = scene.goblins.filter(d => !d.alive);
-        const hitAlive = findNearest(aliveGoblins);
-        const hitDead = !hitAlive ? findNearest(deadGoblins) : undefined;
+        const hitAlive = findNearestPoint(aliveGoblins, tx, ty, snapRadius);
+        const hitDead = !hitAlive ? findNearestPoint(deadGoblins, tx, ty, snapRadius) : undefined;
         const hitGoblin = hitAlive ?? hitDead;
         if (hitGoblin) {
-            scene.selectedGoblinId = hitGoblin.id;
-            scene.selectedHearth = null;
-            scene.selectedStockpile = null;
-            scene.selectedAdventurerId = null;
-            bus.emit('stockpileSelect', null);
-            bus.emit('hearthSelect', null);
-            bus.emit('adventurerSelect', null);
-            emitGameState(scene);
+            selectGoblin(scene, hitGoblin.id);
             return;
         }
 
         // Check for stockpile click (with snap on touch)
-        const findStockpile = <T extends { x: number; y: number }>(list: T[]) => {
-            if (SNAP_RADIUS === 0) return list.findIndex(s => s.x === tx && s.y === ty);
-            let bestIdx = -1, bestDist = Infinity;
-            for (let i = 0; i < list.length; i++) {
-                const d = Math.abs(list[i].x - tx) + Math.abs(list[i].y - ty);
-                if (d <= SNAP_RADIUS && d < bestDist) { bestDist = d; bestIdx = i; }
-            }
-            return bestIdx;
-        };
-        const foodIdx = findStockpile(scene.foodStockpiles);
+        const foodIdx = findNearestIndex(scene.foodStockpiles, tx, ty, snapRadius);
         if (foodIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'food', idx: foodIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'food', idx: foodIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'food', idx: foodIdx });
             return;
         }
-        const oreIdx = findStockpile(scene.oreStockpiles);
+        const oreIdx = findNearestIndex(scene.oreStockpiles, tx, ty, snapRadius);
         if (oreIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'ore', idx: oreIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'ore', idx: oreIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'ore', idx: oreIdx });
             return;
         }
-        const woodIdx = findStockpile(scene.woodStockpiles);
+        const woodIdx = findNearestIndex(scene.woodStockpiles, tx, ty, snapRadius);
         if (woodIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'wood', idx: woodIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'wood', idx: woodIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'wood', idx: woodIdx });
             return;
         }
-        const mealIdx = findStockpile(scene.mealStockpiles);
+        const mealIdx = findNearestIndex(scene.mealStockpiles, tx, ty, snapRadius);
         if (mealIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'meal', idx: mealIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'meal', idx: mealIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'meal', idx: mealIdx });
             return;
         }
-        const plankIdx = findStockpile(scene.plankStockpiles);
+        const plankIdx = findNearestIndex(scene.plankStockpiles, tx, ty, snapRadius);
         if (plankIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'plank', idx: plankIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'plank', idx: plankIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'plank', idx: plankIdx });
             return;
         }
-        const barIdx = findStockpile(scene.barStockpiles);
+        const barIdx = findNearestIndex(scene.barStockpiles, tx, ty, snapRadius);
         if (barIdx >= 0) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = null;
-            scene.selectedAdventurerId = null;
-            scene.selectedStockpile = { kind: 'bar', idx: barIdx };
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', { kind: 'bar', idx: barIdx });
-            bus.emit('hearthSelect', null);
+            selectStockpile(scene, { kind: 'bar', idx: barIdx });
             return;
         }
 
         // Check for hearth click (tile-based)
         const tile = scene.grid[ty]?.[tx];
         if (tile?.type === TileType.Hearth) {
-            scene.selectedGoblinId = null;
-            scene.selectedHearth = { x: tx, y: ty };
-            scene.selectedStockpile = null;
-            scene.selectedAdventurerId = null;
-            bus.emit('adventurerSelect', null);
-            bus.emit('stockpileSelect', null);
-            bus.emit('hearthSelect', { x: tx, y: ty });
+            selectHearth(scene, tx, ty);
             return;
         }
 
         // Nothing hit: clear selections
-        scene.selectedGoblinId = null;
-        scene.selectedHearth = null;
-        scene.selectedStockpile = null;
-        scene.selectedAdventurerId = null;
-        bus.emit('stockpileSelect', null);
-        bus.emit('hearthSelect', null);
-        bus.emit('adventurerSelect', null);
-        emitGameState(scene);
+        clearSelections(scene, true);
     });
 
     // When pointer is released outside the canvas (e.g. on a native <select> option), Phaser
@@ -399,7 +397,7 @@ export function setupInput(scene: WorldScene) {
             // proportional rather than jumping 10% per tick.
             const clampedDelta = Phaser.Math.Clamp(deltaY, -300, 300);
             const factor = 1 - clampedDelta * 0.003;   // e.g. deltaY=100 → factor=0.7 (−30%)
-            const newZoom = Phaser.Math.Clamp(oldZoom * factor, scene.minZoom, 5);
+            const newZoom = Phaser.Math.Clamp(oldZoom * factor, scene.minZoom, MAX_ZOOM);
             if (newZoom === oldZoom) return;
 
             // Phaser 3 uses a viewport-centred transform — scrollX is NOT the world position
