@@ -17,6 +17,7 @@ export enum TileType {
   CropRipe = 'crop_ripe',
   Ore = 'ore',
   Mushroom = 'mushroom',
+  Egg = 'egg',
   Wall = 'wall',       // legacy; new builds use WoodWall/StoneWall
   WoodWall = 'woodwall',  // built from planks
   StoneWall = 'stonewall', // built from bars
@@ -73,6 +74,17 @@ export interface Adventurer {
   staggeredUntil?: number;         // tick until which the adventurer cannot move (post-hit stagger)
   /** Movement delay ticks remaining before the adventurer may step again. */
   moveCooldownTicks?: number;
+}
+
+/** Wandering critter; can be penned for eggs. */
+export interface Chicken {
+  id: string;
+  x: number;
+  y: number;
+  homePenId?: string;
+  moveCooldownTicks?: number;
+  restTicks?: number;
+  heldByGoblinId?: string;
 }
 
 // Permanent personality trait assigned at spawn
@@ -170,6 +182,7 @@ export interface Goblin {
   carryingWater?: boolean;                 // true when goblin has fetched water and is heading to douse fire
   onFire?: boolean;                 // goblin is currently burning
   onFireTick?: number;                  // tick when they caught fire
+  carryingChickenId?: string;
   skills: SkillSet;      // XP per skill category (forage, mine, chop, combat, scout)
   wound?: Wound;       // active wound (undefined = healthy); heals at wound.healTick
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
@@ -283,8 +296,8 @@ export interface MiniMapData {
   tiles: { type: TileType; foodRatio: number; matRatio: number }[][];
   /** Alive goblin positions and hunger (0–100). */
   goblins: { x: number; y: number; hunger: number }[];
-  /** Adventurer positions. */
   adventurers: { x: number; y: number }[];
+  chickens: { x: number; y: number }[];
   /** Camera viewport in tile-space. */
   viewport: { x: number; y: number; w: number; h: number };
 }
@@ -302,7 +315,7 @@ export interface Chapter {
   tick: number;
 }
 
-export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm';
+export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm' | 'nursery_pen';
 
 export interface Room {
   id: string;
@@ -316,6 +329,7 @@ export interface Room {
 export interface GameState {
   tick: number;
   goblins: Goblin[];
+  chickens: Chicken[];
   totalFood: number;
   totalMeals: number; // calculated sum of all meals
   totalOre: number;

@@ -3,6 +3,7 @@ import { WorldScene } from './WorldScene';
 import { generateWorld } from '../../simulation/world';
 import { spawnGoblins } from '../../simulation/agents';
 import { resetAdventurers, spawnInitialAdventurers } from '../../simulation/adventurers';
+import { resetChickens, spawnInitialChickens, syncChickenIdCounter } from '../../simulation/chickens';
 import { createWeather } from '../../simulation/weather';
 import { setStorytellerEnabled, setStorytellerProvider } from '../../ai/storyteller';
 import { loadGame } from '../../shared/save';
@@ -37,6 +38,8 @@ export function initializeWorld(scene: WorldScene) {
       d.lastLoggedTicks ??= {};
     }
     scene.adventurers = save.adventurers;
+    scene.chickens = save.chickens ?? [];
+    syncChickenIdCounter(scene.chickens);
     scene.tick = save.tick;
     scene.colonyGoal = save.colonyGoal;
     scene.goalStartTick = save.goalStartTick ?? 0;
@@ -53,6 +56,7 @@ export function initializeWorld(scene: WorldScene) {
     scene.speedMultiplier = save.speed;
     scene.overlayMode = save.overlayMode;
     resetAdventurers();
+    resetChickens();
     setNextEventTick(save.nextWorldEventTick ?? (save.tick + 300 + Math.floor(Math.random() * 300)));
     scene.weather = save.weather ?? createWeather(save.tick);
     scene.worldSeed = save.worldSeed ?? '';
@@ -78,7 +82,9 @@ export function initializeWorld(scene: WorldScene) {
     console.log('World seed:', seed);
     scene.goblins = spawnGoblins(scene.grid, spawnZone);
     resetAdventurers();
+    resetChickens();
     scene.adventurers = spawnInitialAdventurers(scene.grid, 3);
+    scene.chickens = spawnInitialChickens(scene.grid, 8);
 
     const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
     const depotY = Math.floor(spawnZone.y + spawnZone.h / 2);

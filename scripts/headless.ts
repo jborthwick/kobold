@@ -33,6 +33,7 @@ import { tickPooling } from '../src/simulation/pooling';
 import { spawnGoblins, spawnSuccessor, SUCCESSION_DELAY } from '../src/simulation/agents';
 import { tickAgentUtility } from '../src/simulation/utilityAI';
 import { maybeSpawnRaid, tickAdventurers, resetAdventurers, spawnInitialAdventurers } from '../src/simulation/adventurers';
+import { resetChickens, spawnInitialChickens, tickChickens, tickNurseryPenEggs } from '../src/simulation/chickens';
 import { createDangerField, computeGoblinWarmth, computeDanger, updateTraffic } from '../src/simulation/diffusion';
 import { createWeather, tickWeather, growbackModifier, metabolismModifier } from '../src/simulation/weather';
 import { tickWorldEvents, setNextEventTick } from '../src/simulation/events';
@@ -58,6 +59,7 @@ import type {
   ColonyGoal,
   Chapter,
   Adventurer,
+  Chicken,
   Room,
   LogEntry,
 } from '../src/shared/types';
@@ -231,6 +233,7 @@ function makeGoal(type: GoalType, generation: number): ColonyGoal {
 console.log(`\n🧌 Kobold headless sim — ${TICKS} ticks${SEED_ARG !== undefined ? `, seed ${SEED_ARG}` : ''}\n`);
 
 const { grid, spawnZone, seed } = generateWorld(SEED_ARG?.toString());
+resetChickens();
 
 // Count harvestable tiles (forageable near spawn and total) for startup diagnostics.
 let totalForageable = 0;
@@ -262,6 +265,7 @@ if (headlessStoryRealGoals) {
 
 const goblins: Goblin[] = spawnGoblins(grid, spawnZone);
 let adventurers: Adventurer[] = spawnInitialAdventurers(grid, 3);
+const chickens: Chicken[] = spawnInitialChickens(grid, 8);
 resetAdventurers();
 
 const depotX = Math.floor(spawnZone.x + spawnZone.w / 2);
@@ -343,6 +347,8 @@ function runDiffusionTick(tick: number): void {
   computeDanger(grid, adventurers, dangerPrev, dangerField);
   dangerPrev.set(dangerField);
   updateTraffic(grid, goblins);
+  tickChickens(chickens, grid, goblins, rooms);
+  tickNurseryPenEggs(chickens, rooms, grid, tick);
   for (const g of goblins) {
     if (g.alive) {
       const raw = computeGoblinWarmth(g, grid, rooms, weather.type);
@@ -372,6 +378,7 @@ function runAgentTicks(tick: number): void {
       foodStockpiles, adventurers, oreStockpiles, colonyGoal, woodStockpiles,
       metabolismModifier(weather), dangerField, weather.type, rooms, mealStockpiles,
       plankStockpiles, barStockpiles,
+      chickens,
     );
     if (g.alive) recordAction(g, g.task);
     if (wasAlive && !g.alive) {

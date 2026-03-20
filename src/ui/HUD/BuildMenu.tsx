@@ -128,6 +128,20 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                                 <div style={styles.btnDesc}>10×5 crop rows (no walls)</div>
                             </div>
                         </button>
+                        <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'nursery_pen')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'nursery_pen' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>🐔</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Nursery Pen</div>
+                                <div style={styles.btnDesc}>5×5 chicken pen; eggs with 2+ hens</div>
+                            </div>
+                        </button>
                     </div>
 
                     <div style={styles.section}>

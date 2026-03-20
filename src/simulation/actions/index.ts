@@ -18,6 +18,7 @@ import { establishStockpile } from './stockpiling';
 import { cook } from './cooking';
 import { saw } from './sawing';
 import { smith } from './smithing';
+import { captureChicken, depositChicken } from './chickens';
 import type { Action } from './types';
 
 export const ALL_ACTIONS: Action[] = [
@@ -31,6 +32,8 @@ export const ALL_ACTIONS: Action[] = [
   buildHearth,
   refuelHearth,
   establishStockpile,
+  depositChicken,
+  captureChicken,
   cook,
   saw,
   smith,

@@ -2,6 +2,7 @@ import type {
   Tile,
   Goblin,
   Adventurer,
+  Chicken,
   ColonyGoal,
   FoodStockpile,
   MealStockpile,
@@ -27,6 +28,7 @@ export interface SaveData {
   grid: Tile[][];
   goblins: Goblin[];
   adventurers: Adventurer[];
+  chickens?: Chicken[];
   colonyGoal: ColonyGoal;
   foodStockpiles: FoodStockpile[];
   oreStockpiles: OreStockpile[];

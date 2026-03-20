@@ -21,6 +21,7 @@ export function getTerrainMoveCost(tileType: TileType): number {
     case TileType.Water: // not walkable, but keep defined for completeness
     case TileType.Forest:
     case TileType.Mushroom:
+    case TileType.Egg:
     case TileType.Wall:
     case TileType.WoodWall:
     case TileType.StoneWall:

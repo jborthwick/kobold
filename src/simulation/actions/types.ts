@@ -8,7 +8,7 @@
  * order doesn't set priority, scoring does. (3) Add display label in utilityAI.ts ACTION_DISPLAY_NAMES.
  */
 
-import type { Goblin, Tile, Adventurer, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
+import type { Goblin, Tile, Adventurer, Chicken, FoodStockpile, MealStockpile, OreStockpile, WoodStockpile, PlankStockpile, BarStockpile, ColonyGoal, WeatherType, Room } from '../../shared/types';
 
 type LogFn = (message: string, level: 'info' | 'warn' | 'error') => void;
 
@@ -22,6 +22,7 @@ export interface ActionContext {
   foodStockpiles?: FoodStockpile[];
   mealStockpiles?: MealStockpile[];
   adventurers?:        Adventurer[];
+  chickens?:       Chicken[];
   oreStockpiles?:  OreStockpile[];
   woodStockpiles?: WoodStockpile[];
   plankStockpiles?: PlankStockpile[];
