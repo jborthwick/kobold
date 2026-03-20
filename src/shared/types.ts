@@ -343,7 +343,6 @@ export interface GameState {
   totalMeals: number; // calculated sum of all meals
   totalOre: number;
   totalWood: number;
-  selectedGoblinId: string | null;
   selection?: SceneSelection;
   overlayMode: OverlayMode;
   paused: boolean;

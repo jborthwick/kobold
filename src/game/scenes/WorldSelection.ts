@@ -7,15 +7,15 @@ export type StockpileKind = 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar';
 
 function applySelection(scene: WorldScene, selection: SceneSelection, emitState: boolean) {
     scene.selection = selection;
-    scene.selectedGoblinId = selection.kind === 'goblin' ? selection.goblinId : null;
-    scene.selectedAdventurerId = selection.kind === 'adventurer' ? selection.adventurerId : null;
-    scene.selectedStockpile = selection.kind === 'stockpile'
-        ? { kind: selection.stockpileKind, idx: selection.idx }
-        : null;
-    scene.selectedHearth = selection.kind === 'hearth' ? { x: selection.x, y: selection.y } : null;
 
-    bus.emit('stockpileSelect', scene.selectedStockpile);
-    bus.emit('hearthSelect', scene.selectedHearth);
+    bus.emit(
+        'stockpileSelect',
+        selection.kind === 'stockpile' ? { kind: selection.stockpileKind, idx: selection.idx } : null
+    );
+    bus.emit(
+        'hearthSelect',
+        selection.kind === 'hearth' ? { x: selection.x, y: selection.y } : null
+    );
     if (selection.kind === 'adventurer') {
         const adventurer = scene.adventurers.find(a => a.id === selection.adventurerId) ?? null;
         bus.emit('adventurerSelect', adventurer);

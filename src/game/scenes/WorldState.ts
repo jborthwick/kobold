@@ -69,7 +69,6 @@ export function emitGameState(scene: WorldScene) {
           + scene.mealStockpiles.reduce((s, sp) => s + sp.meals, 0),
         totalOre: alive.reduce((s, d) => s + d.inventory.ore, 0),
         totalWood: alive.reduce((s, d) => s + d.inventory.wood, 0),
-        selectedGoblinId: scene.selectedGoblinId,
         selection: scene.selection,
         overlayMode: scene.overlayMode,
         paused: scene.paused,

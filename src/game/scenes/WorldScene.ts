@@ -15,7 +15,7 @@ import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 import { getRoomDims } from '../../shared/roomConfig';
 import { spawnChickensInRoom } from '../../simulation/chickens';
-import { getSelectedGoblinId, selectGoblin, type StockpileKind } from './WorldSelection';
+import { getSelectedGoblinId, selectGoblin } from './WorldSelection';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -34,16 +34,6 @@ export class WorldScene extends Phaser.Scene {
   public goblins: Goblin[] = [];
   public tick = 0;
   public selection: SceneSelection = { kind: 'none' };
-  // Legacy mirrored selection fields (kept for compatibility during migration).
-  public selectedGoblinId: string | null = null;
-  /** Selected hearth tile (click-to-show fuel); cleared when selecting something else. */
-  public selectedHearth: { x: number; y: number } | null = null;
-  /** Matches UI stockpile panel; used to draw selection ring on the map. */
-  public selectedStockpile: {
-    kind: StockpileKind;
-    idx: number;
-  } | null = null;
-  public selectedAdventurerId: string | null = null;
   public terrainDirty = true;
   public lastTickTime = 0;
   public paused = false;
