@@ -30,7 +30,7 @@ function emptyDirtGrid(): Tile[][] {
   return grid;
 }
 
-function minimalGoblin(overrides: Partial<Goblin> & Pick<Goblin, 'x' | 'y' | 'id'>): Goblin {
+function minimalGoblin(overrides: Partial<Goblin>): Goblin {
   return {
     id: '',
     name: 'Test',
