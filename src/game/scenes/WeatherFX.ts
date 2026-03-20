@@ -9,6 +9,7 @@
 
 import type { WorldScene } from './WorldScene';
 import type { WeatherType, Season } from '../../shared/types';
+import { timeOfDayProgress } from '../../simulation/weather';
 
 // ── Particle pool ────────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ let currentSeason: Season | null = null;
 // Lightning flash state
 let flashAlpha = 0;
 let flashCooldown = 0;
+const NIGHT_TINT_ALPHA_MAX = 0.22;
+const DAY_WARM_TINT_MAX = 0.04;
 
 // ── Particle configs per weather type ────────────────────────────────────────
 
@@ -291,11 +294,32 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     }
 
     const cfg = CONFIGS[weather];
+    const tod = timeOfDayProgress(scene.tick);
+    const daylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
+    const nightStrength = 1 - daylight;
 
     // ── Tint overlay ────────────────────────────────────────────────────
     scene.weatherTintGfx.clear();
     if (cfg) {
         scene.weatherTintGfx.fillStyle(cfg.tintColor, cfg.tintAlpha);
+        scene.weatherTintGfx.fillRect(
+            toDrawX(0),
+            toDrawY(0),
+            toDrawSize(w),
+            toDrawSize(h),
+        );
+    }
+    // Day-night cycle layer: medium nighttime darkening with a small warm daytime lift.
+    if (nightStrength > 0.01) {
+        scene.weatherTintGfx.fillStyle(0x102040, NIGHT_TINT_ALPHA_MAX * nightStrength);
+        scene.weatherTintGfx.fillRect(
+            toDrawX(0),
+            toDrawY(0),
+            toDrawSize(w),
+            toDrawSize(h),
+        );
+    } else {
+        scene.weatherTintGfx.fillStyle(0xffcc88, DAY_WARM_TINT_MAX * daylight);
         scene.weatherTintGfx.fillRect(
             toDrawX(0),
             toDrawY(0),
