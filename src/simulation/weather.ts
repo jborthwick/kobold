@@ -150,6 +150,25 @@ export function ambientColdStress(weather: Weather, tick: number): number {
 
 /** Ticks per season (exported for UI progress calculation). */
 export const SEASON_LENGTH_TICKS = SEASON_LENGTH;
+/** Ticks per full day-night cycle. */
+export const DAY_LENGTH_TICKS_CYCLE = DAY_LENGTH_TICKS;
+
+/** Day progress in [0, 1), where 0 is dawn. */
+export function timeOfDayProgress(tick: number): number {
+  const wrapped = ((tick % DAY_LENGTH_TICKS) + DAY_LENGTH_TICKS) % DAY_LENGTH_TICKS;
+  return wrapped / DAY_LENGTH_TICKS;
+}
+
+export type DayPeriod = 'dawn' | 'day' | 'dusk' | 'night';
+
+/** Compact named phase used by HUD labels. */
+export function dayPeriod(tick: number): DayPeriod {
+  const p = timeOfDayProgress(tick);
+  if (p < 0.125) return 'dawn';
+  if (p < 0.5) return 'day';
+  if (p < 0.625) return 'dusk';
+  return 'night';
+}
 
 /** Display label for weather (for HUD). */
 export function weatherLabel(weather: Weather): string {

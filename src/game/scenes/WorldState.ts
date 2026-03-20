@@ -5,6 +5,7 @@
  */
 import { bus } from '../../shared/events';
 import { getNextEventTick } from '../../simulation/events';
+import { dayPeriod, timeOfDayProgress } from '../../simulation/weather';
 import { TILE_SIZE } from '../../shared/constants';
 import type { SaveData } from '../../shared/save';
 import type { MiniMapData } from '../../shared/types';
@@ -82,6 +83,14 @@ export function emitGameState(scene: WorldScene) {
         barStockpiles: scene.barStockpiles.map(s => ({ ...s })),
         weatherSeason: scene.weather.season,
         weatherType: scene.weather.type,
+        timeOfDayLabel: (() => {
+            const p = dayPeriod(scene.tick);
+            if (p === 'dawn') return 'Dawn';
+            if (p === 'day') return 'Day';
+            if (p === 'dusk') return 'Dusk';
+            return 'Night';
+        })(),
+        timeOfDayProgress: timeOfDayProgress(scene.tick),
         rooms: scene.rooms.map(r => ({ ...r })),
         selectedHearthTile: (() => {
             if (scene.selection.kind !== 'hearth') return null;

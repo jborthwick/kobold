@@ -358,6 +358,10 @@ export interface GameState {
   /** Current weather / season (affects growback & metabolism). */
   weatherSeason?: Season;
   weatherType?: WeatherType;
+  /** Day/night phase label for HUD display. */
+  timeOfDayLabel?: 'Dawn' | 'Day' | 'Dusk' | 'Night';
+  /** Day/night cycle progress in [0,1). */
+  timeOfDayProgress?: number;
   rooms: Room[];
   /** When the player has clicked a hearth, its position and current fuel (for HearthPanel). */
   selectedHearthTile?: { x: number; y: number; hearthFuel: number } | null;

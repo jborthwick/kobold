@@ -68,12 +68,25 @@ function PauseSpeed({ paused, speed }: { paused: boolean; speed: number }) {
   );
 }
 
-function WeatherIndicator({ season, weather }: { season: Season; weather: WeatherType }) {
+function WeatherIndicator({
+  season,
+  weather,
+  timeOfDayLabel,
+}: {
+  season: Season;
+  weather: WeatherType;
+  timeOfDayLabel?: 'Dawn' | 'Day' | 'Dusk' | 'Night';
+}) {
   return (
     <div style={{ ...styles.stat, justifyContent: 'center' }}>
       <span style={{ fontSize: 10, color: WEATHER_COLORS[weather] }}>
         {SEASON_LABELS[season]} {WEATHER_ICONS[weather]}
       </span>
+      {timeOfDayLabel && (
+        <span style={{ ...styles.statLabel, color: '#c7d5ff' }}>
+          {timeOfDayLabel}
+        </span>
+      )}
     </div>
   );
 }
@@ -155,7 +168,11 @@ export function HUD({ layout = 'desktop' as LayoutMode }: { layout?: LayoutMode 
     <div style={topBarStyle}>
       {!isPhone && <Stat label="tick" value={String(state.tick)} />}
       {state.weatherSeason && state.weatherType && (
-        <WeatherIndicator season={state.weatherSeason} weather={state.weatherType} />
+        <WeatherIndicator
+          season={state.weatherSeason}
+          weather={state.weatherType}
+          timeOfDayLabel={state.timeOfDayLabel}
+        />
       )}
       {/* Desktop: inline pause/speed/overlay controls */}
       {isDesktop && <PauseSpeed paused={state.paused} speed={state.speed} />}
