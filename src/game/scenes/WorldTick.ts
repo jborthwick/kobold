@@ -17,7 +17,7 @@
 import { bus } from '../../shared/events';
 import { getGoblinConfig } from '../../shared/goblinConfig';
 
-import { tickWeather, growbackModifier, metabolismModifier } from '../../simulation/weather';
+import { tickWeather, growbackModifier, metabolismModifier, ambientColdStress } from '../../simulation/weather';
 import { computeGoblinWarmth, computeWarmthOverlay, computeDanger, updateTraffic } from '../../simulation/diffusion';
 import { tickAgentUtility, computeResourceBalanceModifier } from '../../simulation/utilityAI';
 import { getCurrentHeadcounts } from '../../simulation/workerTargets';
@@ -52,6 +52,7 @@ export function gameTick(scene: WorldScene) {
             level: 'info',
         });
     }
+    const ambientCold = ambientColdStress(scene.weather, scene.tick);
 
     // ── Diffusion fields ─────────────────────────────────────────────────
     computeWarmthOverlay(scene.grid, scene.warmthField);
@@ -64,7 +65,7 @@ export function gameTick(scene: WorldScene) {
     // Per-goblin warmth (shelter-style): room + proximity to heat; smoothed so the bar decays gradually.
     for (const d of scene.goblins) {
         if (d.alive) {
-            const raw = computeGoblinWarmth(d, scene.grid, scene.rooms, scene.weather.type);
+            const raw = computeGoblinWarmth(d, scene.grid, scene.rooms, ambientCold);
             d.warmth = (d.warmth ?? raw) * 0.95 + raw * 0.05;
         }
     }
@@ -97,7 +98,7 @@ export function gameTick(scene: WorldScene) {
             scene.foodStockpiles, scene.adventurers, scene.oreStockpiles,
             scene.colonyGoal ?? undefined, scene.woodStockpiles,
             metabolismModifier(scene.weather), scene.dangerField,
-            scene.weather.type, scene.rooms, scene.mealStockpiles,
+            scene.weather.type, ambientCold, scene.rooms, scene.mealStockpiles,
             scene.plankStockpiles, scene.barStockpiles,
             scene.chickens,
             scene.workerTargets,

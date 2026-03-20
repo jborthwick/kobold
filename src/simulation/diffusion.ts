@@ -6,7 +6,7 @@
  */
 
 import { GRID_SIZE } from '../shared/constants';
-import { TileType, isWallType, isHearthLit, type Tile, type Goblin, type Adventurer, type FoodStockpile, type WeatherType, type Room } from '../shared/types';
+import { TileType, isWallType, isHearthLit, type Tile, type Goblin, type Adventurer, type FoodStockpile, type Room } from '../shared/types';
 
 const N = GRID_SIZE * GRID_SIZE;
 
@@ -93,7 +93,7 @@ export function computeGoblinWarmth(
   goblin: Goblin,
   grid: Tile[][],
   rooms: Room[] | undefined,
-  weatherType?: WeatherType,
+  ambientColdStress = 0,
 ): number {
   const sources = getHeatSources(grid);
   const currentRoom = rooms?.find(
@@ -113,8 +113,8 @@ export function computeGoblinWarmth(
   }
 
   // In cold, being in any room adds a small warmth (out of the elements).
-  if (weatherType === 'cold' && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH);
-  if (weatherType === 'cold') raw *= 0.7;
+  if (ambientColdStress > 0 && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH * ambientColdStress);
+  raw *= 1 - 0.3 * ambientColdStress;
   return Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
 }
 
@@ -127,7 +127,7 @@ export function warmthAtPosition(
   y: number,
   grid: Tile[][],
   rooms: Room[] | undefined,
-  weatherType?: WeatherType,
+  ambientColdStress = 0,
 ): number {
   const sources = getHeatSources(grid);
   const currentRoom = rooms?.find(
@@ -146,8 +146,8 @@ export function warmthAtPosition(
     raw = dist <= WARMTH_PROXIMITY_RADIUS ? Math.max(0, 100 - 20 * dist) : 0;
   }
 
-  if (weatherType === 'cold' && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH);
-  if (weatherType === 'cold') raw *= 0.7;
+  if (ambientColdStress > 0 && currentRoom) raw = Math.min(100, raw + ROOM_SHELTER_WARMTH * ambientColdStress);
+  raw *= 1 - 0.3 * ambientColdStress;
   return Math.max(0, Math.min(100, Math.round(raw * 10) / 10));
 }
 
@@ -183,7 +183,7 @@ export function computeWarmth(
   grid: Tile[][],
   hearths: { x: number; y: number }[],
   foodStockpiles: FoodStockpile[],
-  weatherType: WeatherType,
+  ambientColdStress: number,
   out: Float32Array,
   rooms?: Room[],
 ): void {
@@ -244,9 +244,8 @@ export function computeWarmth(
     }
   }
 
-  if (weatherType === 'cold') {
-    for (let i = 0; i < N; i++) out[i] *= 0.7;
-  }
+  const coldAttenuation = 1 - 0.3 * Math.max(0, Math.min(1, ambientColdStress));
+  for (let i = 0; i < N; i++) out[i] *= coldAttenuation;
 }
 
 /**

@@ -187,6 +187,7 @@ function updateNeeds(
   currentTick: number,
   weatherMetabolismMod: number,
   weatherType: WeatherType | undefined,
+  ambientColdStress: number,
   rooms?: Room[],
   grid?: Tile[][],
   onLog?: LogFn,
@@ -210,7 +211,7 @@ function updateNeeds(
   // ── Cold exposure penalty ────────────────────────────────────────────────────
   // During cold weather, goblins away from warmth accumulate fatigue and extra hunger.
   // Shelter reduces effective cold penalty (less wind/rain = less heat loss).
-  applyColdExposurePenalty(goblin, currentTick, weatherType, shelterScore, onLog);
+  applyColdExposurePenalty(goblin, currentTick, ambientColdStress, shelterScore, onLog);
 
   // ── Morale ───────────────────────────────────────────────────────────────────
   // Clean up expired thoughts
@@ -231,7 +232,7 @@ function updateNeeds(
   }
 
   let targetMorale = computeBaseMoraleTargetFromThoughtsAndMemories(goblin);
-  targetMorale = applySituationalMoraleAdjustments(goblin, targetMorale, weatherType, shelterScore, burrowComfort);
+  targetMorale = applySituationalMoraleAdjustments(goblin, targetMorale, ambientColdStress, shelterScore, burrowComfort);
 
   // Lerp towards target: gap closes at 0.5% per tick
   const gap = targetMorale - goblin.morale;
@@ -303,13 +304,14 @@ function computeShelterScore(goblin: Goblin, rooms?: Room[], grid?: Tile[][]): n
 function applyColdExposurePenalty(
   goblin: Goblin,
   currentTick: number,
-  weatherType: WeatherType | undefined,
+  ambientColdStress: number,
   shelterScore: number,
   onLog?: LogFn,
 ): void {
-  if (weatherType === 'cold') {
+  if (ambientColdStress > 0.05) {
     const warmth = goblin.warmth ?? 0;
     let coldPenalty = inverseSigmoid(warmth, 30, 0.12);
+    coldPenalty *= ambientColdStress;
     coldPenalty *= Math.max(0, 1 - SHELTER_COLD_REDUCTION * shelterScore);
     if (coldPenalty > 0.05) {
       goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
@@ -337,7 +339,7 @@ function computeBaseMoraleTargetFromThoughtsAndMemories(goblin: Goblin): number 
 function applySituationalMoraleAdjustments(
   goblin: Goblin,
   targetMorale: number,
-  weatherType: WeatherType | undefined,
+  ambientColdStress: number,
   shelterScore: number,
   burrowComfort: number,
 ): number {
@@ -347,12 +349,12 @@ function applySituationalMoraleAdjustments(
   if (goblin.social > 60) adjusted -= Math.round(15 * sigmoid(goblin.social, 75));
   if (goblin.fatigue > 80) adjusted -= Math.round(15 * sigmoid(goblin.fatigue, 90));
   if (goblin.onFire) adjusted -= 40;
-  if (weatherType === 'cold') {
+  if (ambientColdStress > 0.05) {
     const warmth = goblin.warmth ?? 0;
-    if (warmth < 30) adjusted -= Math.round(20 * inverseSigmoid(warmth, 15));
+    if (warmth < 30) adjusted -= Math.round(20 * inverseSigmoid(warmth, 15) * ambientColdStress);
   }
 
-  const coldFactor = weatherType === 'cold' ? 1.0 : 0.5;
+  const coldFactor = 0.5 + 0.5 * ambientColdStress;
   if (shelterScore < 0.3) {
     const penalty = Math.round(8 * (0.3 - shelterScore) / 0.3 * coldFactor);
     adjusted -= penalty;
@@ -532,6 +534,7 @@ function buildActionContext(params: {
   woodStockpiles?: WoodStockpile[];
   dangerField?: Float32Array;
   weatherType?: WeatherType;
+  ambientColdStress?: number;
   rooms?: Room[];
   mealStockpiles?: MealStockpile[];
   plankStockpiles?: PlankStockpile[];
@@ -542,7 +545,7 @@ function buildActionContext(params: {
 }): ActionContext {
   const {
     goblin, grid, currentTick, goblins, onLog, foodStockpiles, adventurers, oreStockpiles, colonyGoal,
-    woodStockpiles, dangerField, weatherType, rooms, mealStockpiles, plankStockpiles, barStockpiles,
+    woodStockpiles, dangerField, weatherType, ambientColdStress, rooms, mealStockpiles, plankStockpiles, barStockpiles,
     chickens, workerTargets, currentHeadcounts,
   } = params;
   const livingGoblinCount = goblins?.reduce((n, g) => n + (g.alive ? 1 : 0), 0) ?? 0;
@@ -564,7 +567,7 @@ function buildActionContext(params: {
   return {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
-    dangerField, weatherType, rooms, mealStockpiles,
+    dangerField, weatherType, ambientColdStress, rooms, mealStockpiles,
     plankStockpiles, barStockpiles,
     chickens,
     resourceBalance,
@@ -679,6 +682,7 @@ export function tickAgentUtility(
   weatherMetabolismMod?: number,
   dangerField?: Float32Array,
   weatherType?: WeatherType,
+  ambientColdStress?: number,
   rooms?: Room[],
   mealStockpiles?: MealStockpile[],
   plankStockpiles?: PlankStockpile[],
@@ -703,7 +707,7 @@ export function tickAgentUtility(
   // ── Step 1: Update needs ──────────────────────────────────────────────────────
   // Hunger, morale, fatigue, and social all advance here before any decision is made.
   // These feed into action scores — a goblin with hunger=80 will score "eat" near 1.0.
-  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, weatherType, rooms, grid, onLog);
+  updateNeeds(goblin, goblins, currentTick, weatherMetabolismMod ?? 1, weatherType, ambientColdStress ?? 0, rooms, grid, onLog);
 
   // Exhaustion stumble: above fatigue=70 there's a chance to skip the whole action this tick.
   // The goblin just stands there recovering. Chance scales from ~20% at 70 to ~80% at 100.
@@ -749,7 +753,7 @@ export function tickAgentUtility(
   // Compute resource balance once per tick and cache it to avoid redundant array reduces.
   const ctx: ActionContext = buildActionContext({
     goblin, grid, currentTick, goblins, onLog, foodStockpiles, adventurers, oreStockpiles, colonyGoal,
-    woodStockpiles, dangerField, weatherType, rooms, mealStockpiles, plankStockpiles, barStockpiles,
+    woodStockpiles, dangerField, weatherType, ambientColdStress, rooms, mealStockpiles, plankStockpiles, barStockpiles,
     chickens, workerTargets, currentHeadcounts,
   });
 

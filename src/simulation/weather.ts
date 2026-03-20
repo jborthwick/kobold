@@ -55,6 +55,15 @@ const SEASON_WEIGHTS: Record<Season, [number, number, number, number, number]> =
 
 const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 const WEATHER_TYPES: WeatherType[] = ['clear', 'rain', 'drought', 'cold', 'storm'];
+const YEAR_CYCLE_TICKS = 2400;
+
+const WEATHER_COLD_STRESS: Record<WeatherType, number> = {
+  clear: 0,
+  rain: 0.08,
+  drought: -0.08,
+  cold: 0.35,
+  storm: 0.2,
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,6 +131,17 @@ export function growbackModifier(weather: Weather): number {
 /** Metabolism multiplier for the current weather. */
 export function metabolismModifier(weather: Weather): number {
   return METABOLISM_MODS[weather.type];
+}
+
+/**
+ * Ambient cold stress 0..1. Higher values mean harsher conditions:
+ *  - seasonal macro curve: coldest mid-winter, warmest mid-summer
+ *  - short-term weather deltas layered on top
+ */
+export function ambientColdStress(weather: Weather, tick: number): number {
+  const seasonalCold = 0.5 - 0.5 * Math.sin((tick / YEAR_CYCLE_TICKS) * 2 * Math.PI);
+  const adjusted = seasonalCold + WEATHER_COLD_STRESS[weather.type];
+  return Math.max(0, Math.min(1, adjusted));
 }
 
 /** Ticks per season (exported for UI progress calculation). */

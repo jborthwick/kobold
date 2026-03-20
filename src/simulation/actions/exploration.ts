@@ -17,7 +17,7 @@ export const wander: Action = {
   tags: ['explore'],
   eligible: () => true,
   score: () => 0.05,
-  execute: ({ goblin, grid, currentTick, onLog, rooms, weatherType }) => {
+  execute: ({ goblin, grid, currentTick, onLog, rooms, ambientColdStress }) => {
     const WANDER_HOLD_TICKS = 25;
     const wanDrift = traitMod(goblin, 'wariness', 2);
     const WANDER_MIN_DIST = 8 + wanDrift;
@@ -59,7 +59,7 @@ export const wander: Action = {
             candidates.push({
               x: wx,
               y: wy,
-              warmth: warmthAtPosition(wx, wy, grid, rooms, weatherType),
+              warmth: warmthAtPosition(wx, wy, grid, rooms, ambientColdStress ?? 0),
             });
           } else {
             goblin.wanderTarget = { x: wx, y: wy };

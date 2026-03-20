@@ -30,6 +30,7 @@ export interface ActionContext {
   colonyGoal?:     ColonyGoal;
   dangerField?:    Float32Array;  // diffusion field: danger 0–100 per tile
   weatherType?:    WeatherType;
+  ambientColdStress?: number; // normalized 0..1 from global climate model
   rooms?:          Room[];
   /** Per-tick room context flags, computed once in utilityAI. */
   roomBonuses?: {
