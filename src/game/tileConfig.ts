@@ -21,7 +21,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Ore]: [522],
   [TileType.Mushroom]: [554],
   [TileType.Egg]: [218],
-  [TileType.Wall]: [637, 843, 844, 845, 892, 893],
+  [TileType.Wall]: [643],
   [TileType.WoodWall]: [148, 149],
   [TileType.StoneWall]: [637, 843, 844, 845, 892, 893],
   [TileType.Hearth]: [504],

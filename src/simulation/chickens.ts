@@ -86,10 +86,13 @@ export function tickChickens(chickens: Chicken[], grid: Tile[][], goblins: Gobli
       [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
     }
     const homePen = chicken.homePenId ? rooms?.find(r => r.id === chicken.homePenId && r.type === 'nursery_pen') : null;
+    if (homePen && Math.random() < 0.005) {
+      chicken.homePenId = undefined;
+    }
     for (const dir of dirs) {
       const nx = chicken.x + dir.x;
       const ny = chicken.y + dir.y;
-      if (homePen && (nx < homePen.x || nx >= homePen.x + homePen.w || ny < homePen.y || ny >= homePen.y + homePen.h)) {
+      if (homePen && chicken.homePenId && (nx < homePen.x || nx >= homePen.x + homePen.w || ny < homePen.y || ny >= homePen.y + homePen.h)) {
         continue;
       }
       if (!isWalkable(grid, nx, ny)) continue;
