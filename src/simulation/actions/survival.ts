@@ -2,13 +2,21 @@
  * commandMove (player override), eat, rest. Survival actions run when needs are critical;
  * eat/rest use sigmoid curves so urgency rises as hunger/fatigue worsen.
  */
-import { TileType } from '../../shared/types';
+import { TileType, type Goblin } from '../../shared/types';
 import { sigmoid } from '../utilityAI';
 import { traitMod, FORAGEABLE_TILES } from '../agents';
 import { accelerateHealing } from '../wounds';
-import { moveTo, shouldLog, traitText } from './helpers';
+import { countNearbyRestingAlliesOnBurrowBeds, isOnBurrowBed, moveTo, moveToward, nearestBurrowBed, shouldLog, traitText } from './helpers';
 import { addThought } from '../mood';
 import type { Action } from './types';
+
+const BURROW_REST_MIN_TICKS = 50;
+const BURROW_RELATION_BONUS_COOLDOWN = 20;
+
+function isSharingCurrentTile(goblinId: string, x: number, y: number, goblins: Goblin[] | undefined): boolean {
+  if (!goblins) return false;
+  return goblins.some(other => other.alive && other.id !== goblinId && other.x === x && other.y === y);
+}
 
 // --- commandMove: player override (always wins) ---
 export const commandMove: Action = {
@@ -101,33 +109,100 @@ export const rest: Action = {
   name: 'rest',
   tags: ['rest'],
   eligible: ({ goblin }) => goblin.hunger < 95,
-  score: ({ goblin }) => {
+  score: ({ goblin, rooms, goblins, roomBonuses, currentTick }) => {
     // Lower midpoint (50 instead of 60) makes resting more attractive earlier
     const base = sigmoid(goblin.fatigue, 50);
     // Hysteresis: once resting, stay committed until fatigue < 40 (exit gate, not action momentum)
     const hysteresis = (goblin.task.includes('resting') && goblin.fatigue > 40) ? 0.15 : 0;
-    return Math.min(1.0, base + hysteresis);
+    const activeCommit = (goblin.burrowRestCommitUntilTick ?? -1) > currentTick;
+    const commitBoost = (activeCommit && isOnBurrowBed(goblin, rooms) && !isSharingCurrentTile(goblin.id, goblin.x, goblin.y, goblins))
+      ? 0.5
+      : 0;
+
+    if (!roomBonuses?.hasBurrow) return Math.min(1.0, base + hysteresis + commitBoost);
+    const targetBed = nearestBurrowBed(goblin, rooms, goblins);
+    if (!targetBed) return Math.min(1.0, base + hysteresis + commitBoost);
+    const onBed = isOnBurrowBed(goblin, rooms);
+    const distToBurrow = Math.abs(targetBed.x - goblin.x) + Math.abs(targetBed.y - goblin.y);
+    const proximityBonus = Math.max(0, 0.14 - distToBurrow * 0.01);
+    const nearbyResters = countNearbyRestingAlliesOnBurrowBeds(goblin, goblins, rooms, 3);
+    const coRestBonus = Math.min(0.14, nearbyResters * 0.04);
+    const fatigueScale = Math.min(1, Math.max(0, (goblin.fatigue - 30) / 70));
+    const burrowBonus = (onBed ? 0.06 : proximityBonus + coRestBonus) * fatigueScale;
+    return Math.min(1.0, base + hysteresis + burrowBonus + commitBoost);
   },
-  execute: ({ goblin, currentTick }) => {
+  execute: ({ goblin, currentTick, rooms, roomBonuses, goblins, grid }) => {
+    const targetBed = roomBonuses?.hasBurrow ? nearestBurrowBed(goblin, rooms, goblins) : null;
+    const onBed = isOnBurrowBed(goblin, rooms);
+    const sharedTile = isSharingCurrentTile(goblin.id, goblin.x, goblin.y, goblins);
+    if (onBed && sharedTile && targetBed) {
+      moveToward(goblin, targetBed, grid, currentTick, 12);
+      goblin.task = '→ free burrow bed';
+      return;
+    }
+    const commitActive = (goblin.burrowRestCommitUntilTick ?? -1) > currentTick;
+    if (commitActive && !onBed && targetBed) {
+      moveToward(goblin, targetBed, grid, currentTick, 24);
+      goblin.task = '→ burrow bed (committed rest)';
+      return;
+    }
+    if (targetBed && !onBed && goblin.fatigue > 35) {
+      moveToward(goblin, targetBed, grid, currentTick, 24);
+      goblin.task = '→ burrow bed';
+      return;
+    }
+    if (onBed && !commitActive) {
+      goblin.burrowRestCommitUntilTick = currentTick + BURROW_REST_MIN_TICKS;
+    } else if (!commitActive) {
+      goblin.burrowRestCommitUntilTick = undefined;
+    }
+
+    const burrowResters = onBed
+      ? countNearbyRestingAlliesOnBurrowBeds(goblin, goblins, rooms, 3)
+      : 0;
+    const burrowRecoveryBoost = onBed ? 1 + Math.min(0.25, burrowResters * 0.06) : 1;
     const warmth = goblin.warmth ?? 0;
     if (warmth >= 40) {
       // Sheltered by hearth — best recovery
-      goblin.fatigue = Math.max(0, goblin.fatigue - 1.4);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 1.4 * burrowRecoveryBoost);
       accelerateHealing(goblin, 3);
       addThought(goblin, 'rested_by_hearth', currentTick);
       goblin.task = goblin.wound ? `resting by the hearth (healing ${goblin.wound.type})` : 'resting by the hearth';
     } else if (warmth >= 20) {
       // Mild warmth — small bonus
-      goblin.fatigue = Math.max(0, goblin.fatigue - 1.1);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 1.1 * burrowRecoveryBoost);
       accelerateHealing(goblin, 2);
       addThought(goblin, 'rested_near_warmth', currentTick);
       goblin.task = goblin.wound ? `resting near warmth (healing ${goblin.wound.type})` : 'resting near warmth';
     } else {
       // Exposed — baseline
-      goblin.fatigue = Math.max(0, goblin.fatigue - 0.8);
+      goblin.fatigue = Math.max(0, goblin.fatigue - 0.8 * burrowRecoveryBoost);
       accelerateHealing(goblin, 2);
       addThought(goblin, 'slept_on_ground', currentTick);
       goblin.task = goblin.wound ? `resting (healing ${goblin.wound.type})` : 'resting';
+    }
+    if (burrowResters > 0 && onBed) {
+      goblin.social = Math.max(0, goblin.social - Math.min(0.8, burrowResters * 0.2));
+      goblin.task = `${goblin.task} on burrow bed`;
+    }
+    if (onBed) {
+      addThought(goblin, 'rested_in_bed', currentTick);
+      if (
+        goblins &&
+        burrowResters > 0 &&
+        currentTick - (goblin.lastLoggedTicks.burrowBedBond ?? -Infinity) >= BURROW_RELATION_BONUS_COOLDOWN
+      ) {
+        for (const other of goblins) {
+          if (!other.alive || other.id === goblin.id) continue;
+          if (!other.task.includes('resting')) continue;
+          if (!isOnBurrowBed(other, rooms)) continue;
+          const dist = Math.max(Math.abs(other.x - goblin.x), Math.abs(other.y - goblin.y));
+          if (dist > 3) continue;
+          goblin.relations[other.id] = Math.min(100, (goblin.relations[other.id] ?? 50) + 1);
+          other.relations[goblin.id] = Math.min(100, (other.relations[goblin.id] ?? 50) + 1);
+        }
+        goblin.lastLoggedTicks.burrowBedBond = currentTick;
+      }
     }
   },
 };

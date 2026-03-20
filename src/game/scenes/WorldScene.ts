@@ -15,6 +15,7 @@ import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 import { getRoomDims } from '../../shared/roomConfig';
 import { spawnChickensInRoom } from '../../simulation/chickens';
+import { burrowBedTiles } from '../../simulation/actions/helpers';
 import { getSelectedGoblinId, selectGoblin } from './WorldSelection';
 
 import { initializeWorld } from './WorldInit';
@@ -27,6 +28,7 @@ const ROOM_DESIGNATION_NAMES: Record<RoomType, string> = {
   farm: 'Farm',
   nursery_pen: 'Nursery Pen',
   blacksmith: 'Blacksmith',
+  burrow: 'Burrow',
 };
 
 export class WorldScene extends Phaser.Scene {
@@ -118,6 +120,7 @@ export class WorldScene extends Phaser.Scene {
   // Furniture sprites at room centers (saw in lumber_hut, anvil in blacksmith)
   public sawSprites: Phaser.GameObjects.Image[] = [];
   public anvilSprites: Phaser.GameObjects.Image[] = [];
+  public burrowBedSprites: Phaser.GameObjects.Image[] = [];
 
   // Event log history (persisted to save, restored on load)
   public logHistory: LogEntry[] = [];
@@ -258,6 +261,8 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'nursery_pen':
         this.chickens.push(...spawnChickensInRoom(this.grid, room, 2));
+        return;
+      case 'burrow':
         return;
     }
   }
@@ -504,6 +509,28 @@ export class WorldScene extends Phaser.Scene {
       const cy = (room.y + Math.floor(room.h / 2)) * TILE_SIZE + TILE_SIZE / 2;
       this.anvilSprites[i].setPosition(cx, cy);
       this.anvilSprites[i].setFrame(SPRITE_CONFIG.anvil ?? 0);
+    }
+  }
+
+  /** Sync burrow bed sprites (4 per burrow room). */
+  public syncBurrowBedMarkers(): void {
+    const burrows = this.rooms.filter(r => r.type === 'burrow');
+    const beds = burrows.flatMap(room => burrowBedTiles(room));
+    while (this.burrowBedSprites.length < beds.length) {
+      const bed = beds[this.burrowBedSprites.length];
+      const cx = bed.x * TILE_SIZE + TILE_SIZE / 2;
+      const cy = bed.y * TILE_SIZE + TILE_SIZE / 2;
+      this.burrowBedSprites.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.bed ?? 0).setDepth(3));
+    }
+    while (this.burrowBedSprites.length > beds.length) {
+      this.burrowBedSprites.pop()?.destroy();
+    }
+    for (let i = 0; i < beds.length; i++) {
+      const bed = beds[i];
+      const cx = bed.x * TILE_SIZE + TILE_SIZE / 2;
+      const cy = bed.y * TILE_SIZE + TILE_SIZE / 2;
+      this.burrowBedSprites[i].setPosition(cx, cy);
+      this.burrowBedSprites[i].setFrame(SPRITE_CONFIG.bed ?? 0);
     }
   }
 

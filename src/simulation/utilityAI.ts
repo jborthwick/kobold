@@ -12,7 +12,7 @@ import { isWalkable } from './world';
 import { traitMod, pathNextStep, pruneInvalidKnownFoodSites } from './agents';
 import { TileType } from '../shared/types';
 import { ALL_ACTIONS, type ActionContext, type Action } from './actions';
-import { CARDINAL_DIRECTIONS } from './actions/helpers';
+import { CARDINAL_DIRECTIONS, countNearbyRestingAlliesOnBurrowBeds, isOnBurrowBed } from './actions/helpers';
 import { applyTraitBias } from './traitActionBias';
 import { GOAL_CONFIG } from './goalConfig';
 import { tickWoundHealing } from './wounds';
@@ -165,6 +165,7 @@ function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number):
 
 /** Fraction of cold penalty removed at full shelter (0 = no reduction, 0.3 = 30% less penalty). */
 const SHELTER_COLD_REDUCTION = 0.3;
+const BURROW_SHELTER_FLOOR = 0.75;
 const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
   bruised: 0.30,
   leg: 0.15,
@@ -198,6 +199,13 @@ function updateNeeds(
   // Shelter: being inside well-walled rooms feels safer; used for cold penalty and morale.
   // shelterScore ~ [0,1]: 0 = fully exposed, 1 = inside room with fully walled perimeter.
   const shelterScore = computeShelterScore(goblin, rooms, grid);
+  const restingOnBurrowBed = goblin.task.includes('resting') && isOnBurrowBed(goblin, rooms);
+  const burrowResters = restingOnBurrowBed
+    ? countNearbyRestingAlliesOnBurrowBeds(goblin, goblins, rooms, 3)
+    : 0;
+  const burrowComfort = restingOnBurrowBed
+    ? Math.min(1, 0.5 + burrowResters * 0.1)
+    : 0;
 
   // ── Cold exposure penalty ────────────────────────────────────────────────────
   // During cold weather, goblins away from warmth accumulate fatigue and extra hunger.
@@ -223,7 +231,7 @@ function updateNeeds(
   }
 
   let targetMorale = computeBaseMoraleTargetFromThoughtsAndMemories(goblin);
-  targetMorale = applySituationalMoraleAdjustments(goblin, targetMorale, weatherType, shelterScore);
+  targetMorale = applySituationalMoraleAdjustments(goblin, targetMorale, weatherType, shelterScore, burrowComfort);
 
   // Lerp towards target: gap closes at 0.5% per tick
   const gap = targetMorale - goblin.morale;
@@ -252,6 +260,9 @@ function updateNeeds(
   // Isolation accumulates slowly (capped at 0.5/tick), so a briefly solo goblin is fine;
   // one stuck alone for hundreds of ticks starts suffering morale loss.
   applySocialNeedTick(goblin, goblins, currentTick, onLog);
+  if (burrowComfort > 0) {
+    goblin.social = Math.max(0, goblin.social - Math.min(0.7, 0.15 + burrowResters * 0.12));
+  }
 }
 
 function computeShelterScore(goblin: Goblin, rooms?: Room[], grid?: Tile[][]): number {
@@ -278,6 +289,9 @@ function computeShelterScore(goblin: Goblin, rooms?: Room[], grid?: Tile[][]): n
         }
         const wallFraction = perimeter > 0 ? walled / perimeter : 0;
         shelterScore = 0.4 + 0.6 * wallFraction;
+        if (currentRoom.type === 'burrow' && goblin.task.includes('resting') && isOnBurrowBed(goblin, rooms)) {
+          shelterScore = Math.max(shelterScore, BURROW_SHELTER_FLOOR);
+        }
       }
     } else {
       shelterScore = 0.1;
@@ -325,6 +339,7 @@ function applySituationalMoraleAdjustments(
   targetMorale: number,
   weatherType: WeatherType | undefined,
   shelterScore: number,
+  burrowComfort: number,
 ): number {
   let adjusted = targetMorale;
   if (goblin.hunger > 60) adjusted -= Math.round(15 * sigmoid(goblin.hunger, 70));
@@ -344,6 +359,9 @@ function applySituationalMoraleAdjustments(
   } else if (shelterScore > 0.7) {
     const bonus = Math.round(8 * (shelterScore - 0.7) / 0.3);
     adjusted += bonus;
+  }
+  if (burrowComfort > 0) {
+    adjusted += Math.round(8 * burrowComfort);
   }
   return Math.max(0, Math.min(100, adjusted));
 }
@@ -542,6 +560,7 @@ function buildActionContext(params: {
   const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;
   const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
   const hasKitchen = rooms?.some(r => r.type === 'kitchen') ?? false;
+  const hasBurrow = rooms?.some(r => r.type === 'burrow') ?? false;
   return {
     goblin, grid, currentTick, goblins, onLog,
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
@@ -554,6 +573,7 @@ function buildActionContext(params: {
       hasLumberHut,
       hasBlacksmith,
       hasKitchen,
+      hasBurrow,
     },
     workerTargets,
     currentHeadcounts,

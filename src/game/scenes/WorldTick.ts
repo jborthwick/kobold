@@ -295,6 +295,7 @@ export function gameTick(scene: WorldScene) {
 
     scene.syncSawSprites();
     scene.syncAnvilSprites();
+    scene.syncBurrowBedMarkers();
 
     // ── Storage expansion — new stockpile within owning room when last fills ──
     expandStockpilesInRooms(

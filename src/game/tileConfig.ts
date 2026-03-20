@@ -17,7 +17,7 @@ export const TILE_CONFIG: Partial<Record<TileType, number[]>> = {
   [TileType.Forest]: [49, 50, 51, 52, 53, 54, 101, 102],
   [TileType.Farmland]: [0, 1, 2],
   [TileType.CropGrowing]: [307],
-  [TileType.CropRipe]: [309],
+  [TileType.CropRipe]: [915],
   [TileType.Ore]: [522],
   [TileType.Mushroom]: [554],
   [TileType.Egg]: [218],
@@ -47,4 +47,5 @@ export const SPRITE_CONFIG: Record<string, number> = {
   woodStockpile: 261,
   saw: 592,
   anvil: 401,
+  bed: 397,
 };

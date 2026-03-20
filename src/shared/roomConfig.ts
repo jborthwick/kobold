@@ -7,6 +7,7 @@ export const ROOM_DIMS: Record<RoomType, { w: number; h: number }> = {
   blacksmith: { w: 5, h: 5 },
   farm: { w: 10, h: 5 },
   nursery_pen: { w: 5, h: 5 },
+  burrow: { w: 5, h: 5 },
 } as const;
 
 /**

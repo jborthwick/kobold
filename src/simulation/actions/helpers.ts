@@ -10,7 +10,7 @@
  * cooldown-gated so logs don't spam.
  */
 
-import type { Goblin, Tile, GoblinTrait } from '../../shared/types';
+import type { Goblin, Tile, GoblinTrait, Room } from '../../shared/types';
 import { pathNextStep, traitMod } from '../agents';
 import { getTerrainMoveCost } from '../movementCost';
 import { isLegWoundSkip } from '../wounds';
@@ -142,6 +142,94 @@ export function nearestPoint(
     const bestDist = best ? Math.abs(best.x - goblin.x) + Math.abs(best.y - goblin.y) : Infinity;
     return dist < bestDist ? p : best;
   }, null);
+}
+
+export function isInRoom(pos: { x: number; y: number }, room: Room): boolean {
+  return pos.x >= room.x && pos.x < room.x + room.w && pos.y >= room.y && pos.y < room.y + room.h;
+}
+
+export function burrowBedTiles(room: Room): Array<{ x: number; y: number }> {
+  if (room.type !== 'burrow') return [];
+  return [
+    { x: room.x + 1, y: room.y + 1 },
+    { x: room.x + room.w - 2, y: room.y + 1 },
+    { x: room.x + 1, y: room.y + room.h - 2 },
+    { x: room.x + room.w - 2, y: room.y + room.h - 2 },
+  ];
+}
+
+export function burrowRoomAt(pos: { x: number; y: number }, rooms: Room[] | undefined): Room | null {
+  if (!rooms || rooms.length === 0) return null;
+  for (const room of rooms) {
+    if (room.type !== 'burrow') continue;
+    if (isInRoom(pos, room)) return room;
+  }
+  return null;
+}
+
+export function isOnBurrowBed(pos: { x: number; y: number }, rooms: Room[] | undefined): boolean {
+  const room = burrowRoomAt(pos, rooms);
+  if (!room) return false;
+  return burrowBedTiles(room).some(b => b.x === pos.x && b.y === pos.y);
+}
+
+export function nearestBurrowBed(
+  goblin: Goblin,
+  rooms: Room[] | undefined,
+  goblins?: Goblin[],
+): { x: number; y: number } | null {
+  if (!rooms || rooms.length === 0) return null;
+  const allBeds = new Set<string>();
+  for (const room of rooms) {
+    if (room.type !== 'burrow') continue;
+    for (const bed of burrowBedTiles(room)) {
+      allBeds.add(`${bed.x},${bed.y}`);
+    }
+  }
+  const occupied = new Set<string>();
+  if (goblins) {
+    for (const other of goblins) {
+      if (!other.alive || other.id === goblin.id) continue;
+      const posKey = `${other.x},${other.y}`;
+      if (allBeds.has(posKey)) occupied.add(posKey);
+      if (other.moveTarget) {
+        const targetKey = `${other.moveTarget.x},${other.moveTarget.y}`;
+        if (allBeds.has(targetKey)) occupied.add(targetKey);
+      }
+    }
+  }
+  let best: { x: number; y: number } | null = null;
+  let bestDist = Infinity;
+  for (const room of rooms) {
+    if (room.type !== 'burrow') continue;
+    for (const bed of burrowBedTiles(room)) {
+      if (occupied.has(`${bed.x},${bed.y}`)) continue;
+      const dist = Math.abs(bed.x - goblin.x) + Math.abs(bed.y - goblin.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = bed;
+      }
+    }
+  }
+  return best;
+}
+
+export function countNearbyRestingAlliesOnBurrowBeds(
+  goblin: Goblin,
+  goblins: Goblin[] | undefined,
+  rooms: Room[] | undefined,
+  radius: number,
+): number {
+  if (!goblins || goblins.length === 0) return 0;
+  let count = 0;
+  for (const other of goblins) {
+    if (!other.alive || other.id === goblin.id) continue;
+    if (!other.task.includes('resting')) continue;
+    if (!isOnBurrowBed(other, rooms)) continue;
+    const chebyshev = Math.max(Math.abs(other.x - goblin.x), Math.abs(other.y - goblin.y));
+    if (chebyshev <= radius) count++;
+  }
+  return count;
 }
 
 /** True if two cells are adjacent (Chebyshev distance ≤ 1). */

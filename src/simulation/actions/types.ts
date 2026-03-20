@@ -37,6 +37,7 @@ export interface ActionContext {
     hasLumberHut: boolean;
     hasBlacksmith: boolean;
     hasKitchen: boolean;
+    hasBurrow: boolean;
   };
   /** Cached per tick: balance (food/material priority) + tier pressures (consumables > materials > upgrades). */
   resourceBalance?: {

@@ -89,6 +89,7 @@ function tintForRoom(scene: WorldScene, room: WorldScene['rooms'][number]): numb
     if (room.type === 'kitchen') return 0xffbb88;
     if (room.type === 'farm') return 0xccff99;
     if (room.type === 'nursery_pen') return 0xfff2aa;
+    if (room.type === 'burrow') return 0xd6c0ff;
     if (room.type === 'lumber_hut') return 0xddffcc;
     if (room.type === 'blacksmith') return 0xffddaa;
     if (room.type !== 'storage') return 0xccccff;

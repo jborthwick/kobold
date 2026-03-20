@@ -145,6 +145,24 @@ export function BuildMenu({ activeType }: BuildMenuProps) {
                     </div>
 
                     <div style={styles.section}>
+                        <div style={styles.sectionLabel}>Comfort</div>
+                        <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => onRoomButtonClick(e, 'burrow')}
+                            style={{
+                                ...styles.buildBtn,
+                                ...(activeType === 'burrow' ? styles.buildBtnActive : {})
+                            }}
+                        >
+                            <span style={styles.icon}>🛏️</span>
+                            <div style={styles.btnText}>
+                                <div style={styles.btnTitle}>Burrow</div>
+                                <div style={styles.btnDesc}>5×5 shared den for group rest</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div style={styles.section}>
                         <div style={styles.sectionLabel}>Crafting</div>
                         <button
                             onMouseDown={(e) => e.preventDefault()}

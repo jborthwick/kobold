@@ -192,6 +192,7 @@ export interface Goblin {
   sawingLastActiveTick?: number;
   smithingProgress?: number;    // ticks spent smithing (ore → bars)
   smithingLastActiveTick?: number;
+  burrowRestCommitUntilTick?: number;  // while on a burrow bed, keep resting until this tick
   lastActionName?: string;  // name of action that won last tick; drives momentum bonus
   lastWorkCategory?: import('../simulation/workerTargets').WorkCategoryId;  // for headcount; set when doing category action
   lastWorkCategoryTick?: number;  // when lastWorkCategory was set; used to expire persistence
@@ -315,7 +316,7 @@ export interface Chapter {
   tick: number;
 }
 
-export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm' | 'nursery_pen';
+export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm' | 'nursery_pen' | 'burrow';
 
 export interface Room {
   id: string;

@@ -35,6 +35,7 @@ export const THOUGHT_DEFS: Record<string, ThoughtDef> = {
   'slept_on_ground': { id: 'slept_on_ground', label: 'Slept on ground', delta: -3, duration: 200 },
   'rested_by_hearth': { id: 'rested_by_hearth', label: 'Rested by hearth', delta: 6, duration: 250 },
   'rested_near_warmth': { id: 'rested_near_warmth', label: 'Rested near warmth', delta: 3, duration: 200 },
+  'rested_in_bed': { id: 'rested_in_bed', label: 'Rested in bed', delta: 4, duration: 220 },
   'singed_by_fire': { id: 'singed_by_fire', label: 'Singed by fire', delta: -8, duration: 300 },
   'doused_fire': { id: 'doused_fire', label: 'Doused a fire', delta: 4, duration: 250 },
   'crafted_meal': { id: 'crafted_meal', label: 'Cooked a meal', delta: 4, duration: 200 },
