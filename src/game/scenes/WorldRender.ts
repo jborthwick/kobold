@@ -347,6 +347,7 @@ export function drawOffScreenIndicator(scene: WorldScene) {
 
 export function drawAgents(scene: WorldScene) {
     scene.selectionGfx.clear();
+    const selection = scene.selection;
 
     const TOMBSTONE_FRAME = SPRITE_CONFIG.tombstone ?? GOBLIN_FRAME;
     for (const [id, spr] of scene.goblinSprites) {
