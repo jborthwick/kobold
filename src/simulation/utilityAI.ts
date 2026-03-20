@@ -420,6 +420,164 @@ function clearProgressIfInterrupted(
   }
 }
 
+const MOMENTUM_BONUS = 0.4;  // single tune point for action stickiness
+const UNDERSTAFF_BONUS_CAP = 0.12;
+const SKILL_PREFERENCE_PER_LEVEL = 0.04;
+const SKILL_PREFERENCE_CAP = 0.18;
+const PREFERRED_CATEGORY_BONUS = 0.07;
+const ASSIGNED_JOB_BONUS = 0.6;
+/** Ceiling for action score so trait-boosted scores above 1.0 can win; must be >= trait module's TRAIT_SCORE_CAP. */
+const MAX_ACTION_SCORE = 2.0;
+
+type ActionSelectionState = {
+  bestAction: Action | null;
+  bestScore: number;
+  secondName: string;
+  secondScore: number;
+};
+
+function buildActionContext(params: {
+  goblin: Goblin;
+  grid: Tile[][];
+  currentTick: number;
+  goblins?: Goblin[];
+  onLog?: LogFn;
+  foodStockpiles?: FoodStockpile[];
+  adventurers?: Adventurer[];
+  oreStockpiles?: OreStockpile[];
+  colonyGoal?: ColonyGoal;
+  woodStockpiles?: WoodStockpile[];
+  dangerField?: Float32Array;
+  weatherType?: WeatherType;
+  rooms?: Room[];
+  mealStockpiles?: MealStockpile[];
+  plankStockpiles?: PlankStockpile[];
+  barStockpiles?: BarStockpile[];
+  chickens?: Chicken[];
+  workerTargets?: WorkerTargets;
+  currentHeadcounts?: Record<WorkCategoryId, number>;
+}): ActionContext {
+  const {
+    goblin, grid, currentTick, goblins, onLog, foodStockpiles, adventurers, oreStockpiles, colonyGoal,
+    woodStockpiles, dangerField, weatherType, rooms, mealStockpiles, plankStockpiles, barStockpiles,
+    chickens, workerTargets, currentHeadcounts,
+  } = params;
+  const livingGoblinCount = goblins?.reduce((n, g) => n + (g.alive ? 1 : 0), 0) ?? 0;
+  const resourceBalanceBase = computeResourceBalanceModifier(
+    foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
+    livingGoblinCount,
+  );
+  const refuelableHearthCount = getRefuelableHearthCount(grid);
+  const resourceBalance = {
+    ...resourceBalanceBase,
+    refuelableHearthCount,
+    livingGoblinCount,
+  };
+  const hasStorage = rooms?.some(r => r.type === 'storage') ?? false;
+  const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;
+  const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
+  const hasKitchen = rooms?.some(r => r.type === 'kitchen') ?? false;
+  return {
+    goblin, grid, currentTick, goblins, onLog,
+    foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
+    dangerField, weatherType, rooms, mealStockpiles,
+    plankStockpiles, barStockpiles,
+    chickens,
+    resourceBalance,
+    roomBonuses: {
+      hasStorage,
+      hasLumberHut,
+      hasBlacksmith,
+      hasKitchen,
+    },
+    workerTargets,
+    currentHeadcounts,
+  };
+}
+
+function applyActionScoreAdjustments(
+  score: number,
+  action: Action,
+  ctx: ActionContext,
+  goalBonuses: Record<string, number>,
+  noFood: boolean,
+): number {
+  const goblin = ctx.goblin;
+  let nextScore = applyTraitBias(goblin, action, score);
+  const category = actionNameToWorkCategory(action.name);
+  const skillKey = category ? getSkillForCategory(category) : null;
+  const level = skillKey ? xpToLevel(goblin.skills[skillKey]) : 0;
+  if (category && ctx.workerTargets?.[category] != null && ctx.currentHeadcounts?.[category] != null) {
+    const target = ctx.workerTargets[category]!;
+    const current = ctx.currentHeadcounts[category]!;
+    if (target > 0 && current < target) {
+      let bonus = 0.05 * (target - current) / Math.max(target, 1);
+      if (skillKey) bonus *= 1 + 0.1 * level;
+      bonus = Math.min(bonus, UNDERSTAFF_BONUS_CAP);
+      nextScore = Math.min(MAX_ACTION_SCORE, nextScore + bonus);
+    }
+  }
+  if (skillKey) {
+    const skillBonus = Math.min(SKILL_PREFERENCE_PER_LEVEL * level, SKILL_PREFERENCE_CAP);
+    nextScore = Math.min(MAX_ACTION_SCORE, nextScore + skillBonus);
+  }
+  if (category && goblin.preferredWorkCategory === category) {
+    nextScore = Math.min(MAX_ACTION_SCORE, nextScore + PREFERRED_CATEGORY_BONUS);
+  }
+  if (category && goblin.assignedJob != null && goblin.assignedJob === category) {
+    nextScore = Math.min(MAX_ACTION_SCORE, nextScore + ASSIGNED_JOB_BONUS);
+  }
+  nextScore *= goalBonuses[action.name] ?? 1.0;
+  if (action.name === goblin.lastActionName && action.name !== 'wander') {
+    nextScore = Math.min(MAX_ACTION_SCORE, nextScore + MOMENTUM_BONUS);
+  }
+  if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
+    nextScore += 0.08;
+  }
+  if (action.name === 'wander' && (ctx.resourceBalance?.consumablesPressure ?? 0) > 0.6) {
+    nextScore += 0.03;
+  }
+  if (noFood && goblin.hunger > 85 && action.name === 'withdrawFood') {
+    nextScore = Math.max(nextScore, 2.0);
+  }
+  if (noFood && goblin.hunger > 85 && action.name === 'forage' && nextScore > 0.2) {
+    nextScore = Math.max(nextScore, 2.0);
+  }
+  if (action.name === 'seekSafety' && ctx.dangerField && getDanger(ctx.dangerField, goblin.x, goblin.y) > 85) {
+    nextScore = Math.max(nextScore, 2.0);
+  }
+  if (action.name === 'eat' && goblin.hunger > 90) {
+    nextScore = Math.max(nextScore, 2.0);
+  }
+  if (action.name === 'rest' && goblin.fatigue > 90) {
+    nextScore = Math.max(nextScore, 2.0);
+  }
+  return nextScore;
+}
+
+function updateSelectionState(
+  state: ActionSelectionState,
+  action: Action,
+  score: number,
+): ActionSelectionState {
+  if (score > state.bestScore) {
+    return {
+      bestAction: action,
+      bestScore: score,
+      secondName: state.bestAction?.name ?? '',
+      secondScore: state.bestScore,
+    };
+  }
+  if (score > state.secondScore) {
+    return {
+      ...state,
+      secondName: action.name,
+      secondScore: score,
+    };
+  }
+  return state;
+}
+
 // ── Selector loop ──────────────────────────────────────────────────────────────
 
 export function tickAgentUtility(
@@ -504,37 +662,11 @@ export function tickAgentUtility(
   // ActionContext is just a read-only bag of world references passed to every action's
   // eligible() and score() functions. Actions don't reach outside this object.
   // Compute resource balance once per tick and cache it to avoid redundant array reduces.
-  const livingGoblinCount = goblins?.reduce((n, g) => n + (g.alive ? 1 : 0), 0) ?? 0;
-  const resourceBalanceBase = computeResourceBalanceModifier(
-    foodStockpiles, oreStockpiles, woodStockpiles, mealStockpiles, barStockpiles, plankStockpiles,
-    livingGoblinCount,
-  );
-  const refuelableHearthCount = getRefuelableHearthCount(grid);
-  const resourceBalance = {
-    ...resourceBalanceBase,
-    refuelableHearthCount,
-    livingGoblinCount,
-  };
-  const hasStorage = rooms?.some(r => r.type === 'storage') ?? false;
-  const hasLumberHut = rooms?.some(r => r.type === 'lumber_hut') ?? false;
-  const hasBlacksmith = rooms?.some(r => r.type === 'blacksmith') ?? false;
-  const hasKitchen = rooms?.some(r => r.type === 'kitchen') ?? false;
-  const ctx: ActionContext = {
-    goblin, grid, currentTick, goblins, onLog,
-    foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
-    dangerField, weatherType, rooms, mealStockpiles,
-    plankStockpiles, barStockpiles,
-    chickens,
-    resourceBalance,
-    roomBonuses: {
-      hasStorage,
-      hasLumberHut,
-      hasBlacksmith,
-      hasKitchen,
-    },
-    workerTargets,
-    currentHeadcounts,
-  };
+  const ctx: ActionContext = buildActionContext({
+    goblin, grid, currentTick, goblins, onLog, foodStockpiles, adventurers, oreStockpiles, colonyGoal,
+    woodStockpiles, dangerField, weatherType, rooms, mealStockpiles, plankStockpiles, barStockpiles,
+    chickens, workerTargets, currentHeadcounts,
+  });
 
   // Stale mushroom memories still made forage score high (stock-the-larder floor + hunger
   // override) while execute only cleared them after winning — goblins looped "searching for food".
@@ -544,102 +676,28 @@ export function tickAgentUtility(
   // Each action has two functions:
   //   eligible(ctx) → boolean  — hard gate (role check, resource check, etc.)
   //   score(ctx)    → 0.0–1.0  — soft preference built from response curves
-  const MOMENTUM_BONUS = 0.4;  // single tune point for action stickiness
   const goalBonuses = colonyGoal ? GOAL_CONFIG[colonyGoal.type].actionBonuses : {};
-  let bestAction: Action | null = null;
-  let bestScore = -1;
-  let secondName = '';
-  let secondScore = -1;
+  let selectionState: ActionSelectionState = {
+    bestAction: null,
+    bestScore: -1,
+    secondName: '',
+    secondScore: -1,
+  };
   const noFood = goblin.inventory.food === 0 && goblin.inventory.meals === 0;
-
-  const UNDERSTAFF_BONUS_CAP = 0.12;
-  const SKILL_PREFERENCE_PER_LEVEL = 0.04;
-  const SKILL_PREFERENCE_CAP = 0.18;
-  
-  /** Ceiling for action score so trait-boosted scores above 1.0 can win; must be >= trait module's TRAIT_SCORE_CAP. */
-  const MAX_ACTION_SCORE = 2.0;
 
   for (const action of ALL_ACTIONS) {
     if (!action.eligible(ctx)) continue;
-    let score = action.score(ctx);
-    score = applyTraitBias(goblin, action, score);
-    const category = actionNameToWorkCategory(action.name);
-    const skillKey = category ? getSkillForCategory(category) : null;
-    const level = skillKey ? xpToLevel(goblin.skills[skillKey]) : 0;
-    // Worker target: nudge under-staffed categories; skill level amplifies for forage/mine/chop
-    if (category && workerTargets?.[category] != null && currentHeadcounts?.[category] != null) {
-      const target = workerTargets[category]!;
-      const current = currentHeadcounts[category]!;
-      if (target > 0 && current < target) {
-        let bonus = 0.05 * (target - current) / Math.max(target, 1);
-        if (skillKey) bonus *= 1 + 0.1 * level;
-        bonus = Math.min(bonus, UNDERSTAFF_BONUS_CAP);
-        score = Math.min(MAX_ACTION_SCORE, score + bonus);
-      }
-    }
-    // Skill preference: nudge toward work this goblin is good at (forage/mine/chop/cook/saw/smith)
-    if (skillKey) {
-      const skillBonus = Math.min(SKILL_PREFERENCE_PER_LEVEL * level, SKILL_PREFERENCE_CAP);
-      score = Math.min(MAX_ACTION_SCORE, score + skillBonus);
-    }
-    // Role affinity: small bonus for this goblin's preferred work category (assigned at spawn)
-    const PREFERRED_CATEGORY_BONUS = 0.07;
-    if (category && goblin.preferredWorkCategory === category) {
-      score = Math.min(MAX_ACTION_SCORE, score + PREFERRED_CATEGORY_BONUS);
-    }
-    // Player-assigned job: strong bonus so goblin strongly favors this work type (urgency still overrides via floors below)
-    const ASSIGNED_JOB_BONUS = 0.6;
-    if (category && goblin.assignedJob != null && goblin.assignedJob === category) {
-      score = Math.min(MAX_ACTION_SCORE, score + ASSIGNED_JOB_BONUS);
-    }
-    // Goal-directed bonus: active colony goal nudges relevant actions higher
-    score *= goalBonuses[action.name] ?? 1.0;
-    // Centralized momentum: sticky bonus for the action that won last tick
-    // (but exclude wander — it's a fallback, not a strategy to stick with)
-    if (action.name === goblin.lastActionName && action.name !== 'wander') {
-      score = Math.min(MAX_ACTION_SCORE, score + MOMENTUM_BONUS);
-    }
-    // Hunger crisis / starvation override: when no food and high hunger, bias toward get-food so goblins don't starve.
-    if (noFood && goblin.hunger > 70 && (action.name === 'forage' || action.name === 'withdrawFood')) {
-      score += 0.08;
-    }
-    if (action.name === 'wander' && (ctx.resourceBalance?.consumablesPressure ?? 0) > 0.6) {
-      score += 0.03;
-    }
-    // Urgency overrides: floor so eat/safety/rest beat assigned-job actions (job scores capped at MAX_ACTION_SCORE)
-    if (noFood && goblin.hunger > 85 && action.name === 'withdrawFood') {
-      score = Math.max(score, 2.0);
-    }
-    if (noFood && goblin.hunger > 85 && action.name === 'forage' && score > 0.2) {
-      score = Math.max(score, 2.0);
-    }
-    if (action.name === 'seekSafety' && ctx.dangerField && getDanger(ctx.dangerField, goblin.x, goblin.y) > 85) {
-      score = Math.max(score, 2.0);
-    }
-    if (action.name === 'eat' && goblin.hunger > 90) {
-      score = Math.max(score, 2.0);
-    }
-    if (action.name === 'rest' && goblin.fatigue > 90) {
-      score = Math.max(score, 2.0);
-    }
-    if (score > bestScore) {
-      secondScore = bestScore;
-      secondName = bestAction?.name ?? '';
-      bestScore = score;
-      bestAction = action;
-    } else if (score > secondScore) {
-      secondScore = score;
-      secondName = action.name;
-    }
+    const score = applyActionScoreAdjustments(action.score(ctx), action, ctx, goalBonuses, noFood);
+    selectionState = updateSelectionState(selectionState, action, score);
   }
 
   // Close-call log: fires when top two scores are within 0.03 AND both are genuinely urgent
   // (above 0.45). A goblin choosing between "idle" and "wander" isn't agonizing — one
   // choosing between "eat" and "flee" is.
-  if (bestAction && secondScore >= 0 && bestScore - secondScore <= 0.03 && bestScore > 0.45) {
+  if (selectionState.bestAction && selectionState.secondScore >= 0 && selectionState.bestScore - selectionState.secondScore <= 0.03 && selectionState.bestScore > 0.45) {
     if (shouldLog(goblin, 'close_call', currentTick, 400)) {
-      const nameA = ACTION_DISPLAY_NAMES[bestAction.name] ?? bestAction.name;
-      const nameB = ACTION_DISPLAY_NAMES[secondName] ?? secondName;
+      const nameA = ACTION_DISPLAY_NAMES[selectionState.bestAction.name] ?? selectionState.bestAction.name;
+      const nameB = ACTION_DISPLAY_NAMES[selectionState.secondName] ?? selectionState.secondName;
       onLog?.(`⚖ agonizing over ${nameA} vs ${nameB}`, 'info');
     }
   }
@@ -649,10 +707,10 @@ export function tickAgentUtility(
   // If execute() returns early (e.g. pathfinding finds nothing), the idle string shows in the HUD.
   goblin.task = idleDescription(goblin);
   let workCategoryRefreshedThisTick = false;
-  if (bestAction) {
-    bestAction.execute(ctx);
-    goblin.lastActionName = bestAction.name;
-    const workCat = actionNameToWorkCategory(bestAction.name);
+  if (selectionState.bestAction) {
+    selectionState.bestAction.execute(ctx);
+    goblin.lastActionName = selectionState.bestAction.name;
+    const workCat = actionNameToWorkCategory(selectionState.bestAction.name);
     if (workCat != null) {
       goblin.lastWorkCategory = workCat;
       goblin.lastWorkCategoryTick = currentTick;
