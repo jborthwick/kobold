@@ -76,18 +76,14 @@ export interface Adventurer {
   moveCooldownTicks?: number;
 }
 
-/** Passive critter — wanders the world and can be captured into nursery pens. */
+/** Wandering critter; can be penned for eggs. */
 export interface Chicken {
   id: string;
   x: number;
   y: number;
-  /** If set, this chicken is currently assigned to a nursery pen room id. */
   homePenId?: string;
-  /** Movement delay ticks remaining before the chicken may step again. */
   moveCooldownTicks?: number;
-  /** Idle delay ticks between wander steps. */
   restTicks?: number;
-  /** Set while a goblin is carrying this chicken. */
   heldByGoblinId?: string;
 }
 
@@ -186,7 +182,6 @@ export interface Goblin {
   carryingWater?: boolean;                 // true when goblin has fetched water and is heading to douse fire
   onFire?: boolean;                 // goblin is currently burning
   onFireTick?: number;                  // tick when they caught fire
-  /** Chicken id currently being carried to a nursery pen. */
   carryingChickenId?: string;
   skills: SkillSet;      // XP per skill category (forage, mine, chop, combat, scout)
   wound?: Wound;       // active wound (undefined = healthy); heals at wound.healTick
@@ -301,9 +296,7 @@ export interface MiniMapData {
   tiles: { type: TileType; foodRatio: number; matRatio: number }[][];
   /** Alive goblin positions and hunger (0–100). */
   goblins: { x: number; y: number; hunger: number }[];
-  /** Adventurer positions. */
   adventurers: { x: number; y: number }[];
-  /** Chicken positions. */
   chickens: { x: number; y: number }[];
   /** Camera viewport in tile-space. */
   viewport: { x: number; y: number; w: number; h: number };

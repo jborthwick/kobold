@@ -87,18 +87,13 @@ export function MiniMap() {
       ctx.fillRect(d.x * SCALE, d.y * SCALE, SCALE + 1, SCALE + 1);
     }
 
-    // ── Adventurer dots (red) ─────────────────────────────────────────────────
-    if (data.adventurers) {
-      ctx.fillStyle = 'rgb(255,80,0)';
-      for (const g of data.adventurers) {
-        ctx.fillRect(g.x * SCALE, g.y * SCALE, SCALE + 1, SCALE + 1);
-      }
+    ctx.fillStyle = 'rgb(255,80,0)';
+    for (const g of data.adventurers) {
+      ctx.fillRect(g.x * SCALE, g.y * SCALE, SCALE + 1, SCALE + 1);
     }
-    if (data.chickens) {
-      ctx.fillStyle = 'rgb(240,240,180)';
-      for (const c of data.chickens) {
-        ctx.fillRect(c.x * SCALE, c.y * SCALE, SCALE + 1, SCALE + 1);
-      }
+    ctx.fillStyle = 'rgb(240,240,180)';
+    for (const c of data.chickens) {
+      ctx.fillRect(c.x * SCALE, c.y * SCALE, SCALE + 1, SCALE + 1);
     }
   }, [data]);
 

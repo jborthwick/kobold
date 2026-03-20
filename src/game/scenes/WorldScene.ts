@@ -19,6 +19,15 @@ import { spawnChickensInRoom } from '../../simulation/chickens';
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
 
+const ROOM_DESIGNATION_NAMES: Record<RoomType, string> = {
+  storage: 'Storage zone',
+  kitchen: 'Kitchen',
+  lumber_hut: 'Lumber Hut',
+  farm: 'Farm',
+  nursery_pen: 'Nursery Pen',
+  blacksmith: 'Blacksmith',
+};
+
 export class WorldScene extends Phaser.Scene {
   public grid: Tile[][] = [];
   public goblins: Goblin[] = [];
@@ -271,12 +280,7 @@ export class WorldScene extends Phaser.Scene {
       this.chickens.push(...spawnChickensInRoom(this.grid, room, 2));
     }
 
-    const roomName = this.buildMode === 'storage' ? 'Storage zone'
-      : this.buildMode === 'kitchen' ? 'Kitchen'
-        : this.buildMode === 'lumber_hut' ? 'Lumber Hut'
-          : this.buildMode === 'farm' ? 'Farm'
-            : this.buildMode === 'nursery_pen' ? 'Nursery Pen'
-              : 'Blacksmith';
+    const roomName = ROOM_DESIGNATION_NAMES[this.buildMode];
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',

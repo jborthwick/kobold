@@ -2,6 +2,18 @@ import type { Chicken, Room } from '../../shared/types';
 import { moveToward } from './helpers';
 import type { Action } from './types';
 
+function isChickenInNurseryPen(chicken: Chicken, rooms: Room[] | undefined): boolean {
+  if (!rooms) return false;
+  return rooms.some(
+    (room) =>
+      room.type === 'nursery_pen' &&
+      chicken.x >= room.x &&
+      chicken.x < room.x + room.w &&
+      chicken.y >= room.y &&
+      chicken.y < room.y + room.h,
+  );
+}
+
 function nearestFreeChicken(
   x: number,
   y: number,
@@ -11,15 +23,7 @@ function nearestFreeChicken(
   if (!chickens || chickens.length === 0) return null;
   return chickens.reduce<Chicken | null>((best, chicken) => {
     if (chicken.heldByGoblinId) return best;
-    const inPen = rooms?.some(
-      (room) =>
-        room.type === 'nursery_pen' &&
-        chicken.x >= room.x &&
-        chicken.x < room.x + room.w &&
-        chicken.y >= room.y &&
-        chicken.y < room.y + room.h,
-    ) ?? false;
-    if (inPen) return best;
+    if (isChickenInNurseryPen(chicken, rooms)) return best;
     const dist = Math.abs(chicken.x - x) + Math.abs(chicken.y - y);
     const bestDist = best ? Math.abs(best.x - x) + Math.abs(best.y - y) : Infinity;
     return dist < bestDist ? chicken : best;
@@ -98,8 +102,9 @@ export const depositChicken: Action = {
   },
   score: ({ goblin }) => (goblin.carryingChickenId ? 0.95 : 0),
   execute: ({ goblin, rooms, chickens, grid, currentTick }) => {
-    if (!goblin.carryingChickenId || !chickens) return;
-    const chicken = chickens.find((c) => c.id === goblin.carryingChickenId);
+    const carriedId = goblin.carryingChickenId;
+    if (!carriedId || !chickens) return;
+    const chicken = chickens.find((c) => c.id === carriedId);
     if (!chicken) {
       goblin.carryingChickenId = undefined;
       return;

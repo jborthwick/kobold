@@ -400,11 +400,11 @@ export function drawAgents(scene: WorldScene) {
             spr.setPosition(px, py);
         }
     }
+    const chickenIds = new Set(scene.chickens.map(c => c.id));
     for (const [id, spr] of scene.chickenSprites) {
-        if (!scene.chickens.some(c => c.id === id)) {
-            spr.destroy();
-            scene.chickenSprites.delete(id);
-        }
+        if (chickenIds.has(id)) continue;
+        spr.destroy();
+        scene.chickenSprites.delete(id);
     }
     for (const c of scene.chickens) {
         const px = c.x * TILE_SIZE + TILE_SIZE / 2;

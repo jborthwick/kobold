@@ -96,7 +96,6 @@ export function tickChickens(chickens: Chicken[], grid: Tile[][], goblins: Gobli
       chicken.x = nx;
       chicken.y = ny;
       chicken.moveCooldownTicks = Math.max(0, getTerrainMoveCost(grid[ny][nx].type) - 1);
-      // Wander, then pause briefly, then wander again.
       chicken.restTicks = 2 + Math.floor(Math.random() * 4);
       break;
     }
@@ -115,42 +114,54 @@ export function countChickensInRoom(chickens: Chicken[], room: Room): number {
   return count;
 }
 
+const EGG_SPAWN_INTERVAL = 120;
+const EGG_FOOD_VALUE = 24;
+const MAX_EGGS_PER_PEN = 2;
+
+function countEggsInPen(grid: Tile[][], room: Room): number {
+  let n = 0;
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      if (grid[y]?.[x]?.type === TileType.Egg) n++;
+    }
+  }
+  return n;
+}
+
+function collectEggSpawnCandidates(grid: Tile[][], room: Room): Array<{ x: number; y: number }> {
+  const candidates: Array<{ x: number; y: number }> = [];
+  for (let y = room.y; y < room.y + room.h; y++) {
+    for (let x = room.x; x < room.x + room.w; x++) {
+      const tile = grid[y]?.[x];
+      if (!tile || tile.type === TileType.Egg || !isWalkable(grid, x, y)) continue;
+      candidates.push({ x, y });
+    }
+  }
+  return candidates;
+}
+
+function spawnEggAt(grid: Tile[][], x: number, y: number): void {
+  const base = grid[y][x];
+  grid[y][x] = {
+    ...base,
+    type: TileType.Egg,
+    foodValue: EGG_FOOD_VALUE,
+    maxFood: EGG_FOOD_VALUE,
+    growbackRate: 0,
+    materialValue: 0,
+    maxMaterial: 0,
+  };
+}
+
 export function tickNurseryPenEggs(chickens: Chicken[], rooms: Room[], grid: Tile[][], tick: number): void {
-  const EGG_SPAWN_INTERVAL = 120;
-  const EGG_FOOD_VALUE = 24;
-  const MAX_EGGS_PER_PEN = 2;
   if (tick % EGG_SPAWN_INTERVAL !== 0) return;
   for (const room of rooms) {
     if (room.type !== 'nursery_pen') continue;
     if (countChickensInRoom(chickens, room) < 2) continue;
-    let eggsInPen = 0;
-    for (let y = room.y; y < room.y + room.h; y++) {
-      for (let x = room.x; x < room.x + room.w; x++) {
-        if (grid[y]?.[x]?.type === TileType.Egg) eggsInPen++;
-      }
-    }
-    if (eggsInPen >= MAX_EGGS_PER_PEN) continue;
-    const candidates: Array<{ x: number; y: number }> = [];
-    for (let y = room.y; y < room.y + room.h; y++) {
-      for (let x = room.x; x < room.x + room.w; x++) {
-        const tile = grid[y]?.[x];
-        if (!tile) continue;
-        if (tile.type === TileType.Egg) continue;
-        if (!isWalkable(grid, x, y)) continue;
-        candidates.push({ x, y });
-      }
-    }
+    if (countEggsInPen(grid, room) >= MAX_EGGS_PER_PEN) continue;
+    const candidates = collectEggSpawnCandidates(grid, room);
     if (candidates.length === 0) continue;
     const target = candidates[Math.floor(Math.random() * candidates.length)];
-    const base = grid[target.y][target.x];
-    grid[target.y][target.x] = {
-      ...base,
-      type: TileType.Egg,
-      foodValue: EGG_FOOD_VALUE,
-      maxFood: EGG_FOOD_VALUE,
-      growbackRate: 0,
-      materialValue: 0,
-      maxMaterial: 0,
-    };
+    spawnEggAt(grid, target.x, target.y);
   }
 }
