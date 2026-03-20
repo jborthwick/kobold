@@ -56,6 +56,8 @@ const SEASON_WEIGHTS: Record<Season, [number, number, number, number, number]> =
 const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
 const WEATHER_TYPES: WeatherType[] = ['clear', 'rain', 'drought', 'cold', 'storm'];
 const YEAR_CYCLE_TICKS = 2400;
+const DAY_LENGTH_TICKS = 600;
+const DIURNAL_COLD_AMPLITUDE = 0.18;
 
 const WEATHER_COLD_STRESS: Record<WeatherType, number> = {
   clear: 0,
@@ -140,7 +142,9 @@ export function metabolismModifier(weather: Weather): number {
  */
 export function ambientColdStress(weather: Weather, tick: number): number {
   const seasonalCold = 0.5 - 0.5 * Math.sin((tick / YEAR_CYCLE_TICKS) * 2 * Math.PI);
-  const adjusted = seasonalCold + WEATHER_COLD_STRESS[weather.type];
+  const diurnalCold = 0.5 - 0.5 * Math.sin((tick / DAY_LENGTH_TICKS) * 2 * Math.PI);
+  const diurnalOffset = (diurnalCold - 0.5) * DIURNAL_COLD_AMPLITUDE;
+  const adjusted = seasonalCold + WEATHER_COLD_STRESS[weather.type] + diurnalOffset;
   return Math.max(0, Math.min(1, adjusted));
 }
 
