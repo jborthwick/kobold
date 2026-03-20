@@ -70,49 +70,78 @@ import { FORAGEABLE_TILES } from '../src/simulation/agents/sites';
 // Numeric args (any order vs flags): first number = ticks (default 2000), second = optional seed.
 // e.g. headless.ts --story | headless.ts 4000 --story | headless.ts --story 4000 42
 
-const argvRest = process.argv.slice(2);
-const numericArgs = argvRest.filter(a => /^\d+$/.test(a)).map(n => parseInt(n, 10));
-let TICKS = numericArgs[0] ?? 2000;
-if (!Number.isFinite(TICKS) || TICKS < 1) TICKS = 2000;
-const SEED_ARG = numericArgs.length > 1 ? numericArgs[1] : undefined;
+type HeadlessCliConfig = {
+  ticks: number;
+  seedArg: number | undefined;
+  dumpJson: boolean;
+  headlessStory: boolean;
+  headlessStoryPersona: string;
+  storyEveryTicks: number;
+  headlessStoryRealGoals: boolean;
+  headlessStoryLlm: boolean;
+};
 
-const DUMP_JSON = process.env['DUMP_JSON'] === '1';
+function parseHeadlessCli(args: string[], env: NodeJS.ProcessEnv): HeadlessCliConfig {
+  const numericArgs = args.filter(a => /^\d+$/.test(a)).map(n => parseInt(n, 10));
+  let ticks = numericArgs[0] ?? 2000;
+  if (!Number.isFinite(ticks) || ticks < 1) ticks = 2000;
+  const seedArg = numericArgs.length > 1 ? numericArgs[1] : undefined;
+  const dumpJson = env['DUMP_JSON'] === '1';
 
-let headlessStory = process.env['HEADLESS_STORY'] === '1';
-let headlessStoryPersona = 'balanced';
-let storyEveryFromCli: number | undefined;
-let headlessStoryRealGoals = process.env['HEADLESS_STORY_REAL_GOALS'] === '1';
-for (const a of argvRest) {
-  if (a === '--story') headlessStory = true;
-  if (a.startsWith('--story-persona=')) {
-    headlessStoryPersona = a.slice('--story-persona='.length).trim() || 'balanced';
+  let headlessStory = env['HEADLESS_STORY'] === '1';
+  let headlessStoryPersona = 'balanced';
+  let storyEveryFromCli: number | undefined;
+  let headlessStoryRealGoals = env['HEADLESS_STORY_REAL_GOALS'] === '1';
+  for (const a of args) {
+    if (a === '--story') headlessStory = true;
+    if (a.startsWith('--story-persona=')) {
+      headlessStoryPersona = a.slice('--story-persona='.length).trim() || 'balanced';
+    }
+    if (a.startsWith('--story-every=')) {
+      const n = parseInt(a.slice('--story-every='.length), 10);
+      if (Number.isFinite(n) && n >= 0) storyEveryFromCli = n;
+    }
+    if (a === '--story-real-goals') headlessStoryRealGoals = true;
   }
-  if (a.startsWith('--story-every=')) {
-    const n = parseInt(a.slice('--story-every='.length), 10);
-    if (Number.isFinite(n) && n >= 0) storyEveryFromCli = n;
+  let storyEveryTicks = 0;
+  if (headlessStory) {
+    if (storyEveryFromCli !== undefined) {
+      storyEveryTicks = storyEveryFromCli;
+    } else {
+      const envN = env['HEADLESS_STORY_EVERY'];
+      if (envN !== undefined && envN !== '') {
+        const n = parseInt(envN, 10);
+        storyEveryTicks = Number.isFinite(n) && n >= 0 ? n : 800;
+      } else {
+        storyEveryTicks = 800;
+      }
+    }
   }
-  if (a === '--story-real-goals') headlessStoryRealGoals = true;
+
+  return {
+    ticks,
+    seedArg,
+    dumpJson,
+    headlessStory,
+    headlessStoryPersona,
+    storyEveryTicks,
+    headlessStoryRealGoals,
+    headlessStoryLlm: env['HEADLESS_STORY_LLM'] === '1',
+  };
 }
-const headlessStoryLlm = process.env['HEADLESS_STORY_LLM'] === '1';
+
+const cli = parseHeadlessCli(process.argv.slice(2), process.env);
+const TICKS = cli.ticks;
+const SEED_ARG = cli.seedArg;
+const DUMP_JSON = cli.dumpJson;
+const headlessStory = cli.headlessStory;
+const headlessStoryPersona = cli.headlessStoryPersona;
+const storyEveryTicks = cli.storyEveryTicks;
+const headlessStoryRealGoals = cli.headlessStoryRealGoals;
+const headlessStoryLlm = cli.headlessStoryLlm;
 const storyLlmPrompts: { system: string; user: string }[] = [];
 /** Synthetic chronicle entries so storyteller prompts match in-game continuity (prior chapters). */
 const headlessChapters: Chapter[] = [];
-
-/** Timed story beats: 0 = off (goal completions only). Default 800 when --story. */
-let storyEveryTicks = 0;
-if (headlessStory) {
-  if (storyEveryFromCli !== undefined) {
-    storyEveryTicks = storyEveryFromCli;
-  } else {
-    const envN = process.env['HEADLESS_STORY_EVERY'];
-    if (envN !== undefined && envN !== '') {
-      const n = parseInt(envN, 10);
-      storyEveryTicks = Number.isFinite(n) && n >= 0 ? n : 800;
-    } else {
-      storyEveryTicks = 800;
-    }
-  }
-}
 
 // Headless reporting constants (tuning / output shape)
 const SNAPSHOT_INTERVAL = 10;
@@ -988,34 +1017,37 @@ function printOscillation(
   }
 }
 
+function printHeadlessReport(): void {
+  const alive = goblins.filter(g => g.alive);
+  const last = snapshots[snapshots.length - 1];
+
+  printResultsTable(
+    TICKS,
+    elapsed,
+    alive.length,
+    goblins.length,
+    deathLog.length,
+    raidLog.length,
+    adventurerKills,
+    goalLog.length,
+    last,
+    fireLog.length,
+    fireTilesTotal,
+    fireTilesRainedOut,
+    fireTilesMax,
+  );
+  printWarnings(warnLog);
+  printFireEvents(fireLog);
+  printDeaths(deathLog);
+  printGoalsCompleted(goalLog);
+  printActionFrequencies(actionCounts);
+  printTraitBias(actionCountsByTrait, actionCounts);
+  printOscillation(oscillationLog);
+}
+
 // ── Report ────────────────────────────────────────────────────────────────────
 // Print all sections from the recording buffers; optionally write full JSON when DUMP_JSON=1.
-
-const alive = goblins.filter(g => g.alive);
-const last = snapshots[snapshots.length - 1];
-
-printResultsTable(
-  TICKS,
-  elapsed,
-  alive.length,
-  goblins.length,
-  deathLog.length,
-  raidLog.length,
-  adventurerKills,
-  goalLog.length,
-  last,
-  fireLog.length,
-  fireTilesTotal,
-  fireTilesRainedOut,
-  fireTilesMax,
-);
-printWarnings(warnLog);
-printFireEvents(fireLog);
-printDeaths(deathLog);
-printGoalsCompleted(goalLog);
-printActionFrequencies(actionCounts);
-printTraitBias(actionCountsByTrait, actionCounts);
-printOscillation(oscillationLog);
+printHeadlessReport();
 
 if (DUMP_JSON) {
   const outPath = `headless-${seed}-${TICKS}.json`;
