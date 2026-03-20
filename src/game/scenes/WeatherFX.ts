@@ -35,6 +35,7 @@ let flashAlpha = 0;
 let flashCooldown = 0;
 const NIGHT_TINT_ALPHA_MAX = 0.22;
 const DAY_WARM_TINT_MAX = 0.04;
+const DUSK_TINT_ALPHA_MAX = 0.16;
 
 // ── Particle configs per weather type ────────────────────────────────────────
 
@@ -295,8 +296,12 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
 
     const cfg = CONFIGS[weather];
     const tod = timeOfDayProgress(scene.tick);
-    const daylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
+    const rawDaylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
+    // Compress the daylight window so nights stay darker longer.
+    const daylight = Math.max(0, Math.min(1, (rawDaylight - 0.2) / 0.8));
     const nightStrength = 1 - daylight;
+    // Peaks near dawn/dusk, low at noon and midnight.
+    const duskStrength = 1 - Math.abs(rawDaylight * 2 - 1);
 
     // ── Tint overlay ────────────────────────────────────────────────────
     scene.weatherTintGfx.clear();
@@ -309,16 +314,26 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
             toDrawSize(h),
         );
     }
-    // Day-night cycle layer: medium nighttime darkening with a small warm daytime lift.
+    // Day-night cycle layer: dramatic dusk/night grading.
     if (nightStrength > 0.01) {
-        scene.weatherTintGfx.fillStyle(0x102040, NIGHT_TINT_ALPHA_MAX * nightStrength);
+        scene.weatherTintGfx.fillStyle(0x071226, (NIGHT_TINT_ALPHA_MAX + 0.2) * nightStrength);
         scene.weatherTintGfx.fillRect(
             toDrawX(0),
             toDrawY(0),
             toDrawSize(w),
             toDrawSize(h),
         );
-    } else {
+    }
+    if (duskStrength > 0.01) {
+        scene.weatherTintGfx.fillStyle(0x402060, DUSK_TINT_ALPHA_MAX * duskStrength);
+        scene.weatherTintGfx.fillRect(
+            toDrawX(0),
+            toDrawY(0),
+            toDrawSize(w),
+            toDrawSize(h),
+        );
+    }
+    if (daylight > 0.01) {
         scene.weatherTintGfx.fillStyle(0xffcc88, DAY_WARM_TINT_MAX * daylight);
         scene.weatherTintGfx.fillRect(
             toDrawX(0),
