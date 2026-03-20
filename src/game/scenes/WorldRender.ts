@@ -4,6 +4,7 @@ import type { Season } from '../../shared/types';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import type { WorkCategoryId } from '../../simulation/workerTargets';
 import type { WorldScene } from './WorldScene';
+import { timeOfDayProgress } from '../../simulation/weather';
 
 const GOBLIN_JOB_SPRITE_KEYS: Record<WorkCategoryId, keyof typeof SPRITE_CONFIG> = {
   foraging: 'goblinForaging',
@@ -268,6 +269,10 @@ export function drawTerrain(scene: WorldScene) {
 export function drawOverlay(scene: WorldScene) {
     scene.overlayGfx.clear();
     scene.ambientGfx.clear();
+    const tod = timeOfDayProgress(scene.tick);
+    const rawDaylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
+    const daylight = Math.max(0, Math.min(1, (rawDaylight - 0.2) / 0.8));
+    const nightStrength = 1 - daylight;
 
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -284,6 +289,15 @@ export function drawOverlay(scene: WorldScene) {
             if (ambientAlpha > 0.02) {
                 scene.ambientGfx.fillStyle(ambientColor, ambientAlpha);
                 scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+
+            // Extra pixelated warmth at night (layer is below object tiles so fire/hearth art stays crisp).
+            if (nightStrength > 0.2 && w > 0) {
+                const boosted = Math.pow(w / 100, 1.45) * (0.22 + 0.35 * nightStrength);
+                if (boosted > 0.02) {
+                    scene.ambientGfx.fillStyle(0xffa547, boosted);
+                    scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
             }
 
             if (scene.overlayMode === 'off') continue;
