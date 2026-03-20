@@ -291,24 +291,7 @@ export function gameTick(scene: WorldScene) {
     }
 
     // ── Sync stockpile graphics (actions may have added new stockpiles) ─────
-    while (scene.foodStockpileGfxList.length < scene.foodStockpiles.length) {
-        scene.addFoodStockpileGraphics(scene.foodStockpiles[scene.foodStockpileGfxList.length]);
-    }
-    while (scene.mealStockpileGfxList.length < scene.mealStockpiles.length) {
-        scene.addMealStockpileGraphics(scene.mealStockpiles[scene.mealStockpileGfxList.length]);
-    }
-    while (scene.oreStockpileGfxList.length < scene.oreStockpiles.length) {
-        scene.addOreStockpileGraphics(scene.oreStockpiles[scene.oreStockpileGfxList.length]);
-    }
-    while (scene.woodStockpileGfxList.length < scene.woodStockpiles.length) {
-        scene.addWoodStockpileGraphics(scene.woodStockpiles[scene.woodStockpileGfxList.length]);
-    }
-    while (scene.plankStockpileGfxList.length < scene.plankStockpiles.length) {
-        scene.addPlankStockpileGraphics(scene.plankStockpiles[scene.plankStockpileGfxList.length]);
-    }
-    while (scene.barStockpileGfxList.length < scene.barStockpiles.length) {
-        scene.addBarStockpileGraphics(scene.barStockpiles[scene.barStockpileGfxList.length]);
-    }
+    scene.syncAllStockpileGraphics();
 
     scene.syncSawSprites();
     scene.syncAnvilSprites();
@@ -320,9 +303,9 @@ export function gameTick(scene: WorldScene) {
         scene.foodStockpiles,
         scene.oreStockpiles,
         scene.woodStockpiles,
-        (pile) => scene.addFoodStockpileGraphics(pile),
-        (pile) => scene.addOreStockpileGraphics(pile),
-        (pile) => scene.addWoodStockpileGraphics(pile)
+        (pile) => scene.addStockpileGraphics('food', pile),
+        (pile) => scene.addStockpileGraphics('ore', pile),
+        (pile) => scene.addStockpileGraphics('wood', pile)
     );
     expandLumberHutWoodStockpiles(
         scene.grid,
@@ -330,7 +313,7 @@ export function gameTick(scene: WorldScene) {
         scene.foodStockpiles,
         scene.oreStockpiles,
         scene.woodStockpiles,
-        (pile) => scene.addWoodStockpileGraphics(pile)
+        (pile) => scene.addStockpileGraphics('wood', pile)
     );
     expandBlacksmithOreStockpiles(
         scene.grid,
@@ -338,7 +321,7 @@ export function gameTick(scene: WorldScene) {
         scene.foodStockpiles,
         scene.oreStockpiles,
         scene.woodStockpiles,
-        (pile) => scene.addOreStockpileGraphics(pile)
+        (pile) => scene.addStockpileGraphics('ore', pile)
     );
 
     scene.terrainDirty = true;

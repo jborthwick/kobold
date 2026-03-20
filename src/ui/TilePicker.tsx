@@ -47,6 +47,12 @@ interface TypeEntry {
   frames:  number[];
 }
 
+type SavePayload = {
+  tileConfig: Record<string, number[]>;
+  spriteConfig: Record<string, number>;
+  newTypes: string[];
+};
+
 /** Build initial entry list from the imported config. Use enum keys (e.g. WoodWall, TreeStump) so Save writes valid TileType.*/
 function buildEntries(): TypeEntry[] {
   const terrain: TypeEntry[] = (Object.entries(TileType) as [keyof typeof TileType, TileType][])
@@ -64,6 +70,89 @@ function buildEntries(): TypeEntry[] {
   return [...terrain, ...sprites];
 }
 
+function partitionEntries(entries: TypeEntry[]) {
+  const terrainEntries = entries.filter(e => e.section === 'terrain');
+  const spriteEntries = entries.filter(e => e.section === 'sprite');
+  return { terrainEntries, spriteEntries };
+}
+
+function buildSavePayload(entries: TypeEntry[]): SavePayload {
+  const tileConfig: Record<string, number[]> = {};
+  const spriteConfig: Record<string, number> = {};
+  const existingTypes = new Set(Object.keys(TileType));
+  const newTypes: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.section === 'terrain') {
+      tileConfig[entry.key] = entry.frames;
+      if (!existingTypes.has(entry.key)) newTypes.push(entry.key);
+    } else {
+      spriteConfig[entry.key] = entry.frames[0] ?? 0;
+    }
+  }
+
+  return { tileConfig, spriteConfig, newTypes };
+}
+
+function drawSheetBase(
+  ctx: CanvasRenderingContext2D,
+  sheet: HTMLImageElement,
+  canvas: HTMLCanvasElement,
+) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(sheet, 0, 0, sheet.width * SCALE, sheet.height * SCALE);
+}
+
+function drawGridLines(ctx: CanvasRenderingContext2D) {
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= SHEET_COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(c * CELL, 0);
+    ctx.lineTo(c * CELL, SHEET_ROWS * CELL);
+    ctx.stroke();
+  }
+  for (let r = 0; r <= SHEET_ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * CELL);
+    ctx.lineTo(SHEET_COLS * CELL, r * CELL);
+    ctx.stroke();
+  }
+}
+
+function drawEntryHighlights(
+  ctx: CanvasRenderingContext2D,
+  entries: TypeEntry[],
+  selected: string | null,
+) {
+  entries.forEach((entry, i) => {
+    const color = HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length];
+    const isSelected = entry.key === selected;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isSelected ? 2.5 : 1.5;
+    ctx.globalAlpha = isSelected ? 1.0 : 0.55;
+    for (const f of entry.frames) {
+      const { col, row } = frameToXY(f);
+      ctx.strokeRect(col * CELL + 1, row * CELL + 1, CELL - 2, CELL - 2);
+      if (isSelected) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(col * CELL + 1, row * CELL + 1, CELL - 2, CELL - 2);
+        ctx.globalAlpha = 1.0;
+      }
+    }
+  });
+  ctx.globalAlpha = 1.0;
+}
+
+function drawHoveredFrame(ctx: CanvasRenderingContext2D, hovered: number | null) {
+  if (hovered === null) return;
+  const { col, row } = frameToXY(hovered);
+  ctx.strokeStyle = '#ffff00';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(col * CELL, row * CELL, CELL, CELL);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TilePicker() {
@@ -77,6 +166,7 @@ export function TilePicker() {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const sheetRef    = useRef<HTMLImageElement | null>(null);
   const newTypeRef  = useRef<HTMLInputElement>(null);
+  const { terrainEntries, spriteEntries } = partitionEntries(entries);
 
   // ── T key toggle ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -110,54 +200,10 @@ export function TilePicker() {
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
 
-    // Full sheet at 2×
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(sheet, 0, 0, sheet.width * SCALE, sheet.height * SCALE);
-
-    // Grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth   = 0.5;
-    for (let c = 0; c <= SHEET_COLS; c++) {
-      ctx.beginPath();
-      ctx.moveTo(c * CELL, 0);
-      ctx.lineTo(c * CELL, SHEET_ROWS * CELL);
-      ctx.stroke();
-    }
-    for (let r = 0; r <= SHEET_ROWS; r++) {
-      ctx.beginPath();
-      ctx.moveTo(0, r * CELL);
-      ctx.lineTo(SHEET_COLS * CELL, r * CELL);
-      ctx.stroke();
-    }
-
-    // Highlight assigned frames (one color per entry)
-    entries.forEach((entry, i) => {
-      const color = HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length];
-      const isSelected = entry.key === selected;
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = isSelected ? 2.5 : 1.5;
-      ctx.globalAlpha = isSelected ? 1.0 : 0.55;
-      for (const f of entry.frames) {
-        const { col, row } = frameToXY(f);
-        ctx.strokeRect(col * CELL + 1, row * CELL + 1, CELL - 2, CELL - 2);
-        // Fill tint for selected type
-        if (isSelected) {
-          ctx.fillStyle = color;
-          ctx.globalAlpha = 0.2;
-          ctx.fillRect(col * CELL + 1, row * CELL + 1, CELL - 2, CELL - 2);
-          ctx.globalAlpha = 1.0;
-        }
-      }
-    });
-    ctx.globalAlpha = 1.0;
-
-    // Hover outline
-    if (hovered !== null) {
-      const { col, row } = frameToXY(hovered);
-      ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth   = 2;
-      ctx.strokeRect(col * CELL, row * CELL, CELL, CELL);
-    }
+    drawSheetBase(ctx, sheet, canvas);
+    drawGridLines(ctx);
+    drawEntryHighlights(ctx, entries, selected);
+    drawHoveredFrame(ctx, hovered);
   }, [entries, selected, hovered]);
 
   useEffect(() => { redrawCanvas(); }, [redrawCanvas]);
@@ -212,29 +258,13 @@ export function TilePicker() {
   // ── Save ─────────────────────────────────────────────────────────────────────
   const save = async () => {
     setSaveStatus('saving');
-
-    // Split entries back into tileConfig / spriteConfig
-    const tileConfig:   Record<string, number[]> = {};
-    const spriteConfig: Record<string, number>   = {};
-    const existingTypes = new Set(
-      (Object.keys(TileType) as (keyof typeof TileType)[]).filter(k => typeof TileType[k] === 'string')
-    );
-    const newTypes: string[] = [];
-
-    for (const entry of entries) {
-      if (entry.section === 'terrain') {
-        tileConfig[entry.key] = entry.frames;
-        if (!(existingTypes as Set<string>).has(entry.key)) newTypes.push(entry.key);
-      } else {
-        spriteConfig[entry.key] = entry.frames[0] ?? 0;
-      }
-    }
+    const payload = buildSavePayload(entries);
 
     try {
       const res = await fetch('/api/write-tile-config', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
-        body:    JSON.stringify({ tileConfig, spriteConfig, newTypes }),
+        body:    JSON.stringify(payload),
       });
       const json = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -296,7 +326,7 @@ export function TilePicker() {
         <div style={styles.leftPanel}>
 
           <div style={styles.sectionLabel}>TERRAIN TYPES</div>
-          {entries.filter(e => e.section === 'terrain').map((entry, i) => (
+          {terrainEntries.map((entry, i) => (
             <EntryRow
               key={entry.key}
               entry={entry}
@@ -309,11 +339,11 @@ export function TilePicker() {
           ))}
 
           <div style={{ ...styles.sectionLabel, marginTop: 10 }}>SPRITES</div>
-          {entries.filter(e => e.section === 'sprite').map((entry, i) => (
+          {spriteEntries.map((entry, i) => (
             <EntryRow
               key={entry.key}
               entry={entry}
-              color={HIGHLIGHT_COLORS[(entries.filter(e2 => e2.section === 'terrain').length + i) % HIGHLIGHT_COLORS.length]}
+              color={HIGHLIGHT_COLORS[(terrainEntries.length + i) % HIGHLIGHT_COLORS.length]}
               isSelected={entry.key === selected}
               onSelect={() => setSelected(entry.key)}
               drawThumb={drawThumb}

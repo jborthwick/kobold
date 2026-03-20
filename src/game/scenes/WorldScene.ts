@@ -15,6 +15,7 @@ import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 import { getRoomDims } from '../../shared/roomConfig';
 import { spawnChickensInRoom } from '../../simulation/chickens';
+import { selectGoblin, type StockpileKind } from './WorldSelection';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -37,7 +38,7 @@ export class WorldScene extends Phaser.Scene {
   public selectedHearth: { x: number; y: number } | null = null;
   /** Matches UI stockpile panel; used to draw selection ring on the map. */
   public selectedStockpile: {
-    kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar';
+    kind: StockpileKind;
     idx: number;
   } | null = null;
   public selectedAdventurerId: string | null = null;
@@ -202,85 +203,22 @@ export class WorldScene extends Phaser.Scene {
   /** Place a room at the current build preview location. */
   public placeRoom() {
     if (!this.buildMode || !this.buildPreview) return;
+    const buildMode = this.buildMode;
     const { x, y } = this.buildPreview;
-    const { w, h } = getRoomDims(this.buildMode);
+    const { w, h } = getRoomDims(buildMode);
     if (!canPlaceRoom(this.grid, this.rooms, x, y, w, h)) return;
     clearRoomGroundToDirt(this.grid, x, y, w, h);
 
     const room: Room = {
       id: `room - ${Date.now()} `,
-      type: this.buildMode,
+      type: buildMode,
       x, y, w, h,
     };
     this.rooms.push(room);
 
-    if (this.buildMode === 'farm') {
-      // Crops need enough "value" to overcome the AI's distance penalty (bestFoodTile uses foodValue - dist),
-      // otherwise goblins only harvest when standing right next to them.
-      const cropMaxFood = 10;
-      const cropGrowbackRate = 0.10;
-      // Base ground: farmland across the whole room
-      for (let dy = 0; dy < h; dy++) {
-        for (let dx = 0; dx < w; dx++) {
-          const tx = x + dx, ty = y + dy;
-          const t = this.grid[ty][tx];
-          this.grid[ty][tx] = { ...t, type: TileType.Farmland, materialValue: 0, maxMaterial: 0 };
-        }
-      }
-      // Two horizontal crop rows, each 8 tiles long, centered with 1-tile margins.
-      const cropStartX = x + 1;
-      const cropRowsY = [y + 1, y + 3];
-      for (const cy of cropRowsY) {
-        for (let tx = cropStartX; tx < cropStartX + 8; tx++) {
-          const t = this.grid[cy][tx];
-          this.grid[cy][tx] = {
-            ...t,
-            type: TileType.CropGrowing,
-            foodValue: 0,
-            maxFood: cropMaxFood,
-            materialValue: 0,
-            maxMaterial: 0,
-            growbackRate: cropGrowbackRate,
-          };
-        }
-      }
-    }
+    this.applyRoomPlacementEffects(buildMode, room);
 
-    if (this.buildMode === 'lumber_hut') {
-      const wx = x + 1, wy = y + 1;
-      this.woodStockpiles.push({ x: wx, y: wy, wood: 0, maxWood: 200 });
-      this.addWoodStockpileGraphics(this.woodStockpiles[this.woodStockpiles.length - 1]);
-    } else if (this.buildMode === 'blacksmith') {
-      const ox = x + 1, oy = y + 1;
-      this.oreStockpiles.push({ x: ox, y: oy, ore: 0, maxOre: 200 });
-      this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpiles.length - 1]);
-    } else if (this.buildMode === 'kitchen') {
-      // Auto-place Hearth at kitchen center so cooking is immediately eligible
-      const cx = x + Math.floor(w / 2);
-      const cy = y + Math.floor(h / 2);
-      const t = this.grid[cy][cx];
-      this.grid[cy][cx] = { ...t, type: TileType.Hearth, foodValue: 0, maxFood: 0, materialValue: 0, maxMaterial: 0, growbackRate: 0, hearthFuel: HEARTH_FUEL_MAX };
-      // Update tilemap visual for the hearth tile
-      const hearthFrames = TILE_CONFIG[TileType.Hearth];
-      const hearthFrame = hearthFrames ? hearthFrames[0] : 504;
-      this.floorLayer?.putTileAt(hearthFrame, cx, cy);
-
-      // Auto-create an empty MealStockpile so eating from kitchen works immediately
-      this.mealStockpiles.push({ x: x + 1, y: y + 1, meals: 0, maxMeals: 50 });
-
-      // Auto-create a FoodStockpile so depositFood targets the kitchen immediately
-      const foodPile: FoodStockpile = { x: x + 3, y: y + 1, food: 0, maxFood: 200 };
-      this.foodStockpiles.push(foodPile);
-      this.addFoodStockpileGraphics(foodPile);
-    } else if (this.buildMode === 'storage') {
-      const foodPile: FoodStockpile = { x: x + 1, y: y + 1, food: 0, maxFood: 200 };
-      this.foodStockpiles.push(foodPile);
-      this.addFoodStockpileGraphics(foodPile);
-    } else if (this.buildMode === 'nursery_pen') {
-      this.chickens.push(...spawnChickensInRoom(this.grid, room, 2));
-    }
-
-    const roomName = ROOM_DESIGNATION_NAMES[this.buildMode];
+    const roomName = ROOM_DESIGNATION_NAMES[buildMode];
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',
@@ -292,6 +230,107 @@ export class WorldScene extends Phaser.Scene {
     this.terrainDirty = true;
 
     // Auto-exit build mode after placing a room
+    this.exitBuildMode();
+  }
+
+  private applyRoomPlacementEffects(buildMode: RoomType, room: Room): void {
+    switch (buildMode) {
+      case 'farm':
+        this.applyFarmRoomEffects(room);
+        return;
+      case 'lumber_hut': {
+        const wx = room.x + 1;
+        const wy = room.y + 1;
+        const woodPile: WoodStockpile = { x: wx, y: wy, wood: 0, maxWood: 200 };
+        this.woodStockpiles.push(woodPile);
+        this.addStockpileGraphics('wood', woodPile);
+        return;
+      }
+      case 'blacksmith': {
+        const ox = room.x + 1;
+        const oy = room.y + 1;
+        const orePile: OreStockpile = { x: ox, y: oy, ore: 0, maxOre: 200 };
+        this.oreStockpiles.push(orePile);
+        this.addStockpileGraphics('ore', orePile);
+        return;
+      }
+      case 'kitchen':
+        this.applyKitchenRoomEffects(room);
+        return;
+      case 'storage': {
+        const foodPile: FoodStockpile = { x: room.x + 1, y: room.y + 1, food: 0, maxFood: 200 };
+        this.foodStockpiles.push(foodPile);
+        this.addStockpileGraphics('food', foodPile);
+        return;
+      }
+      case 'nursery_pen':
+        this.chickens.push(...spawnChickensInRoom(this.grid, room, 2));
+        return;
+    }
+  }
+
+  private applyFarmRoomEffects(room: Room): void {
+    const { x, y, w, h } = room;
+    // Crops need enough "value" to overcome the AI's distance penalty (bestFoodTile uses foodValue - dist),
+    // otherwise goblins only harvest when standing right next to them.
+    const cropMaxFood = 10;
+    const cropGrowbackRate = 0.10;
+    // Base ground: farmland across the whole room
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const tx = x + dx;
+        const ty = y + dy;
+        const t = this.grid[ty][tx];
+        this.grid[ty][tx] = { ...t, type: TileType.Farmland, materialValue: 0, maxMaterial: 0 };
+      }
+    }
+    // Two horizontal crop rows, each 8 tiles long, centered with 1-tile margins.
+    const cropStartX = x + 1;
+    const cropRowsY = [y + 1, y + 3];
+    for (const cy of cropRowsY) {
+      for (let tx = cropStartX; tx < cropStartX + 8; tx++) {
+        const t = this.grid[cy][tx];
+        this.grid[cy][tx] = {
+          ...t,
+          type: TileType.CropGrowing,
+          foodValue: 0,
+          maxFood: cropMaxFood,
+          materialValue: 0,
+          maxMaterial: 0,
+          growbackRate: cropGrowbackRate,
+        };
+      }
+    }
+  }
+
+  private applyKitchenRoomEffects(room: Room): void {
+    const cx = room.x + Math.floor(room.w / 2);
+    const cy = room.y + Math.floor(room.h / 2);
+    const t = this.grid[cy][cx];
+    this.grid[cy][cx] = {
+      ...t,
+      type: TileType.Hearth,
+      foodValue: 0,
+      maxFood: 0,
+      materialValue: 0,
+      maxMaterial: 0,
+      growbackRate: 0,
+      hearthFuel: HEARTH_FUEL_MAX,
+    };
+    const hearthFrames = TILE_CONFIG[TileType.Hearth];
+    const hearthFrame = hearthFrames ? hearthFrames[0] : 504;
+    this.floorLayer?.putTileAt(hearthFrame, cx, cy);
+
+    const mealPile: MealStockpile = { x: room.x + 1, y: room.y + 1, meals: 0, maxMeals: 50 };
+    this.mealStockpiles.push(mealPile);
+    this.addStockpileGraphics('meal', mealPile);
+
+    const foodPile: FoodStockpile = { x: room.x + 3, y: room.y + 1, food: 0, maxFood: 200 };
+    this.foodStockpiles.push(foodPile);
+    this.addStockpileGraphics('food', foodPile);
+  }
+
+  private exitBuildMode(): void {
     this.buildMode = null;
     this.buildPreview = null;
     this.buildPreviewGfx.clear();
@@ -320,14 +359,7 @@ export class WorldScene extends Phaser.Scene {
     if (alive.length === 0) return;
     const currentIdx = alive.findIndex(d => d.id === this.selectedGoblinId);
     const nextIdx = ((currentIdx + direction) + alive.length) % alive.length;
-    this.selectedGoblinId = alive[nextIdx].id;
-    this.selectedHearth = null;
-    this.selectedStockpile = null;
-    this.selectedAdventurerId = null;
-    bus.emit('stockpileSelect', null);
-    bus.emit('hearthSelect', null);
-    bus.emit('adventurerSelect', null);
-    emitGameState(this);
+    selectGoblin(this, alive[nextIdx].id);
   }
 
   // ── Colony goal ────────────────────────────────────────────────────────
@@ -376,6 +408,65 @@ export class WorldScene extends Phaser.Scene {
     const cy = stockpile.y * TILE_SIZE + TILE_SIZE / 2;
     this.barStockpileImgList.push(this.add.image(cx, cy, 'tiles', SPRITE_CONFIG.oreStockpile).setDepth(3).setTint(0x888899));
     this.barStockpileGfxList.push(this.add.graphics().setDepth(3));
+  }
+
+  public addStockpileGraphics(kind: StockpileKind, stockpile: FoodStockpile | MealStockpile | OreStockpile | WoodStockpile | PlankStockpile | BarStockpile): void {
+    switch (kind) {
+      case 'food':
+        this.addFoodStockpileGraphics(stockpile as FoodStockpile);
+        return;
+      case 'meal':
+        this.addMealStockpileGraphics(stockpile as MealStockpile);
+        return;
+      case 'ore':
+        this.addOreStockpileGraphics(stockpile as OreStockpile);
+        return;
+      case 'wood':
+        this.addWoodStockpileGraphics(stockpile as WoodStockpile);
+        return;
+      case 'plank':
+        this.addPlankStockpileGraphics(stockpile as PlankStockpile);
+        return;
+      case 'bar':
+        this.addBarStockpileGraphics(stockpile as BarStockpile);
+        return;
+    }
+  }
+
+  public syncAllStockpileGraphics(): void {
+    const adders: Record<StockpileKind, () => void> = {
+      food: () => {
+        while (this.foodStockpileGfxList.length < this.foodStockpiles.length) {
+          this.addFoodStockpileGraphics(this.foodStockpiles[this.foodStockpileGfxList.length]);
+        }
+      },
+      meal: () => {
+        while (this.mealStockpileGfxList.length < this.mealStockpiles.length) {
+          this.addMealStockpileGraphics(this.mealStockpiles[this.mealStockpileGfxList.length]);
+        }
+      },
+      ore: () => {
+        while (this.oreStockpileGfxList.length < this.oreStockpiles.length) {
+          this.addOreStockpileGraphics(this.oreStockpiles[this.oreStockpileGfxList.length]);
+        }
+      },
+      wood: () => {
+        while (this.woodStockpileGfxList.length < this.woodStockpiles.length) {
+          this.addWoodStockpileGraphics(this.woodStockpiles[this.woodStockpileGfxList.length]);
+        }
+      },
+      plank: () => {
+        while (this.plankStockpileGfxList.length < this.plankStockpiles.length) {
+          this.addPlankStockpileGraphics(this.plankStockpiles[this.plankStockpileGfxList.length]);
+        }
+      },
+      bar: () => {
+        while (this.barStockpileGfxList.length < this.barStockpiles.length) {
+          this.addBarStockpileGraphics(this.barStockpiles[this.barStockpileGfxList.length]);
+        }
+      },
+    };
+    for (const kind of ['food', 'meal', 'ore', 'wood', 'plank', 'bar'] as const) adders[kind]();
   }
 
   /** Sync saw sprites to lumber_hut room centers (one sprite per room). */

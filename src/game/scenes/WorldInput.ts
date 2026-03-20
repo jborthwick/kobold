@@ -7,9 +7,9 @@ import { TileType } from '../../shared/types';
 import { getRoomDims } from '../../shared/roomConfig';
 import type { WorldScene } from './WorldScene';
 import { drawFlag, drawBuildPreview } from './WorldOverlays';
-import { emitGameState } from './WorldState';
 import { getDanger, getWarmth } from '../../simulation/diffusion';
 import { getTerrainMoveCost } from '../../simulation/movementCost';
+import { clearSelections, selectAdventurer, selectGoblin, selectHearth, selectStockpile } from './WorldSelection';
 
 const OVERLAY_MODES: OverlayMode[] = ['off', 'food', 'material', 'wood', 'warmth', 'danger', 'traffic'];
 const MAX_ZOOM = 5;
@@ -86,61 +86,6 @@ function findNearestIndex<T extends SelectablePoint>(
         }
     }
     return bestIdx;
-}
-
-function clearSelections(scene: WorldScene, emitState: boolean) {
-    scene.selectedGoblinId = null;
-    scene.selectedHearth = null;
-    scene.selectedStockpile = null;
-    scene.selectedAdventurerId = null;
-    bus.emit('stockpileSelect', null);
-    bus.emit('hearthSelect', null);
-    bus.emit('adventurerSelect', null);
-    if (emitState) emitGameState(scene);
-}
-
-function selectAdventurer(scene: WorldScene, adventurer: { id: string }) {
-    scene.selectedGoblinId = null;
-    scene.selectedHearth = null;
-    scene.selectedStockpile = null;
-    scene.selectedAdventurerId = adventurer.id;
-    bus.emit('stockpileSelect', null);
-    bus.emit('hearthSelect', null);
-    bus.emit('adventurerSelect', adventurer);
-}
-
-function selectGoblin(scene: WorldScene, goblinId: string) {
-    scene.selectedGoblinId = goblinId;
-    scene.selectedHearth = null;
-    scene.selectedStockpile = null;
-    scene.selectedAdventurerId = null;
-    bus.emit('stockpileSelect', null);
-    bus.emit('hearthSelect', null);
-    bus.emit('adventurerSelect', null);
-    emitGameState(scene);
-}
-
-function selectStockpile(
-    scene: WorldScene,
-    selection: { kind: 'food' | 'ore' | 'wood' | 'meal' | 'plank' | 'bar'; idx: number },
-) {
-    scene.selectedGoblinId = null;
-    scene.selectedHearth = null;
-    scene.selectedAdventurerId = null;
-    scene.selectedStockpile = selection;
-    bus.emit('adventurerSelect', null);
-    bus.emit('stockpileSelect', selection);
-    bus.emit('hearthSelect', null);
-}
-
-function selectHearth(scene: WorldScene, x: number, y: number) {
-    scene.selectedGoblinId = null;
-    scene.selectedHearth = { x, y };
-    scene.selectedStockpile = null;
-    scene.selectedAdventurerId = null;
-    bus.emit('adventurerSelect', null);
-    bus.emit('stockpileSelect', null);
-    bus.emit('hearthSelect', { x, y });
 }
 
 export function setupInput(scene: WorldScene) {

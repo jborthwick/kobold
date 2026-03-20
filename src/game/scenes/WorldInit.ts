@@ -160,12 +160,7 @@ export function initializeWorld(scene: WorldScene) {
   scene.flagGfx = scene.add.graphics().setDepth(11);
   scene.selectionGfx = scene.add.graphics().setDepth(12);
 
-  for (const sp of scene.foodStockpiles) scene.addFoodStockpileGraphics(sp);
-  for (const sp of scene.mealStockpiles) scene.addMealStockpileGraphics(sp);
-  for (const sp of scene.oreStockpiles) scene.addOreStockpileGraphics(sp);
-  for (const sp of scene.woodStockpiles) scene.addWoodStockpileGraphics(sp);
-  for (const sp of scene.plankStockpiles) scene.addPlankStockpileGraphics(sp);
-  for (const sp of scene.barStockpiles) scene.addBarStockpileGraphics(sp);
+  scene.syncAllStockpileGraphics();
 
   scene.buildPreviewGfx = scene.add.graphics().setDepth(50);
   scene.offScreenGfx = scene.add.graphics().setScrollFactor(0).setDepth(100);
