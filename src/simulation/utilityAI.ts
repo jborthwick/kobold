@@ -64,33 +64,33 @@ export function computeResourceBalanceModifier(
   woodPressure: number;
   upgradesPressure: number;
 } {
-  const totalFood = foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0;
-  const totalMeals = mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0;
-  const totalOre = oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0;
-  const totalWood = woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0;
-  const totalBars = barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0;
-  const totalPlanks = plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0;
+  const totals = computeResourceTotals(
+    foodStockpiles,
+    mealStockpiles,
+    oreStockpiles,
+    woodStockpiles,
+    barStockpiles,
+    plankStockpiles,
+  );
 
-  const consumablesTotal = totalFood + totalMeals;
-  const upgradesTotal = totalBars + totalPlanks;
-  const materialsForBalance = totalOre + totalWood + totalBars + totalPlanks;
+  const consumablesTotal = totals.totalFood + totals.totalMeals;
+  const upgradesTotal = totals.totalBars + totals.totalPlanks;
+  const materialsForBalance = totals.totalOre + totals.totalWood + totals.totalBars + totals.totalPlanks;
 
   // Balance: boost food actions when materials outweigh consumables; nerf material actions
   const imbalance = sigmoid(materialsForBalance - consumablesTotal, 40);
   const foodPriority = imbalance;
   const materialPriority = 1 - imbalance;
 
-  const goblinsForPressure = livingGoblinCount !== undefined && livingGoblinCount > 0
-    ? livingGoblinCount
-    : DEFAULT_GOBLINS_FOR_PRESSURE;
+  const goblinsForPressure = resolveGoblinsForPressure(livingGoblinCount);
 
   // Consumables pressure: per-goblin
   const effectiveConsumables = consumablesTotal / goblinsForPressure;
   const consumablesPressure = Math.min(1, inverseSigmoid(effectiveConsumables, CONSUMABLES_BUFFER_PER_GOBLIN) * 1.0);
 
   // Ore and wood pressure: per-goblin (same scaling as consumables)
-  const effectiveOrePerGoblin = totalOre / goblinsForPressure;
-  const effectiveWoodPerGoblin = totalWood / goblinsForPressure;
+  const effectiveOrePerGoblin = totals.totalOre / goblinsForPressure;
+  const effectiveWoodPerGoblin = totals.totalWood / goblinsForPressure;
   const orePressure = Math.min(1, inverseSigmoid(effectiveOrePerGoblin, ORE_BUFFER_PER_GOBLIN) * 0.65);
   const woodPressure = Math.min(1, inverseSigmoid(effectiveWoodPerGoblin, WOOD_BUFFER_PER_GOBLIN) * 0.65);
 
@@ -105,6 +105,39 @@ export function computeResourceBalanceModifier(
     woodPressure,
     upgradesPressure,
   };
+}
+
+type ResourceTotals = {
+  totalFood: number;
+  totalMeals: number;
+  totalOre: number;
+  totalWood: number;
+  totalBars: number;
+  totalPlanks: number;
+};
+
+function computeResourceTotals(
+  foodStockpiles: FoodStockpile[] | undefined,
+  mealStockpiles: MealStockpile[] | undefined,
+  oreStockpiles: OreStockpile[] | undefined,
+  woodStockpiles: WoodStockpile[] | undefined,
+  barStockpiles: BarStockpile[] | undefined,
+  plankStockpiles: PlankStockpile[] | undefined,
+): ResourceTotals {
+  return {
+    totalFood: foodStockpiles?.reduce((s, p) => s + p.food, 0) ?? 0,
+    totalMeals: mealStockpiles?.reduce((s, p) => s + p.meals, 0) ?? 0,
+    totalOre: oreStockpiles?.reduce((s, p) => s + p.ore, 0) ?? 0,
+    totalWood: woodStockpiles?.reduce((s, p) => s + p.wood, 0) ?? 0,
+    totalBars: barStockpiles?.reduce((s, p) => s + p.bars, 0) ?? 0,
+    totalPlanks: plankStockpiles?.reduce((s, p) => s + p.planks, 0) ?? 0,
+  };
+}
+
+function resolveGoblinsForPressure(livingGoblinCount?: number): number {
+  return livingGoblinCount !== undefined && livingGoblinCount > 0
+    ? livingGoblinCount
+    : DEFAULT_GOBLINS_FOR_PRESSURE;
 }
 
 /** 1 − sigmoid: 1 at low values, 0 at high values. */
@@ -132,6 +165,12 @@ function shouldLog(goblin: Goblin, key: string, tick: number, cooldown: number):
 
 /** Fraction of cold penalty removed at full shelter (0 = no reduction, 0.3 = 30% less penalty). */
 const SHELTER_COLD_REDUCTION = 0.3;
+const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
+  bruised: 0.30,
+  leg: 0.15,
+  arm: 0.10,
+  eye: 0.05,
+};
 
 /** Ticks of inactivity after which cooking/sawing/smithing progress is cleared when task no longer matches. */
 const PROGRESS_GRACE_TICKS = 40;
@@ -158,51 +197,12 @@ function updateNeeds(
 
   // Shelter: being inside well-walled rooms feels safer; used for cold penalty and morale.
   // shelterScore ~ [0,1]: 0 = fully exposed, 1 = inside room with fully walled perimeter.
-  let shelterScore = 0.5;
-  if (rooms && rooms.length > 0 && grid) {
-    const currentRoom = rooms.find(
-      r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
-    );
-    if (currentRoom) {
-      if (isOutdoorRoomType(currentRoom.type)) {
-        shelterScore = 0.1;
-      } else {
-      let perimeter = 0;
-      let walled = 0;
-      const { x, y, w, h } = currentRoom;
-      for (let yy = y; yy < y + h; yy++) {
-        for (let xx = x; xx < x + w; xx++) {
-          const isEdge = yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1;
-          if (!isEdge) continue;
-          if (!grid[yy] || !grid[yy][xx]) continue;
-          perimeter++;
-          if (isWallType(grid[yy][xx].type)) walled++;
-        }
-      }
-      const wallFraction = perimeter > 0 ? walled / perimeter : 0;
-      shelterScore = 0.4 + 0.6 * wallFraction;
-      }
-    } else {
-      shelterScore = 0.1;
-    }
-  }
+  const shelterScore = computeShelterScore(goblin, rooms, grid);
 
   // ── Cold exposure penalty ────────────────────────────────────────────────────
   // During cold weather, goblins away from warmth accumulate fatigue and extra hunger.
   // Shelter reduces effective cold penalty (less wind/rain = less heat loss).
-  if (weatherType === 'cold') {
-    const warmth = goblin.warmth ?? 0;
-    let coldPenalty = inverseSigmoid(warmth, 30, 0.12);
-    coldPenalty *= Math.max(0, 1 - SHELTER_COLD_REDUCTION * shelterScore);
-    if (coldPenalty > 0.05) {
-      goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
-      goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
-      if (shouldLog(goblin, 'freezing', currentTick, 150)) {
-        addMemory(goblin, 'freezing', currentTick);
-        onLog?.('🥶 freezing in the open', 'warn');
-      }
-    }
-  }
+  applyColdExposurePenalty(goblin, currentTick, weatherType, shelterScore, onLog);
 
   // ── Morale ───────────────────────────────────────────────────────────────────
   // Clean up expired thoughts
@@ -222,41 +222,8 @@ function updateNeeds(
     }
   }
 
-  // Calculate target morale
-  let targetMorale = 50;
-
-  for (const t of goblin.thoughts) {
-    targetMorale += THOUGHT_DEFS[t.defId]?.delta ?? 0;
-  }
-  for (const m of goblin.memories) {
-    const def = MEMORY_DEFS[m.defId];
-    if (def) targetMorale += (def.deltas[m.stage] ?? 0);
-  }
-
-  // Continuous Situational modifiers
-  if (goblin.hunger > 60) targetMorale -= Math.round(15 * sigmoid(goblin.hunger, 70));
-  if (goblin.hunger < 30) targetMorale += Math.round(10 * inverseSigmoid(goblin.hunger, 20));
-  if (goblin.social > 60) targetMorale -= Math.round(15 * sigmoid(goblin.social, 75));
-  if (goblin.fatigue > 80) targetMorale -= Math.round(15 * sigmoid(goblin.fatigue, 90));
-  if (goblin.onFire) targetMorale -= 40;
-  
-  if (weatherType === 'cold') {
-    const warmth = goblin.warmth ?? 0;
-    if (warmth < 30) targetMorale -= Math.round(20 * inverseSigmoid(warmth, 15));
-  }
-
-  // Shelter influences morale softly. Good shelter can add up to ~8 morale, poor shelter can
-  // subtract up to ~8, with stronger effect under cold weather.
-  const coldFactor = weatherType === 'cold' ? 1.0 : 0.5;
-  if (shelterScore < 0.3) {
-    const penalty = Math.round(8 * (0.3 - shelterScore) / 0.3 * coldFactor);
-    targetMorale -= penalty;
-  } else if (shelterScore > 0.7) {
-    const bonus = Math.round(8 * (shelterScore - 0.7) / 0.3);
-    targetMorale += bonus;
-  }
-
-  targetMorale = Math.max(0, Math.min(100, targetMorale));
+  let targetMorale = computeBaseMoraleTargetFromThoughtsAndMemories(goblin);
+  targetMorale = applySituationalMoraleAdjustments(goblin, targetMorale, weatherType, shelterScore);
 
   // Lerp towards target: gap closes at 0.5% per tick
   const gap = targetMorale - goblin.morale;
@@ -274,22 +241,7 @@ function updateNeeds(
 
   // ── Fatigue ──────────────────────────────────────────────────────────────────
   // Passive recovery 0.08/tick so fatigue accumulates during activity and drains slowly when resting.
-  goblin.fatigue = Math.max(0, goblin.fatigue - 0.08);
-  const WOUND_FATIGUE_DRAIN: Partial<Record<string, number>> = {
-    bruised: 0.30,
-    leg: 0.15,
-    arm: 0.10,
-    eye: 0.05,
-  };
-  const woundDrain = goblin.wound ? (WOUND_FATIGUE_DRAIN[goblin.wound.type] ?? 0) : 0;
-  if (woundDrain > 0) {
-    goblin.fatigue = Math.min(100, goblin.fatigue + woundDrain);
-  }
-  // Exhaustion drains morale via targetMorale continuous modifier
-  if (goblin.fatigue > 80 && shouldLog(goblin, 'exhausted', currentTick, 150)) {
-    addMemory(goblin, 'exhausted_work', currentTick);
-    onLog?.('😩 exhausted', 'warn');
-  }
+  applyFatigueAndWoundDrain(goblin, currentTick, onLog);
 
   // Wound healing — check and clear expired wounds
   tickWoundHealing(goblin, currentTick, onLog);
@@ -299,9 +251,124 @@ function updateNeeds(
   // It ticks *down* when a friendly goblin is nearby, and *up* when alone.
   // Isolation accumulates slowly (capped at 0.5/tick), so a briefly solo goblin is fine;
   // one stuck alone for hundreds of ticks starts suffering morale loss.
+  applySocialNeedTick(goblin, goblins, currentTick, onLog);
+}
+
+function computeShelterScore(goblin: Goblin, rooms?: Room[], grid?: Tile[][]): number {
+  let shelterScore = 0.5;
+  if (rooms && rooms.length > 0 && grid) {
+    const currentRoom = rooms.find(
+      r => goblin.x >= r.x && goblin.x < r.x + r.w && goblin.y >= r.y && goblin.y < r.y + r.h,
+    );
+    if (currentRoom) {
+      if (isOutdoorRoomType(currentRoom.type)) {
+        shelterScore = 0.1;
+      } else {
+        let perimeter = 0;
+        let walled = 0;
+        const { x, y, w, h } = currentRoom;
+        for (let yy = y; yy < y + h; yy++) {
+          for (let xx = x; xx < x + w; xx++) {
+            const isEdge = yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1;
+            if (!isEdge) continue;
+            if (!grid[yy] || !grid[yy][xx]) continue;
+            perimeter++;
+            if (isWallType(grid[yy][xx].type)) walled++;
+          }
+        }
+        const wallFraction = perimeter > 0 ? walled / perimeter : 0;
+        shelterScore = 0.4 + 0.6 * wallFraction;
+      }
+    } else {
+      shelterScore = 0.1;
+    }
+  }
+  return shelterScore;
+}
+
+function applyColdExposurePenalty(
+  goblin: Goblin,
+  currentTick: number,
+  weatherType: WeatherType | undefined,
+  shelterScore: number,
+  onLog?: LogFn,
+): void {
+  if (weatherType === 'cold') {
+    const warmth = goblin.warmth ?? 0;
+    let coldPenalty = inverseSigmoid(warmth, 30, 0.12);
+    coldPenalty *= Math.max(0, 1 - SHELTER_COLD_REDUCTION * shelterScore);
+    if (coldPenalty > 0.05) {
+      goblin.fatigue = Math.min(100, goblin.fatigue + 0.3 * coldPenalty);
+      goblin.hunger = Math.min(100, goblin.hunger + goblin.metabolism * 0.2 * coldPenalty);
+      if (shouldLog(goblin, 'freezing', currentTick, 150)) {
+        addMemory(goblin, 'freezing', currentTick);
+        onLog?.('🥶 freezing in the open', 'warn');
+      }
+    }
+  }
+}
+
+function computeBaseMoraleTargetFromThoughtsAndMemories(goblin: Goblin): number {
+  let targetMorale = 50;
+  for (const t of goblin.thoughts) {
+    targetMorale += THOUGHT_DEFS[t.defId]?.delta ?? 0;
+  }
+  for (const m of goblin.memories) {
+    const def = MEMORY_DEFS[m.defId];
+    if (def) targetMorale += (def.deltas[m.stage] ?? 0);
+  }
+  return targetMorale;
+}
+
+function applySituationalMoraleAdjustments(
+  goblin: Goblin,
+  targetMorale: number,
+  weatherType: WeatherType | undefined,
+  shelterScore: number,
+): number {
+  let adjusted = targetMorale;
+  if (goblin.hunger > 60) adjusted -= Math.round(15 * sigmoid(goblin.hunger, 70));
+  if (goblin.hunger < 30) adjusted += Math.round(10 * inverseSigmoid(goblin.hunger, 20));
+  if (goblin.social > 60) adjusted -= Math.round(15 * sigmoid(goblin.social, 75));
+  if (goblin.fatigue > 80) adjusted -= Math.round(15 * sigmoid(goblin.fatigue, 90));
+  if (goblin.onFire) adjusted -= 40;
+  if (weatherType === 'cold') {
+    const warmth = goblin.warmth ?? 0;
+    if (warmth < 30) adjusted -= Math.round(20 * inverseSigmoid(warmth, 15));
+  }
+
+  const coldFactor = weatherType === 'cold' ? 1.0 : 0.5;
+  if (shelterScore < 0.3) {
+    const penalty = Math.round(8 * (0.3 - shelterScore) / 0.3 * coldFactor);
+    adjusted -= penalty;
+  } else if (shelterScore > 0.7) {
+    const bonus = Math.round(8 * (shelterScore - 0.7) / 0.3);
+    adjusted += bonus;
+  }
+  return Math.max(0, Math.min(100, adjusted));
+}
+
+function applyFatigueAndWoundDrain(goblin: Goblin, currentTick: number, onLog?: LogFn): void {
+  goblin.fatigue = Math.max(0, goblin.fatigue - 0.08);
+  const woundDrain = goblin.wound ? (WOUND_FATIGUE_DRAIN[goblin.wound.type] ?? 0) : 0;
+  if (woundDrain > 0) {
+    goblin.fatigue = Math.min(100, goblin.fatigue + woundDrain);
+  }
+  if (goblin.fatigue > 80 && shouldLog(goblin, 'exhausted', currentTick, 150)) {
+    addMemory(goblin, 'exhausted_work', currentTick);
+    onLog?.('😩 exhausted', 'warn');
+  }
+}
+
+function applySocialNeedTick(
+  goblin: Goblin,
+  goblins: Goblin[] | undefined,
+  currentTick: number,
+  onLog?: LogFn,
+): void {
   if (goblins) {
-    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1; // helpful/cheerful trait widens this
-    const FRIEND_REL = 40; // minimum relation score to count as "friendly"
+    const FRIEND_RADIUS = traitMod(goblin, 'generosityRange', 2) + 1;
+    const FRIEND_REL = 40;
     const hasFriend = goblins.some(
       other => other.id !== goblin.id && other.alive &&
         Math.abs(other.x - goblin.x) <= FRIEND_RADIUS &&
@@ -313,12 +380,10 @@ function updateNeeds(
       goblin.social = Math.max(0, goblin.social - (0.3 + socialBonus));
       goblin.lastSocialTick = currentTick;
     } else {
-      // Isolation grows faster the longer they've been alone (capped at 0.5/tick)
       const isolationTicks = currentTick - goblin.lastSocialTick;
       goblin.social = Math.min(100, goblin.social + Math.min(0.5, isolationTicks / 400));
     }
   }
-  // High loneliness drains morale via targetMorale continuous modifier
   if (goblin.social > 40) {
     if (goblin.social > 60 && shouldLog(goblin, 'lonely', currentTick, 200)) {
       addMemory(goblin, 'socially_isolated', currentTick);
