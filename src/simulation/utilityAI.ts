@@ -7,7 +7,7 @@
  * (unconditional). (3) Score all eligible actions. (4) Execute highest-scoring action.
  */
 
-import { type Goblin, type Tile, type Adventurer, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
+import { type Goblin, type Tile, type Adventurer, type Chicken, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type ColonyGoal, type WeatherType, type Room, isWallType } from '../shared/types';
 import { isWalkable } from './world';
 import { traitMod, pathNextStep, pruneInvalidKnownFoodSites } from './agents';
 import { TileType } from '../shared/types';
@@ -355,6 +355,8 @@ const ACTION_DISPLAY_NAMES: Record<string, string> = {
   smith: 'smithing',
   fightFire: 'fighting fire',
   establishStockpile: 'establishing stockpile',
+  captureChicken: 'chasing chicken',
+  depositChicken: 'hauling chicken',
 };
 
 /** On-fire override: move toward nearest water/pool and set task; pathfinding never routes onto water so we step on when adjacent. */
@@ -438,6 +440,7 @@ export function tickAgentUtility(
   mealStockpiles?: MealStockpile[],
   plankStockpiles?: PlankStockpile[],
   barStockpiles?: BarStockpile[],
+  chickens?: Chicken[],
   workerTargets?: WorkerTargets,
   currentHeadcounts?: Record<WorkCategoryId, number>,
 ): void {
@@ -521,6 +524,7 @@ export function tickAgentUtility(
     foodStockpiles, adventurers, oreStockpiles, woodStockpiles, colonyGoal,
     dangerField, weatherType, rooms, mealStockpiles,
     plankStockpiles, barStockpiles,
+    chickens,
     resourceBalance,
     roomBonuses: {
       hasStorage,

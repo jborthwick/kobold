@@ -28,6 +28,7 @@ const SEASON_TINTS: Record<Season, number> = {
 
 const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
 const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;
+const CHICKEN_FRAME = SPRITE_CONFIG.chicken;
 
 /** Same ring as living selected goblins — tile center, world space. */
 function strokeYellowSelectionRing(gfx: Phaser.GameObjects.Graphics, tileX: number, tileY: number) {
@@ -124,7 +125,7 @@ export function drawBarStockpile(scene: WorldScene) {
 export function drawTerrain(scene: WorldScene) {
     const OBJECT_TILES = new Set([
         TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
-        TileType.CropGrowing, TileType.CropRipe,
+        TileType.CropGrowing, TileType.CropRipe, TileType.Egg,
     ]);
 
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -186,6 +187,8 @@ export function drawTerrain(scene: WorldScene) {
                         roomTint = 0xffbb88;
                     } else if (room.type === 'farm') {
                         roomTint = 0xccff99;
+                    } else if (room.type === 'nursery_pen') {
+                        roomTint = 0xfff2aa;
                     } else if (room.type === 'lumber_hut') {
                         roomTint = 0xddffcc;
                     } else if (room.type === 'blacksmith') {
@@ -393,6 +396,24 @@ export function drawAgents(scene: WorldScene) {
             spr = scene.add.sprite(px, py, 'tiles', ADVENTURER_FRAME).setDepth(5);
             spr.setTint(0xff6600);
             scene.adventurerSprites.set(g.id, spr);
+        } else {
+            spr.setPosition(px, py);
+        }
+    }
+    for (const [id, spr] of scene.chickenSprites) {
+        if (!scene.chickens.some(c => c.id === id)) {
+            spr.destroy();
+            scene.chickenSprites.delete(id);
+        }
+    }
+    for (const c of scene.chickens) {
+        const px = c.x * TILE_SIZE + TILE_SIZE / 2;
+        const py = c.y * TILE_SIZE + TILE_SIZE / 2;
+        let spr = scene.chickenSprites.get(c.id);
+        if (!spr) {
+            spr = scene.add.sprite(px, py, 'tiles', CHICKEN_FRAME).setDepth(5);
+            spr.setTint(0xffffcc);
+            scene.chickenSprites.set(c.id, spr);
         } else {
             spr.setPosition(px, py);
         }

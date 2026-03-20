@@ -5,7 +5,7 @@ import { drawFoodStockpile, drawOreStockpile, drawWoodStockpile, drawMealStockpi
 import { gameTick } from './WorldTick';
 import { createWarmthField, createDangerField } from '../../simulation/diffusion';
 import { TICK_RATE_MS, TILE_SIZE, HEARTH_FUEL_MAX } from '../../shared/constants';
-import { type OverlayMode, type Tile, type Goblin, type Adventurer, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, TileType } from '../../shared/types';
+import { type OverlayMode, type Tile, type Goblin, type Adventurer, type Chicken, type ColonyGoal, type FoodStockpile, type MealStockpile, type OreStockpile, type WoodStockpile, type PlankStockpile, type BarStockpile, type LogEntry, type Chapter, type Room, type RoomType, TileType } from '../../shared/types';
 import type { WorkerTargets } from '../../simulation/workerTargets';
 import { updateCamera } from './WorldCamera';
 import { emitGameState } from './WorldState';
@@ -14,6 +14,7 @@ import { bus } from '../../shared/events';
 import { type Weather } from '../../simulation/weather';
 import { SPRITE_CONFIG, TILE_CONFIG } from '../tileConfig';
 import { getRoomDims } from '../../shared/roomConfig';
+import { spawnChickensInRoom } from '../../simulation/chickens';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
@@ -61,6 +62,8 @@ export class WorldScene extends Phaser.Scene {
   // Adventurer raid state
   public adventurers: Adventurer[] = [];
   public adventurerSprites = new Map<string, Phaser.GameObjects.Sprite>();
+  public chickens: Chicken[] = [];
+  public chickenSprites = new Map<string, Phaser.GameObjects.Sprite>();
 
   // Succession state
   public spawnZone!: { x: number; y: number; w: number; h: number };
@@ -264,12 +267,16 @@ export class WorldScene extends Phaser.Scene {
       const foodPile: FoodStockpile = { x: x + 1, y: y + 1, food: 0, maxFood: 200 };
       this.foodStockpiles.push(foodPile);
       this.addFoodStockpileGraphics(foodPile);
+    } else if (this.buildMode === 'nursery_pen') {
+      this.chickens.push(...spawnChickensInRoom(this.grid, room, 2));
     }
 
     const roomName = this.buildMode === 'storage' ? 'Storage zone'
       : this.buildMode === 'kitchen' ? 'Kitchen'
         : this.buildMode === 'lumber_hut' ? 'Lumber Hut'
-          : this.buildMode === 'farm' ? 'Farm' : 'Blacksmith';
+          : this.buildMode === 'farm' ? 'Farm'
+            : this.buildMode === 'nursery_pen' ? 'Nursery Pen'
+              : 'Blacksmith';
     bus.emit('logEntry', {
       tick: this.tick,
       goblinId: 'world',

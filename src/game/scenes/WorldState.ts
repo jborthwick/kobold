@@ -32,6 +32,7 @@ export function buildSaveData(scene: WorldScene): SaveData {
             memories: d.memories.slice(-MAX_MEMORIES_PER_GOBLIN),
         })),
         adventurers: scene.adventurers.map(g => ({ ...g })),
+        chickens: scene.chickens.map(c => ({ ...c })),
         colonyGoal: { ...scene.colonyGoal },
         foodStockpiles: scene.foodStockpiles.map(s => ({ ...s })),
         mealStockpiles: scene.mealStockpiles.map(s => ({ ...s })),
@@ -62,6 +63,7 @@ export function emitGameState(scene: WorldScene) {
     bus.emit('gameState', {
         tick: scene.tick,
         goblins: scene.goblins.map(d => ({ ...d })),
+        chickens: scene.chickens.map(c => ({ ...c })),
         totalFood: alive.reduce((s, d) => s + d.inventory.food, 0),
         totalMeals: alive.reduce((s, d) => s + d.inventory.meals, 0)
           + scene.mealStockpiles.reduce((s, sp) => s + sp.meals, 0),
@@ -106,6 +108,7 @@ export function emitMiniMap(scene: WorldScene) {
             .filter(d => d.alive)
             .map(d => ({ x: d.x, y: d.y, hunger: d.hunger })),
         adventurers: scene.adventurers.map(g => ({ x: g.x, y: g.y })),
+        chickens: scene.chickens.map(c => ({ x: c.x, y: c.y })),
         viewport: {
             x: view.x / tpx,
             y: view.y / tpx,

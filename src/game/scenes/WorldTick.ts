@@ -28,6 +28,7 @@ import { tickBurningGoblins, tickFire } from '../../simulation/fire';
 import { tickPooling } from '../../simulation/pooling';
 import { tickLightning } from '../../simulation/lightning';
 import { maybeSpawnRaid, tickAdventurers } from '../../simulation/adventurers';
+import { tickChickens, tickNurseryPenEggs } from '../../simulation/chickens';
 import { addMemory } from '../../simulation/mood';
 import { rollWound, woundLabel } from '../../simulation/wounds';
 import { tickWorldEvents } from '../../simulation/events';
@@ -57,6 +58,8 @@ export function gameTick(scene: WorldScene) {
     computeDanger(scene.grid, scene.adventurers, scene.dangerFieldPrev, scene.dangerField);
     scene.dangerFieldPrev.set(scene.dangerField);
     updateTraffic(scene.grid, scene.goblins);
+    tickChickens(scene.chickens, scene.grid, scene.goblins, scene.rooms);
+    tickNurseryPenEggs(scene.chickens, scene.rooms, scene.grid, scene.tick);
 
     // Per-goblin warmth (shelter-style): room + proximity to heat; smoothed so the bar decays gradually.
     for (const d of scene.goblins) {
@@ -96,6 +99,7 @@ export function gameTick(scene: WorldScene) {
             metabolismModifier(scene.weather), scene.dangerField,
             scene.weather.type, scene.rooms, scene.mealStockpiles,
             scene.plankStockpiles, scene.barStockpiles,
+            scene.chickens,
             scene.workerTargets,
             currentHeadcounts
         );

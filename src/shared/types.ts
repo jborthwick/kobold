@@ -17,6 +17,7 @@ export enum TileType {
   CropRipe = 'crop_ripe',
   Ore = 'ore',
   Mushroom = 'mushroom',
+  Egg = 'egg',
   Wall = 'wall',       // legacy; new builds use WoodWall/StoneWall
   WoodWall = 'woodwall',  // built from planks
   StoneWall = 'stonewall', // built from bars
@@ -73,6 +74,21 @@ export interface Adventurer {
   staggeredUntil?: number;         // tick until which the adventurer cannot move (post-hit stagger)
   /** Movement delay ticks remaining before the adventurer may step again. */
   moveCooldownTicks?: number;
+}
+
+/** Passive critter — wanders the world and can be captured into nursery pens. */
+export interface Chicken {
+  id: string;
+  x: number;
+  y: number;
+  /** If set, this chicken is currently assigned to a nursery pen room id. */
+  homePenId?: string;
+  /** Movement delay ticks remaining before the chicken may step again. */
+  moveCooldownTicks?: number;
+  /** Idle delay ticks between wander steps. */
+  restTicks?: number;
+  /** Set while a goblin is carrying this chicken. */
+  heldByGoblinId?: string;
 }
 
 // Permanent personality trait assigned at spawn
@@ -170,6 +186,8 @@ export interface Goblin {
   carryingWater?: boolean;                 // true when goblin has fetched water and is heading to douse fire
   onFire?: boolean;                 // goblin is currently burning
   onFireTick?: number;                  // tick when they caught fire
+  /** Chicken id currently being carried to a nursery pen. */
+  carryingChickenId?: string;
   skills: SkillSet;      // XP per skill category (forage, mine, chop, combat, scout)
   wound?: Wound;       // active wound (undefined = healthy); heals at wound.healTick
   warmth?: number;      // warmth field value at goblin's tile (0–100); recomputed each tick, not saved
@@ -285,6 +303,8 @@ export interface MiniMapData {
   goblins: { x: number; y: number; hunger: number }[];
   /** Adventurer positions. */
   adventurers: { x: number; y: number }[];
+  /** Chicken positions. */
+  chickens: { x: number; y: number }[];
   /** Camera viewport in tile-space. */
   viewport: { x: number; y: number; w: number; h: number };
 }
@@ -302,7 +322,7 @@ export interface Chapter {
   tick: number;
 }
 
-export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm';
+export type RoomType = 'storage' | 'kitchen' | 'lumber_hut' | 'blacksmith' | 'farm' | 'nursery_pen';
 
 export interface Room {
   id: string;
@@ -316,6 +336,7 @@ export interface Room {
 export interface GameState {
   tick: number;
   goblins: Goblin[];
+  chickens: Chicken[];
   totalFood: number;
   totalMeals: number; // calculated sum of all meals
   totalOre: number;

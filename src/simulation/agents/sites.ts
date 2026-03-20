@@ -53,6 +53,7 @@ export function recordSite(sites: ResourceSite[], x: number, y: number, value: n
 export const FORAGEABLE_TILES = new Set<TileType>([
   TileType.Mushroom,
   TileType.CropRipe,
+  TileType.Egg,
 ]);
 
 /** Drop remembered food sites that no longer have harvestable food (before scoring actions). */

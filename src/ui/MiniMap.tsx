@@ -17,6 +17,7 @@ const TILE_RGB: Record<TileType, [number, number, number]> = {
   [TileType.Farmland]: [100, 80, 40],
   [TileType.Ore]: [90, 75, 20],
   [TileType.Mushroom]: [70, 40, 80],
+  [TileType.Egg]: [220, 220, 120],
   [TileType.Wall]: [110, 100, 75],
   [TileType.WoodWall]: [100, 85, 55],
   [TileType.StoneWall]: [115, 110, 95],
@@ -91,6 +92,12 @@ export function MiniMap() {
       ctx.fillStyle = 'rgb(255,80,0)';
       for (const g of data.adventurers) {
         ctx.fillRect(g.x * SCALE, g.y * SCALE, SCALE + 1, SCALE + 1);
+      }
+    }
+    if (data.chickens) {
+      ctx.fillStyle = 'rgb(240,240,180)';
+      for (const c of data.chickens) {
+        ctx.fillRect(c.x * SCALE, c.y * SCALE, SCALE + 1, SCALE + 1);
       }
     }
   }, [data]);
