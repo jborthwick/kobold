@@ -29,6 +29,156 @@ const SEASON_TINTS: Record<Season, number> = {
 const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
 const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;
 const CHICKEN_FRAME = SPRITE_CONFIG.chicken;
+const OBJECT_TILES = new Set([
+    TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
+    TileType.CropGrowing, TileType.CropRipe, TileType.Egg,
+]);
+
+type StockpileCell = { x: number; y: number };
+
+type OverlayColors = {
+    ambientAlpha: number;
+    ambientColor: number;
+    tacticalAlpha: number;
+    tacticalColor: number;
+};
+
+function multiplyTint(baseTint: number, overlayTint: number): number {
+    const br = (baseTint >> 16) & 0xff;
+    const bg = (baseTint >> 8) & 0xff;
+    const bb = baseTint & 0xff;
+    const or = (overlayTint >> 16) & 0xff;
+    const og = (overlayTint >> 8) & 0xff;
+    const ob = overlayTint & 0xff;
+    return (((br * or) >> 8) << 16) | (((bg * og) >> 8) << 8) | ((bb * ob) >> 8);
+}
+
+function isVegetationTile(type: TileType): boolean {
+    return (
+        type === TileType.Dirt
+        || type === TileType.Grass
+        || type === TileType.Forest
+        || type === TileType.Farmland
+        || type === TileType.TreeStump
+        || type === TileType.CropGrowing
+        || type === TileType.CropRipe
+    );
+}
+
+function getSeasonTint(scene: WorldScene): number {
+    return scene.weather?.season ? SEASON_TINTS[scene.weather.season] : 0xffffff;
+}
+
+function getBaseTileTint(scene: WorldScene, tile: WorldScene['grid'][number][number], x: number, y: number): number {
+    if (tile.maxFood > 0) {
+        const ratio = tile.foodValue / tile.maxFood;
+        const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
+        return (brightness << 16) | (brightness << 8) | brightness;
+    }
+    if (isWall(tile)) return 0x88aacc;
+    if (tile.type === TileType.Hearth) return (tile.hearthFuel ?? 0) > 0 ? 0xff8844 : 0x555555;
+    if (tile.type === TileType.Fire) {
+        const phase = (scene.tick + x * 3 + y * 7) % 3;
+        return phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
+    }
+    if (tile.type === TileType.Pool) return 0x44bbaa;
+    return 0xffffff;
+}
+
+function tintForRoom(scene: WorldScene, room: WorldScene['rooms'][number]): number {
+    if (room.type === 'kitchen') return 0xffbb88;
+    if (room.type === 'farm') return 0xccff99;
+    if (room.type === 'nursery_pen') return 0xfff2aa;
+    if (room.type === 'lumber_hut') return 0xddffcc;
+    if (room.type === 'blacksmith') return 0xffddaa;
+    if (room.type !== 'storage') return 0xccccff;
+
+    const inRoom = (px: number, py: number) =>
+        px >= room.x && px < room.x + room.w && py >= room.y && py < room.y + room.h;
+    const hasFood = scene.foodStockpiles.some(s => inRoom(s.x, s.y));
+    const hasOre = scene.oreStockpiles.some(s => inRoom(s.x, s.y));
+    const hasWood = scene.woodStockpiles.some(s => inRoom(s.x, s.y));
+    if (hasFood && !hasOre && !hasWood) return 0xccffcc;
+    if (hasOre && !hasFood && !hasWood) return 0xffddaa;
+    if (hasWood && !hasFood && !hasOre) return 0xddffcc;
+    if (hasFood || hasOre || hasWood) return 0xddddff;
+    return 0xccccff;
+}
+
+function roomTintAt(scene: WorldScene, x: number, y: number): number | null {
+    for (const room of scene.rooms) {
+        if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
+            return tintForRoom(scene, room);
+        }
+    }
+    return null;
+}
+
+function drawStockpileBoxes(
+    stockpiles: StockpileCell[],
+    gfxList: Phaser.GameObjects.Graphics[],
+    color: number,
+) {
+    for (let i = 0; i < stockpiles.length; i++) {
+        const cell = stockpiles[i];
+        const gfx = gfxList[i];
+        if (!gfx) continue;
+        const px = cell.x * TILE_SIZE;
+        const py = cell.y * TILE_SIZE;
+        gfx.clear();
+        gfx.lineStyle(2, color, 0.9);
+        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    }
+}
+
+function computeOverlayColors(
+    scene: WorldScene,
+    tile: WorldScene['grid'][number][number],
+    warmth: number,
+    danger: number,
+): OverlayColors {
+    let ambientAlpha = 0;
+    let ambientColor = 0;
+    if (warmth > 0) {
+        ambientAlpha = Math.pow(warmth / 100, 2) * 0.5;
+        ambientColor = 0xff6600;
+    } else if (danger > 0) {
+        ambientAlpha = Math.pow(danger / 100, 2) * 0.5;
+        ambientColor = 0xff2222;
+    }
+
+    let tacticalAlpha = 0;
+    let tacticalColor = 0;
+    if (scene.overlayMode === 'food' && tile.maxFood > 0) {
+        tacticalAlpha = (tile.foodValue / tile.maxFood) * 0.65;
+        tacticalColor = 0x00dd44;
+    } else if (scene.overlayMode === 'material' && tile.maxMaterial > 0 && tile.type !== TileType.Forest) {
+        tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+        tacticalColor = 0xff8800;
+    } else if (scene.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
+        tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
+        tacticalColor = 0x56d973;
+    } else if (scene.overlayMode === 'warmth') {
+        if (warmth > 0) {
+            tacticalAlpha = (warmth / 100) * 0.5;
+            tacticalColor = 0xff6600;
+        }
+    } else if (scene.overlayMode === 'danger') {
+        if (danger > 0) {
+            tacticalAlpha = (danger / 100) * 0.5;
+            tacticalColor = 0xff2222;
+        }
+    } else if (scene.overlayMode === 'traffic') {
+        const traffic = tile.trafficScore ?? 0;
+        if (traffic > 0) {
+            const normalized = Phaser.Math.Clamp(traffic / 100, 0, 1);
+            tacticalAlpha = 0.05 + 0.7 * Math.pow(normalized, 0.6);
+            tacticalColor = 0xffee00;
+        }
+    }
+
+    return { ambientAlpha, ambientColor, tacticalAlpha, tacticalColor };
+}
 
 /** Same ring as living selected goblins — tile center, world space. */
 function strokeYellowSelectionRing(gfx: Phaser.GameObjects.Graphics, tileX: number, tileY: number) {
@@ -51,82 +201,31 @@ function selectedStockpileTile(scene: WorldScene): { x: number; y: number } | nu
 }
 
 export function drawFoodStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.foodStockpiles.length; i++) {
-        const d = scene.foodStockpiles[i];
-        const gfx = scene.foodStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = d.x * TILE_SIZE, py = d.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0xf0c040, 0.9);
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.foodStockpiles, scene.foodStockpileGfxList, 0xf0c040);
 }
 
 export function drawOreStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.oreStockpiles.length; i++) {
-        const s = scene.oreStockpiles[i];
-        const gfx = scene.oreStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = s.x * TILE_SIZE, py = s.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0xff8800, 0.9);
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.oreStockpiles, scene.oreStockpileGfxList, 0xff8800);
 }
 
 export function drawWoodStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.woodStockpiles.length; i++) {
-        const w = scene.woodStockpiles[i];
-        const gfx = scene.woodStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = w.x * TILE_SIZE, py = w.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0x56d973, 0.9);  // green border — wood
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.woodStockpiles, scene.woodStockpileGfxList, 0x56d973);
 }
 
 export function drawMealStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.mealStockpiles.length; i++) {
-        const m = scene.mealStockpiles[i];
-        const gfx = scene.mealStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = m.x * TILE_SIZE, py = m.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0xff9900, 0.9);  // orange border — meals
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.mealStockpiles, scene.mealStockpileGfxList, 0xff9900);
 }
 
 export function drawPlankStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.plankStockpiles.length; i++) {
-        const p = scene.plankStockpiles[i];
-        const gfx = scene.plankStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = p.x * TILE_SIZE, py = p.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0x8b7355, 0.9);
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.plankStockpiles, scene.plankStockpileGfxList, 0x8b7355);
 }
 
 export function drawBarStockpile(scene: WorldScene) {
-    for (let i = 0; i < scene.barStockpiles.length; i++) {
-        const b = scene.barStockpiles[i];
-        const gfx = scene.barStockpileGfxList[i];
-        if (!gfx) continue;
-        const px = b.x * TILE_SIZE, py = b.y * TILE_SIZE;
-        gfx.clear();
-        gfx.lineStyle(2, 0x888899, 0.9);
-        gfx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    }
+    drawStockpileBoxes(scene.barStockpiles, scene.barStockpileGfxList, 0x888899);
 }
 
 export function drawTerrain(scene: WorldScene) {
-    const OBJECT_TILES = new Set([
-        TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
-        TileType.CropGrowing, TileType.CropRipe, TileType.Egg,
-    ]);
+    const seasonTint = getSeasonTint(scene);
 
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -145,32 +244,10 @@ export function drawTerrain(scene: WorldScene) {
             const t = targetLayer.putTileAt(frame, x, y)!;
             otherLayer.removeTileAt(x, y);
 
-            let baseTint = 0xffffff;
-            if (tile.maxFood > 0) {
-                const ratio = tile.foodValue / tile.maxFood;
-                const brightness = Math.floor((0.5 + ratio * 0.5) * 255);
-                baseTint = (brightness << 16) | (brightness << 8) | brightness;
-            } else if (isWall(tile)) {
-                baseTint = 0x88aacc;
-            } else if (tile.type === TileType.Hearth) {
-                baseTint = (tile.hearthFuel ?? 0) > 0 ? 0xff8844 : 0x555555;
-            } else if (tile.type === TileType.Fire) {
-                const phase = (scene.tick + x * 3 + y * 7) % 3;
-                baseTint = phase === 0 ? 0xff2200 : phase === 1 ? 0xff6600 : 0xff4400;
-            } else if (tile.type === TileType.Pool) {
-                baseTint = 0x44bbaa;
-            }
-
-            const seasonTint = scene.weather?.season ? SEASON_TINTS[scene.weather.season] : 0xffffff;
-
-            const isVegetation = tile.type === TileType.Dirt || tile.type === TileType.Grass || tile.type === TileType.Forest || tile.type === TileType.Farmland || tile.type === TileType.TreeStump || tile.type === TileType.CropGrowing || tile.type === TileType.CropRipe;
-            if (isVegetation && seasonTint !== 0xffffff) {
-                const br = (baseTint >> 16) & 0xff, bg = (baseTint >> 8) & 0xff, bb = baseTint & 0xff;
-                const sr = (seasonTint >> 16) & 0xff, sg = (seasonTint >> 8) & 0xff, sb = seasonTint & 0xff;
-                t.tint = (((br * sr) >> 8) << 16) | (((bg * sg) >> 8) << 8) | ((bb * sb) >> 8);
-            } else {
-                t.tint = baseTint;
-            }
+            const baseTint = getBaseTileTint(scene, tile, x, y);
+            t.tint = isVegetationTile(tile.type) && seasonTint !== 0xffffff
+                ? multiplyTint(baseTint, seasonTint)
+                : baseTint;
 
             if (isObject) {
                 const dirtFrames = TILE_CONFIG[TileType.Dirt] ?? [0];
@@ -180,38 +257,9 @@ export function drawTerrain(scene: WorldScene) {
                 }
             }
 
-            for (const room of scene.rooms) {
-                if (x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h) {
-                    let roomTint: number;
-                    if (room.type === 'kitchen') {
-                        roomTint = 0xffbb88;
-                    } else if (room.type === 'farm') {
-                        roomTint = 0xccff99;
-                    } else if (room.type === 'nursery_pen') {
-                        roomTint = 0xfff2aa;
-                    } else if (room.type === 'lumber_hut') {
-                        roomTint = 0xddffcc;
-                    } else if (room.type === 'blacksmith') {
-                        roomTint = 0xffddaa;
-                    } else if (room.type === 'storage') {
-                        const inR = (px: number, py: number) =>
-                            px >= room.x && px < room.x + room.w && py >= room.y && py < room.y + room.h;
-                        const hasFood = scene.foodStockpiles.some(s => inR(s.x, s.y));
-                        const hasOre = scene.oreStockpiles.some(s => inR(s.x, s.y));
-                        const hasWood = scene.woodStockpiles.some(s => inR(s.x, s.y));
-                        if (hasFood && !hasOre && !hasWood) roomTint = 0xccffcc;
-                        else if (hasOre && !hasFood && !hasWood) roomTint = 0xffddaa;
-                        else if (hasWood && !hasFood && !hasOre) roomTint = 0xddffcc;
-                        else if (hasFood || hasOre || hasWood) roomTint = 0xddddff;
-                        else roomTint = 0xccccff;
-                    } else {
-                        roomTint = 0xccccff;
-                    }
-                    const tr = (t.tint >> 16) & 0xff, tg = (t.tint >> 8) & 0xff, tb = t.tint & 0xff;
-                    const rr = (roomTint >> 16) & 0xff, rg = (roomTint >> 8) & 0xff, rb = roomTint & 0xff;
-                    t.tint = (((tr * rr) >> 8) << 16) | (((tg * rg) >> 8) << 8) | ((tb * rb) >> 8);
-                    break;
-                }
+            const roomTint = roomTintAt(scene, x, y);
+            if (roomTint !== null) {
+                t.tint = multiplyTint(t.tint, roomTint);
             }
         }
     }
@@ -224,19 +272,14 @@ export function drawOverlay(scene: WorldScene) {
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             const tile = scene.grid[y][x];
-            let ambientAlpha = 0;
-            let ambientColor = 0;
-
             const w = scene.warmthField[y * GRID_SIZE + x];
             const d = scene.dangerField[y * GRID_SIZE + x];
-
-            if (w > 0) {
-                ambientAlpha = Math.pow(w / 100, 2) * 0.5;
-                ambientColor = 0xff6600;
-            } else if (d > 0) {
-                ambientAlpha = Math.pow(d / 100, 2) * 0.5;
-                ambientColor = 0xff2222;
-            }
+            const {
+                ambientAlpha,
+                ambientColor,
+                tacticalAlpha,
+                tacticalColor,
+            } = computeOverlayColors(scene, tile, w, d);
 
             if (ambientAlpha > 0.02) {
                 scene.ambientGfx.fillStyle(ambientColor, ambientAlpha);
@@ -244,31 +287,6 @@ export function drawOverlay(scene: WorldScene) {
             }
 
             if (scene.overlayMode === 'off') continue;
-
-            let tacticalAlpha = 0;
-            let tacticalColor = 0;
-
-            if (scene.overlayMode === 'food' && tile.maxFood > 0) {
-                tacticalAlpha = (tile.foodValue / tile.maxFood) * 0.65;
-                tacticalColor = 0x00dd44;
-            } else if (scene.overlayMode === 'material' && tile.maxMaterial > 0 && tile.type !== TileType.Forest) {
-                tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
-                tacticalColor = 0xff8800;
-            } else if (scene.overlayMode === 'wood' && tile.type === TileType.Forest && tile.maxMaterial > 0) {
-                tacticalAlpha = (tile.materialValue / tile.maxMaterial) * 0.65;
-                tacticalColor = 0x56d973;
-            } else if (scene.overlayMode === 'warmth') {
-                if (w > 0) { tacticalAlpha = (w / 100) * 0.5; tacticalColor = 0xff6600; }
-            } else if (scene.overlayMode === 'danger') {
-                if (d > 0) { tacticalAlpha = (d / 100) * 0.5; tacticalColor = 0xff2222; }
-            } else if (scene.overlayMode === 'traffic') {
-                const tr = tile.trafficScore ?? 0;
-                if (tr > 0) {
-                    const normalized = Phaser.Math.Clamp(tr / 100, 0, 1);
-                    tacticalAlpha = 0.05 + 0.7 * Math.pow(normalized, 0.6);
-                    tacticalColor = 0xffee00;
-                }
-            }
 
             if (tacticalAlpha > 0.02) {
                 scene.overlayGfx.fillStyle(tacticalColor, tacticalAlpha);
