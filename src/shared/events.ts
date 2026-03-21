@@ -43,6 +43,8 @@ type Events = {
   workerTargetChange: { category: WorkCategoryId; value: number };
   /** Player-assigned job for a goblin (from goblin HUD). */
   goblinAssignedJob: { goblinId: string; job: WorkCategoryId | null };
+  /** Dev: ambient glow debug sliders changed — refresh overlay + blend mode. */
+  ambientGlowDebugChanged: undefined;
 };
 
 export const bus = mitt<Events>();

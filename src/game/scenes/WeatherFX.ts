@@ -9,7 +9,11 @@
 
 import type { WorldScene } from './WorldScene';
 import type { WeatherType, Season } from '../../shared/types';
-import { timeOfDayProgress } from '../../simulation/weather';
+import {
+  dayNightVisualStrength,
+  WEATHER_VISUAL_DUSK_TINT_PEAK,
+  WEATHER_VISUAL_NIGHT_TINT_PEAK,
+} from '../../simulation/weather';
 
 // ── Particle pool ────────────────────────────────────────────────────────────
 
@@ -33,9 +37,7 @@ let currentSeason: Season | null = null;
 // Lightning flash state
 let flashAlpha = 0;
 let flashCooldown = 0;
-const NIGHT_TINT_ALPHA_MAX = 0.22;
 const DAY_WARM_TINT_MAX = 0.04;
-const DUSK_TINT_ALPHA_MAX = 0.16;
 
 // ── Particle configs per weather type ────────────────────────────────────────
 
@@ -252,9 +254,18 @@ const SEASON_CONFIGS: Partial<Record<Season, WeatherConfig>> = {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * Depth between floor tilemap (0) and object tilemap (2) — see WorldInit.
+ * Night/dusk/weather tints only darken the ground; hearths, fires, trees, walls, stockpiles,
+ * and agents draw above this layer so they stay readable. ADD warmth (depth 3) stacks above
+ * objects. Screen-space particles stay on top (WEATHER_PARTICLES_DEPTH).
+ */
+const WEATHER_TINT_DEPTH = 1;
+const WEATHER_PARTICLES_DEPTH = 200;
+
 export function initWeatherFX(scene: WorldScene) {
-    scene.weatherTintGfx = scene.add.graphics().setScrollFactor(0).setDepth(199);
-    scene.weatherGfx = scene.add.graphics().setScrollFactor(0).setDepth(200);
+    scene.weatherTintGfx = scene.add.graphics().setScrollFactor(0).setDepth(WEATHER_TINT_DEPTH);
+    scene.weatherGfx = scene.add.graphics().setScrollFactor(0).setDepth(WEATHER_PARTICLES_DEPTH);
     particles = [];
     currentWeather = null;
     seasonParticles = [];
@@ -295,13 +306,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     }
 
     const cfg = CONFIGS[weather];
-    const tod = timeOfDayProgress(scene.tick);
-    const rawDaylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
-    // Compress the daylight window so nights stay darker longer.
-    const daylight = Math.max(0, Math.min(1, (rawDaylight - 0.2) / 0.8));
-    const nightStrength = 1 - daylight;
-    // Peaks near dawn/dusk, low at noon and midnight.
-    const duskStrength = 1 - Math.abs(rawDaylight * 2 - 1);
+    const { daylight, nightStrength, duskStrength } = dayNightVisualStrength(scene.tick);
 
     // ── Tint overlay ────────────────────────────────────────────────────
     scene.weatherTintGfx.clear();
@@ -316,7 +321,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
     }
     // Day-night cycle layer: dramatic dusk/night grading.
     if (nightStrength > 0.01) {
-        scene.weatherTintGfx.fillStyle(0x071226, (NIGHT_TINT_ALPHA_MAX + 0.2) * nightStrength);
+        scene.weatherTintGfx.fillStyle(0x071226, WEATHER_VISUAL_NIGHT_TINT_PEAK * nightStrength);
         scene.weatherTintGfx.fillRect(
             toDrawX(0),
             toDrawY(0),
@@ -325,7 +330,7 @@ export function updateWeatherFX(scene: WorldScene, delta: number) {
         );
     }
     if (duskStrength > 0.01) {
-        scene.weatherTintGfx.fillStyle(0x402060, DUSK_TINT_ALPHA_MAX * duskStrength);
+        scene.weatherTintGfx.fillStyle(0x402060, WEATHER_VISUAL_DUSK_TINT_PEAK * duskStrength);
         scene.weatherTintGfx.fillRect(
             toDrawX(0),
             toDrawY(0),

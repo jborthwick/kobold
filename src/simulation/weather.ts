@@ -159,6 +159,31 @@ export function timeOfDayProgress(tick: number): number {
   return wrapped / DAY_LENGTH_TICKS;
 }
 
+// ── Visual day/night (must stay in sync with WeatherFX full-screen grading) ──
+
+/** Peak alpha of the dark blue night rect on `weatherTintGfx` (was 0.22 + 0.2). */
+export const WEATHER_VISUAL_NIGHT_TINT_PEAK = 0.42;
+/** Peak alpha of the purple dusk rect on `weatherTintGfx`. */
+export const WEATHER_VISUAL_DUSK_TINT_PEAK = 0.16;
+
+export interface DayNightVisualStrength {
+  rawDaylight: number;
+  /** Compressed daylight curve (matches WeatherFX / WorldRender). */
+  daylight: number;
+  nightStrength: number;
+  duskStrength: number;
+}
+
+/** Shared curve for HUD grading + warmth overlay — keep WeatherFX and WorldRender in lockstep. */
+export function dayNightVisualStrength(tick: number): DayNightVisualStrength {
+  const tod = timeOfDayProgress(tick);
+  const rawDaylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
+  const daylight = Math.max(0, Math.min(1, (rawDaylight - 0.2) / 0.8));
+  const nightStrength = 1 - daylight;
+  const duskStrength = 1 - Math.abs(rawDaylight * 2 - 1);
+  return { rawDaylight, daylight, nightStrength, duskStrength };
+}
+
 export type DayPeriod = 'dawn' | 'day' | 'dusk' | 'night';
 
 /** Compact named phase used by HUD labels. */

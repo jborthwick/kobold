@@ -16,6 +16,8 @@ npm run headless:story   # --story: prompts every 800 ticks + on goals (see belo
 python3 scripts/inspect-tiles.py --frame N   # inspect Kenney tile by frame index
 ```
 
+**Glow debug (dev, desktop layout):** draggable panel for warmth/weather blend modes, hearth source attenuation, night-wash compensation, etc. State: `src/debug/ambientGlowDebug.ts`; mounted when `import.meta.env.DEV &&` desktop in `App.tsx`.
+
 ## Headless simulation (`scripts/headless.ts`)
 
 Runs the full simulation (world gen, utility AI, weather, raids, diffusion, events) without

@@ -4,7 +4,8 @@ import type { Season } from '../../shared/types';
 import { TILE_CONFIG, SPRITE_CONFIG } from '../tileConfig';
 import type { WorkCategoryId } from '../../simulation/workerTargets';
 import type { WorldScene } from './WorldScene';
-import { timeOfDayProgress } from '../../simulation/weather';
+import { dayNightVisualStrength } from '../../simulation/weather';
+import { ambientGlowDebug, computeAmbientGlowOverlayCompensation } from '../../debug/ambientGlowDebug';
 
 const GOBLIN_JOB_SPRITE_KEYS: Record<WorkCategoryId, keyof typeof SPRITE_CONFIG> = {
   foraging: 'goblinForaging',
@@ -30,8 +31,9 @@ const SEASON_TINTS: Record<Season, number> = {
 const GOBLIN_FRAME = SPRITE_CONFIG.goblin;
 const ADVENTURER_FRAME = SPRITE_CONFIG.adventurer;
 const CHICKEN_FRAME = SPRITE_CONFIG.chicken;
+/** Tiles drawn on the object layer (depth 2) with optional dirt underlay on floor. Forest stays on floor (depth 0) with stone/grass/dirt. */
 const OBJECT_TILES = new Set([
-    TileType.Forest, TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
+    TileType.Mushroom, TileType.Wall, TileType.WoodWall, TileType.StoneWall, TileType.Hearth, TileType.Fire,
     TileType.CropGrowing, TileType.CropRipe, TileType.Egg,
 ]);
 
@@ -133,6 +135,19 @@ function drawStockpileBoxes(
     }
 }
 
+/** Hearth & fire tiles: ADD glow is drawn on top of the sprite — soften α on the source cell only. */
+function warmthSourceTileGlowMult(tile: WorldScene['grid'][number][number], warmth: number): number {
+    if (warmth <= 0) return 1;
+    if (tile.type !== TileType.Hearth && tile.type !== TileType.Fire) return 1;
+    return ambientGlowDebug.sourceWarmthTileMult;
+}
+
+function warmthSourceTileNightBoostMult(tile: WorldScene['grid'][number][number], warmth: number): number {
+    if (warmth <= 0) return 1;
+    if (tile.type !== TileType.Hearth && tile.type !== TileType.Fire) return 1;
+    return ambientGlowDebug.sourceNightBoostTileMult;
+}
+
 function computeOverlayColors(
     scene: WorldScene,
     tile: WorldScene['grid'][number][number],
@@ -141,12 +156,13 @@ function computeOverlayColors(
 ): OverlayColors {
     let ambientAlpha = 0;
     let ambientColor = 0;
-    // Alphas tuned for ambientGfx using Phaser BlendModes.ADD (additive reads brighter than same alpha in NORMAL).
+    // Alphas tuned for ambientGfx; default blend is ADD (reads brighter than same alpha in NORMAL).
+    const g = ambientGlowDebug;
     if (warmth > 0) {
-        ambientAlpha = Math.pow(warmth / 100, 1.85) * 0.32;
+        ambientAlpha = Math.pow(warmth / 100, g.warmthPow) * g.warmthMult;
         ambientColor = 0xff6600;
     } else if (danger > 0) {
-        ambientAlpha = Math.pow(danger / 100, 1.85) * 0.28;
+        ambientAlpha = Math.pow(danger / 100, g.dangerPow) * g.dangerMult;
         ambientColor = 0xff2222;
     }
 
@@ -270,10 +286,10 @@ export function drawTerrain(scene: WorldScene) {
 export function drawOverlay(scene: WorldScene) {
     scene.overlayGfx.clear();
     scene.ambientGfx.clear();
-    const tod = timeOfDayProgress(scene.tick);
-    const rawDaylight = 0.5 + 0.5 * Math.sin(tod * Math.PI * 2);
-    const daylight = Math.max(0, Math.min(1, (rawDaylight - 0.2) / 0.8));
-    const nightStrength = 1 - daylight;
+    const dn = dayNightVisualStrength(scene.tick);
+    const { nightStrength } = dn;
+    /** ~1 with default tint depth; can rise if you tune overlay-comp sliders (legacy tint-above-glow). */
+    const glowWashComp = computeAmbientGlowOverlayCompensation(dn);
 
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -288,13 +304,19 @@ export function drawOverlay(scene: WorldScene) {
             } = computeOverlayColors(scene, tile, w, d);
 
             if (ambientAlpha > 0.02) {
-                scene.ambientGfx.fillStyle(ambientColor, ambientAlpha);
+                const srcM = warmthSourceTileGlowMult(tile, w);
+                scene.ambientGfx.fillStyle(ambientColor, ambientAlpha * glowWashComp * srcM);
                 scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
 
             // Night warmth punch (additive blend on ambientGfx — strong glow without opaque wash).
-            if (nightStrength > 0.2 && w > 0) {
-                const boosted = Math.pow(w / 100, 1.45) * (0.14 + 0.26 * nightStrength);
+            const gd = ambientGlowDebug;
+            if (nightStrength > gd.nightMinStrength && w > 0) {
+                const boosted =
+                    Math.pow(w / 100, gd.nightBoostPow) *
+                    (gd.nightBoostBase + gd.nightBoostScale * nightStrength) *
+                    glowWashComp *
+                    warmthSourceTileNightBoostMult(tile, w);
                 if (boosted > 0.02) {
                     scene.ambientGfx.fillStyle(0xffa547, boosted);
                     scene.ambientGfx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);

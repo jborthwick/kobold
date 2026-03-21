@@ -20,6 +20,7 @@ import { getSelectedGoblinId, selectGoblin } from './WorldSelection';
 
 import { initializeWorld } from './WorldInit';
 import { updateWeatherFX } from './WeatherFX';
+import { applyAllDebugRenderBlendModes } from '../../debug/ambientGlowDebug';
 
 const ROOM_DESIGNATION_NAMES: Record<RoomType, string> = {
   storage: 'Storage zone',
@@ -156,6 +157,11 @@ export class WorldScene extends Phaser.Scene {
   public longPressFired = false;
   public minZoom = 0.6;
 
+  /** Dev: force drawOverlay when glow debug panel edits values (works while paused). */
+  public ambientGlowRefresh = false;
+
+  private glowDebugBusHandler: (() => void) | null = null;
+
   constructor() {
     super({ key: 'WorldScene' });
   }
@@ -166,6 +172,31 @@ export class WorldScene extends Phaser.Scene {
 
   create() {
     initializeWorld(this);
+    applyAllDebugRenderBlendModes({
+      ambient: this.ambientGfx,
+      weatherTint: this.weatherTintGfx,
+      weatherGfx: this.weatherGfx,
+      overlayGfx: this.overlayGfx,
+    });
+    if (import.meta.env.DEV) {
+      this.glowDebugBusHandler = () => {
+        this.ambientGlowRefresh = true;
+        applyAllDebugRenderBlendModes({
+          ambient: this.ambientGfx,
+          weatherTint: this.weatherTintGfx,
+          weatherGfx: this.weatherGfx,
+          overlayGfx: this.overlayGfx,
+        });
+      };
+      bus.on('ambientGlowDebugChanged', this.glowDebugBusHandler);
+    }
+  }
+
+  shutdown() {
+    if (this.glowDebugBusHandler) {
+      bus.off('ambientGlowDebugChanged', this.glowDebugBusHandler);
+      this.glowDebugBusHandler = null;
+    }
   }
 
   // ── Simulation tick ────────────────────────────────────────────────────
@@ -545,9 +576,14 @@ export class WorldScene extends Phaser.Scene {
       gameTick(this);
     }
 
-    if (this.terrainDirty || !this.paused) {
-      if (this.terrainDirty) drawTerrain(this);
+    if (this.terrainDirty) {
+      drawTerrain(this);
+    }
+    if (this.terrainDirty || !this.paused || this.ambientGlowRefresh) {
       drawOverlay(this); // refresh density + ambient glow
+    }
+    if (this.ambientGlowRefresh) {
+      this.ambientGlowRefresh = false;
     }
     drawAgents(this);
     drawFoodStockpile(this);

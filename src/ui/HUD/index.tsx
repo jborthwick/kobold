@@ -1,6 +1,7 @@
 export { HUD } from './HUDBar';
 export { SelectedGoblinPanel } from './GoblinPanel';
 export { TokenDebugPanel } from './TokenDebugPanel';
+export { GlowDebugPanel } from './GlowDebugPanel';
 export { TileTooltip } from './TileTooltip';
 export { StockpilePanel } from './StockpilePanel';
 export { HearthPanel } from './HearthPanel';
