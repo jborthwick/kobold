@@ -186,7 +186,7 @@ function updateNeeds(
   goblins: Goblin[] | undefined,
   currentTick: number,
   weatherMetabolismMod: number,
-  weatherType: WeatherType | undefined,
+  _weatherType: WeatherType | undefined,
   ambientColdStress: number,
   rooms?: Room[],
   grid?: Tile[][],
