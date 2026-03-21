@@ -144,32 +144,78 @@ function weightedNextStep(from: Point, to: Point, grid: Tile[][]): Point | null 
   return null;
 }
 
-/**
- * Scan for richest forageable tile in a square radius.
- * Applies a distance penalty of 1.0 per tile so the goblin only leaves its
- * current tile for one that's meaningfully richer — prevents oscillation between
- * two adjacent patches with similar food values.
- */
+/** Local-first forage radius (current tile + 4-neighbors). */
+const BEST_FOOD_LOCAL_MANHATTAN = 1;
+
+function isBetterFoodPick(
+  food: number,
+  dist: number,
+  y: number,
+  x: number,
+  bestFood: number,
+  bestDist: number,
+  bestY: number,
+  bestX: number,
+): boolean {
+  // Lexicographic compare: prefer higher yield, then nearer tile, then stable y/x tie-break.
+  if (food > bestFood) return true;
+  if (food < bestFood) return false;
+  if (dist < bestDist) return true;
+  if (dist > bestDist) return false;
+  if (y < bestY) return true;
+  if (y > bestY) return false;
+  return x < bestX;
+}
+
+/** Best forage tile by (foodValue, -distance, -y, -x), with optional distance cap. */
+function bestForageableInScan(
+  goblin: Goblin,
+  grid: Tile[][],
+  radius: number,
+  maxManhattan: number | null,
+): Point | null {
+  let best: Point | null = null;
+  let bestFood = -Infinity;
+  let bestDist = Infinity;
+  let bestY = Infinity;
+  let bestX = Infinity;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (maxManhattan !== null && dist > maxManhattan) continue;
+      const nx = goblin.x + dx;
+      const ny = goblin.y + dy;
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+      const tile = grid[ny][nx];
+      if (!FORAGEABLE_TILES.has(tile.type)) continue;
+      if (tile.foodValue < 1) continue;
+
+      const food = tile.foodValue;
+      if (
+        best === null ||
+        isBetterFoodPick(food, dist, ny, nx, bestFood, bestDist, bestY, bestX)
+      ) {
+        best = { x: nx, y: ny };
+        bestFood = food;
+        bestDist = dist;
+        bestY = ny;
+        bestX = nx;
+      }
+    }
+  }
+  return best;
+}
+
+/** Two-phase forage target: local band first, then full scan. */
 export function bestFoodTile(
   goblin: Goblin,
   grid: Tile[][],
   radius: number,
 ): { x: number; y: number } | null {
-  let best: { x: number; y: number } | null = null;
-  let bestValue = 0; // start at 0 so a tile with exactly foodValue=1 at dist=0 wins (v=1>0)
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const nx = goblin.x + dx;
-      const ny = goblin.y + dy;
-      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
-      if (!FORAGEABLE_TILES.has(grid[ny][nx].type)) continue;
-      if (grid[ny][nx].foodValue < 1) continue; // skip sub-threshold tiles (can't harvest)
-      const dist = Math.abs(dx) + Math.abs(dy);
-      const v = grid[ny][nx].foodValue - dist;
-      if (v > bestValue) { bestValue = v; best = { x: nx, y: ny }; }
-    }
-  }
-  return best;
+  const local = bestForageableInScan(goblin, grid, radius, BEST_FOOD_LOCAL_MANHATTAN);
+  if (local) return local;
+  return bestForageableInScan(goblin, grid, radius, null);
 }
 
 export function bestMaterialTile(

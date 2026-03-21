@@ -300,8 +300,7 @@ export class WorldScene extends Phaser.Scene {
 
   private applyFarmRoomEffects(room: Room): void {
     const { x, y, w, h } = room;
-    // Crops need enough "value" to overcome the AI's distance penalty (bestFoodTile uses foodValue - dist),
-    // otherwise goblins only harvest when standing right next to them.
+    // Ripe crops hold up to cropMaxFood, then regrow over time.
     const cropMaxFood = 10;
     const cropGrowbackRate = 0.10;
     // Base ground: farmland across the whole room
